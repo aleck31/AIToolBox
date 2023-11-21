@@ -1,25 +1,55 @@
 import gradio as gr
+import random
+import time
+from llm import chat
 
 
-def yes_man(message, history):
-    if message.endswith("?"):
-        return "Yes"
-    else:
-        return "Ask me anything!"
 
-gr.ChatInterface(
-    yes_man,
-    chatbot=gr.Chatbot(height=300),
-    textbox=gr.Textbox(placeholder="Ask me a yes or no question", container=False, scale=7),
-    title="Yes Man",
-    description="Ask Yes Man any question",
-    theme="soft",
-    examples=["Hello", "Am I cool?", "Are tomatoes vegetables?"],
-    cache_examples=True,
-    retry_btn="Retry",
-    undo_btn="Delete Previous",
-    clear_btn="Clear",
-).launch()
+with gr.Blocks() as tab_chat:
+    description = gr.Markdown("Let's chat ...")
+    with gr.Column(variant="panel"):
+        # Chatbot接收 chat history进行显示
+        chatbot = gr.Chatbot(label="Chatbot")
+        with gr.Group():
+            with gr.Row():
+                input_msg = gr.Textbox(
+                    show_label=False, container=False, autofocus=True, scale=7,
+                    placeholder="Type a message..."            
+                )
+                btn_submit = gr.Button('Chat', variant="primary", scale=1, min_width=150)
+        with gr.Row():
+            btn_undo = gr.Button('↩️ Undo', scale=1, min_width=150)
+            btn_clear = gr.ClearButton([input_msg, chatbot], value='🗑️  Clear')
+            btn_forget = gr.Button('🎲 Forget All', scale=1, min_width=200)
+            btn_forget.click(chat.clear_memory, None, chatbot)
+        with gr.Accordion(label='Chatbot Style', open=False):
+            input_style = gr.Radio(label="Chatbot Style", choices=['AA','b','c'], value="AA", show_label=False)
+        input_msg.submit(chat.text_chat, [input_msg, chatbot, input_style], [input_msg, chatbot])
+
+
+tab_chat.load(chat.clear_memory, None, None)
+tab_chat.launch()
+
+
+# def respond(message, chat_history):
+#     bot_message = random.choice(["How are you?", "I love you", "I'm very hungry"])
+#     chat_history.append((message, bot_message))
+#     time.sleep(2)
+#     return "", chat_history
+
+# gr.ChatInterface(
+#     yes_man,
+#     chatbot=gr.Chatbot(height=300),
+#     textbox=gr.Textbox(placeholder="Ask me a yes or no question", container=False, scale=7),
+#     title="Yes Man",
+#     description="Ask Yes Man any question",
+#     theme="soft",
+#     examples=["Hello", "Am I cool?", "Are tomatoes vegetables?"],
+#     cache_examples=True,
+#     retry_btn="Retry",
+#     undo_btn="Delete Previous",
+#     clear_btn="Clear",
+# ).launch()
 
 # define the input component
 # input_textbox = gr.Textbox()

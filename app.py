@@ -6,6 +6,7 @@ from llm import chat, text, code, image
 from utils import auth
 
 
+
 LANGS = ["en_US", "zh_CN", "zh_TW", "ja_JP", "de_DE", "fr_FR"]
 STYLES = ["正常", "幽默", "极简", "理性", "可爱"]
 PICSTYLES = [
@@ -14,27 +15,45 @@ PICSTYLES = [
     "线稿(line-art)", "3D模型(3d-model)", "黏土(craft-clay)"
     ]
 CODELANGS = ["Python", "Shell", "HTML", "Javascript", "Typescript", "Yaml", "GoLang", "Rust"]
-LoginUser = ''
 
 
 def random_seed():
     return random.randrange(10000000, 99999999)
 
-tab_chat = gr.ChatInterface(
-    chat.text_chat,
-    chatbot=gr.Chatbot(
-        # avatar_images='',
-        layout="bubble",
-        height=360
-    ),
-    textbox=gr.Textbox(placeholder="", container=False, scale=7),
-    additional_inputs=gr.Radio(label="Chatbot Style", choices=STYLES, value="正常"),
-    description="Let's chat ...",
-    # retry_btn="Retry",
-    undo_btn=None,
-    # clear_btn="Clear",
-    submit_btn="Chat"
-)
+def login(username, password):
+    user_dict = auth.get_userdict()
+    if username == user_dict.get('username') and password == user_dict.get('password'):
+        # global LoginUser = username
+        # clear memory of last session
+        chat.clear_memory()
+        return True
+
+with gr.Blocks() as tab_chat:
+    description = gr.Markdown("Let's chat ...")
+    with gr.Column(variant="panel"):
+        # Chatbot接收 chat history进行显示
+        chatbot = gr.Chatbot(
+            # avatar_images='',
+            label="Chatbot",
+            layout="bubble",
+            height=360
+        )
+        with gr.Group():
+            with gr.Row():
+                input_msg = gr.Textbox(
+                    show_label=False, container=False, autofocus=True, scale=7,
+                    placeholder="Type a message..."            
+                )
+                btn_submit = gr.Button('Chat', variant="primary", scale=1, min_width=150)                
+        with gr.Row():
+            btn_undo = gr.Button('↩️ Undo', scale=1, min_width=150)
+            btn_clear = gr.ClearButton([input_msg, chatbot], value='🗑️  Clear')
+            btn_forget = gr.Button('💊 Forget All', scale=1, min_width=200)
+            btn_forget.click(chat.clear_memory, None, chatbot)
+        with gr.Accordion(label='Chatbot Style', open=False):
+            input_style = gr.Radio(label="Chatbot Style", choices=STYLES, value="正常", show_label=False)
+        input_msg.submit(chat.text_chat, [input_msg, chatbot, input_style], [input_msg, chatbot])
+        btn_submit.click(chat.text_chat, [input_msg, chatbot, input_style], [input_msg, chatbot])
 
 tab_translate = gr.Interface(
     text.text_translate,
@@ -142,7 +161,7 @@ if __name__ == "__main__":
     app.launch(
         # share=True,
         debug=True,
-        auth=auth.login,
+        auth=login,
         # ssl_certfile="cert.pem",
         # ssl_keyfile="key.pem"
         server_name='0.0.0.0',

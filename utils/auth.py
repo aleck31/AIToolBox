@@ -30,10 +30,3 @@ def get_userdict():
     user_dict = ast.literal_eval(response['SecretString'])
 
     return user_dict
-
-
-def login(username, password):
-    user_dict = get_userdict()
-    if username == user_dict.get('username') and password == user_dict.get('password'):
-        # global LoginUser = username
-        return True

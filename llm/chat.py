@@ -37,7 +37,7 @@ conversation = ConversationChain(
     memory=buffer_memory
 )
 
-def text_chat(message, history, style):
+def text_chat(message:str, history:list, style:str):
     if message == '':
         return "Please tell me something first :)"
     
@@ -80,10 +80,15 @@ def text_chat(message, history, style):
     )
 
     conversation.prompt = chat_prompt
+    # 获取llm回复，注意 Claude回复内容带一个空格，例如 " Hello! I'm Claude“
     bot_reply = conversation.predict(input=message)
+    # 将当前对话添加到聊天记录
+    history.append((message, bot_reply))
     
-    return bot_reply
+    # 返回<空>和<历史记录>给输入框和Chatbot
+    return '', history
 
 
 def clear_memory():
-    return buffer_memory.clear()
+    buffer_memory.clear()
+    return [('/reset', 'Conversation history forgotten.')]

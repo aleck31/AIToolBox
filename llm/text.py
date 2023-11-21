@@ -76,9 +76,9 @@ def text_rewrite(text, style):
     rewrite_prompt = PromptTemplate(
         input_variables=["text", "style"], 
         template="""
-        Human: Please polis the original paragraph in a {style} way to make the content more in line with local expression.
+        Human: Polis the original paragraph in a {style} way to make the content more idiomatic and natural in the native language expression.
         You can modify the vocabulary, adjust sentences structure to make it more natural. But do not overextend or change the meaning.
-        Provide only the polished contents, do not include any other content, such as XML tags.
+        Please provide only the polished contents, do not translate.
         <original_paragraph>
         {text}
         </original_paragraph>
