@@ -8,15 +8,15 @@ from . import bedrock_runtime
 
 
 
-model_id = "anthropic.claude-v2"
-# modelId = 'anthropic.claude-instant-v1'
+# model_id = "anthropic.claude-v2"
+model_id = 'anthropic.claude-instant-v1'
 
 inference_modifier = {
-    'max_tokens_to_sample':4096, 
+    'max_tokens_to_sample':2048, 
     "temperature":1,
-    "top_k":10,
-    "top_p":1,
-    "stop_sequences": ["\n\nHuman"]
+    "top_p":0.999,
+    "top_k":250,
+    "stop_sequences": ["\n\nHuman:"]
     }
 
 textgen_llm = Bedrock(

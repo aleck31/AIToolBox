@@ -10,10 +10,11 @@ from utils import auth
 LANGS = ["en_US", "zh_CN", "zh_TW", "ja_JP", "de_DE", "fr_FR"]
 STYLES = ["正常", "幽默", "极简", "理性", "可爱"]
 PICSTYLES = [
-    "照片(photographic)", "动漫(anime)", "美式漫画(comic-book)", 
-    "数字艺术(digital-art)", "老照片(analog-film)", "电影(cinematic)", 
-    "线稿(line-art)", "3D模型(3d-model)", "黏土(craft-clay)"
-    ]
+    "增强(enhance)", "照片(photographic)", "老照片(analog-film)",
+    "电影(cinematic)", "模拟电影(analog-film)", "数字艺术(digital-art)",
+    "奇幻艺术(fantasy-art)", "动漫(anime)", "美式漫画(comic-book)", "线稿(line-art)", 
+    "3D模型(3d-model)", "低多边形(lowpoly)", "折纸艺术(origami)", "黏土(craft-clay)"
+]
 CODELANGS = ["Python", "Shell", "HTML", "Javascript", "Typescript", "Yaml", "GoLang", "Rust"]
 
 
@@ -47,7 +48,7 @@ with gr.Blocks() as tab_chat:
                 btn_submit = gr.Button('Chat', variant="primary", scale=1, min_width=150)                
         with gr.Row():
             btn_undo = gr.Button('↩️ Undo', scale=1, min_width=150)
-            btn_clear = gr.ClearButton([input_msg, chatbot], value='🗑️  Clear')
+            btn_clear = gr.ClearButton([input_msg, chatbot], value='🗑️ Clear')
             btn_forget = gr.Button('💊 Forget All', scale=1, min_width=200)
             btn_forget.click(chat.clear_memory, None, chatbot)
         with gr.Accordion(label='Chatbot Style', open=False):
@@ -58,7 +59,7 @@ with gr.Blocks() as tab_chat:
 tab_translate = gr.Interface(
     text.text_translate,
     inputs=[
-        gr.Textbox(label="Original", lines=6, scale=5),
+        gr.Textbox(label="Original", lines=7, scale=5),
         gr.Dropdown(label="Target Language", choices=LANGS, value='en_US', scale=1)
     ],
     outputs=gr.Textbox(label="Translated", lines=11, scale=5),
@@ -70,7 +71,7 @@ tab_translate = gr.Interface(
 tab_rewrite = gr.Interface(
     text.text_rewrite,
     inputs=[
-        gr.Textbox(label="Original", lines=6, scale=5),
+        gr.Textbox(label="Original", lines=7, scale=5),
         # gr.Accordion(),
         gr.Radio(label="Style", choices=STYLES, value="正常", scale=1)
     ],
@@ -78,7 +79,7 @@ tab_rewrite = gr.Interface(
     examples=[["人工智能将对人类文明的发展产生深远影响。", "幽默"]],
     cache_examples=False,
     # live=True,
-    description="Let me help you polish the paragraph."
+    description="Let me help you polish the contents."
 )
 
 tab_summary = gr.Interface(
@@ -87,14 +88,14 @@ tab_summary = gr.Interface(
         gr.Textbox(label="Original", lines=12, scale=5),
     ],
     outputs=gr.Textbox(label="Translated", lines=6, scale=5),
-    description="Let me summary the text for you."
+    description="Let me summary the contents for you."
 )
 
 with gr.Blocks() as tab_code:
     with gr.Row():
         # 输入需求
         with gr.Column(scale=6, min_width=500):
-            input_requirement =  gr.Textbox(label="Requirement Description:", lines=4)         
+            input_requirement =  gr.Textbox(label="Describe your requirements:", lines=4)         
         with gr.Column(scale=2, min_width=100):
             input_lang = gr.Radio(label="Programming Language", choices=CODELANGS, value="Python")
     with gr.Row():
@@ -104,9 +105,9 @@ with gr.Blocks() as tab_code:
             lang_format = input_lang.value.lower() if input_lang.value.lower() in support_langs else None
             output_codes = gr.Code(label="Code", language=lang_format, lines=9)
         with gr.Column(scale=2, min_width=100):
-            btn_code_submit = gr.Button()
+            btn_code_submit = gr.Button(value='⌨️ Generate')
             btn_code_submit.click(fn=code.gen_code, inputs=[input_requirement, input_lang], outputs=output_codes)
-            btn_code_clear = gr.ClearButton([input_requirement, output_codes])
+            btn_code_clear = gr.ClearButton([input_requirement, output_codes], value='🗑️ Clear')
     with gr.Row():
         error_box = gr.Textbox(label="Error", visible=False)
 
@@ -130,14 +131,12 @@ with gr.Blocks() as tab_draw:
                     # with gr.Column(scale=1):
                     btn_random = gr.Button('🎲 Random', scale=1)
                     btn_random.click(random_seed, None, input_seed)
-                with gr.Row():
-                    with gr.Column(scale=1):
-                        btn_text_img = gr.Button("Generate")          
-                    with gr.Column(scale=1):
-                        btn_text_clean = gr.ClearButton([input_prompt, input_negative])                
+                with gr.Row():          
+                    btn_img_gen = gr.Button("🪄 Draw")                
+                    btn_text_clean = gr.ClearButton([input_prompt, input_negative], value='🗑️ Clear')
             with gr.Column(scale=6):
-                output_image = gr.Image(interactive=False, height=480)            
-            btn_text_img.click(
+                output_image = gr.Image(interactive=False)            
+            btn_img_gen.click(
                 fn=image.text_image, 
                 inputs=[input_prompt, input_negative, input_style, input_step, input_seed], 
                 outputs=output_image
@@ -149,7 +148,7 @@ with gr.Blocks() as tab_draw:
 
 app = gr.TabbedInterface(
     [tab_chat, tab_translate, tab_rewrite, tab_summary, tab_draw, tab_code], 
-    tab_names= ["Chat (Claude v2)", "Translate (Claude v2)", "ReWrite (Claude v2)", "Summary (Claude v2)", "Draw (SDXL v0.8)", "Code (Claude v2)"],
+    tab_names= ["Chat (Claude Instant v1.2)", "Translate (Claude v2)", "ReWrite (Claude v2)", "Summary (Claude v2)", "Draw (SDXL v0.8)", "Code (Claude v2)"],
     title="AI ToolBox (powered by Bedrock)",
     theme="Base",
     css="footer {visibility: hidden}"
@@ -160,10 +159,8 @@ if __name__ == "__main__":
     app.queue()
     app.launch(
         # share=True,
-        debug=True,
+        # debug=True,
         auth=login,
-        # ssl_certfile="cert.pem",
-        # ssl_keyfile="key.pem"
         server_name='0.0.0.0',
         server_port=8888
     )

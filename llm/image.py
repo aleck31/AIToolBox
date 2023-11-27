@@ -21,6 +21,14 @@ negative_prompts = [
 ]
 clip_guidance_preset = "FAST_GREEN" # (e.g. FAST_BLUE FAST_GREEN NONE SIMPLE SLOW SLOWER SLOWEST)
 sampler = "K_DPMPP_2S_ANCESTRAL" # (e.g. DDIM, DDPM, K_DPMPP_SDE, K_DPMPP_2M, K_DPMPP_2S_ANCESTRAL, K_DPM_2, K_DPM_2_ANCESTRAL, K_EULER, K_EULER_ANCESTRAL, K_HEUN, K_LMS)
+'''
+Recommended image sizes for different ratios:
+21:9 - 1536 x 640
+16:9 - 1344 x 768
+3:2 - 1216 x 832
+5:4 - 1152 x 896
+1:1 - 1024 x 1024
+'''
 width = 768
 
 
@@ -32,7 +40,7 @@ def text_image(prompt:str, negative:str, style, step:int, seed:int):
         pattern = r'\((.*?)\)'
         style = re.findall(pattern, style)[0]
     else:
-        style = None
+        style = 'base'
     
     negative_prompts.append(negative)
 

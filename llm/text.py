@@ -10,15 +10,15 @@ from utils import format_resp
 
 
 inference_modifier = {
-    # max_tokens_to_sample - maximum number of tokens to generate. Responses are not guaranteed to fill up to the maximum desired length.
+    # maximum number of tokens to generate. Responses are not guaranteed to fill up to the maximum desired length.
     'max_tokens_to_sample':4096, 
     # tunes the degree of randomness in generation. Lower temperatures mean less random generations.
     "temperature":0.5,
-    # top_k - can be used to reduce repetitiveness of generated tokens. The higher the value, the stronger a penalty is applied to previously present tokens, 
-    # proportional to how many times they have already appeared in the prompt or prior generation.
-    "top_k":250,
     # less than one keeps only the smallest set of most probable tokens with probabilities that add up to top_p or higher for generation.
     "top_p":0.5,
+    # top_k - can be used to reduce repetitiveness of generated tokens. 
+    # The higher the value, the stronger a penalty is applied to previously present tokens, 
+    "top_k":200,
     # stop_sequences - are sequences where the API will stop generating further tokens. The returned text will not contain the stop sequence.
     "stop_sequences": []
     }
