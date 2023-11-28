@@ -1,8 +1,6 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 from langchain.prompts import PromptTemplate
-from langchain.chains import ConversationChain
-from langchain.memory import ConversationBufferMemory
 from langchain.llms.bedrock import Bedrock
 from . import bedrock_runtime
 from utils import format_resp

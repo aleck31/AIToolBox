@@ -37,8 +37,8 @@ conversation = ConversationChain(
     memory=buffer_memory
 )
 
-def text_chat(message:str, history:list, style:str):
-    if message == '':
+def text_chat(user_msg:str, chat_history:list, style:str):
+    if user_msg == '':
         return "Please tell me something first :)"
     
     # AI的回复采用 {style} 的对话风格.
@@ -81,12 +81,12 @@ def text_chat(message:str, history:list, style:str):
 
     conversation.prompt = chat_prompt
     # 获取llm回复，注意 Claude回复内容带一个空格，例如 " Hello! I'm Claude“
-    bot_reply = conversation.predict(input=message)
-    # 将当前对话添加到聊天记录
-    history.append((message, bot_reply))
+    bot_reply = conversation.predict(input=user_msg)
+    # 将当前的聊天对()添加到聊天记录
+    chat_history.append((user_msg, bot_reply))
     
     # 返回<空>和<历史记录>给输入框和Chatbot
-    return '', history
+    return '', chat_history
 
 
 def clear_memory():

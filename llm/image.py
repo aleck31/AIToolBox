@@ -32,9 +32,14 @@ Recommended image sizes for different ratios:
 width = 768
 
 
-def text_image(prompt:str, negative:str, style, step:int, seed:int):
+
+def random_seed():
+    return random.randrange(10000000, 99999999)
+
+
+def text_image(prompt:str, negative:str, style, step:int, seed):
     # chang seed from Double to Int
-    seed = random.randrange(10000000, 99999999) if seed == -1 else int(seed)
+    seed = random_seed() if seed == -1 else int(seed)
     # extracts the style string contained within ()
     if style:
         pattern = r'\((.*?)\)'

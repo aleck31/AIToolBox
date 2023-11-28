@@ -1,7 +1,6 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
-import random
 from llm import chat, text, code, image
 from utils import auth
 
@@ -16,18 +15,20 @@ PICSTYLES = [
     "3D模型(3d-model)", "低多边形(lowpoly)", "折纸艺术(origami)", "黏土(craft-clay)"
 ]
 CODELANGS = ["Python", "Shell", "HTML", "Javascript", "Typescript", "Yaml", "GoLang", "Rust"]
+Login_USER = ''
 
-
-def random_seed():
-    return random.randrange(10000000, 99999999)
 
 def login(username, password):
-    user_dict = auth.get_userdict()
-    if username == user_dict.get('username') and password == user_dict.get('password'):
-        # global LoginUser = username
-        # clear memory of last session
-        chat.clear_memory()
+    global Login_USER
+    if auth.verify_user(username, password):
+        # If a new user logs in, clear the history by default
+        if username != Login_USER:
+            chat.clear_memory()
+        Login_USER = username 
         return True
+    else:
+        return False
+
 
 with gr.Blocks() as tab_chat:
     description = gr.Markdown("Let's chat ...")
@@ -37,7 +38,7 @@ with gr.Blocks() as tab_chat:
             # avatar_images='',
             label="Chatbot",
             layout="bubble",
-            height=360
+            height=420
         )
         with gr.Group():
             with gr.Row():
@@ -130,7 +131,7 @@ with gr.Blocks() as tab_draw:
                     input_seed = gr.Number(value=-1, label="Seed", scale=5)
                     # with gr.Column(scale=1):
                     btn_random = gr.Button('🎲 Random', scale=1)
-                    btn_random.click(random_seed, None, input_seed)
+                    btn_random.click(image.random_seed, None, input_seed)
                 with gr.Row():          
                     btn_img_gen = gr.Button("🪄 Draw")                
                     btn_text_clean = gr.ClearButton([input_prompt, input_negative], value='🗑️ Clear')
@@ -146,9 +147,21 @@ with gr.Blocks() as tab_draw:
         gr.Markdown('TBD')
 
 
+with gr.Blocks() as tab_setting:
+    description = gr.Markdown("Toolbox Settings")
+    with gr.Row():
+        with gr.Column(scale=5):
+            # tobeFix: cannot get the value of global variable
+            gr.Textbox(Login_USER, label="Login User", max_lines=1)
+        with gr.Column(scale=2):
+            pass
+        with gr.Column(scale=2):
+            btn_logout = gr.Button('Logout ↪️', scale=1, min_width=150)
+
+
 app = gr.TabbedInterface(
-    [tab_chat, tab_translate, tab_rewrite, tab_summary, tab_draw, tab_code], 
-    tab_names= ["Chat (Claude Instant v1.2)", "Translate (Claude v2)", "ReWrite (Claude v2)", "Summary (Claude v2)", "Draw (SDXL v0.8)", "Code (Claude v2)"],
+    [tab_chat, tab_translate, tab_rewrite, tab_summary, tab_draw, tab_code, tab_setting], 
+    tab_names= ["Chat (Claude Instant v1.2)", "Translate (Claude v2)", "ReWrite (Claude v2)", "Summary (Claude v2)", "Draw (SDXL v0.8)", "Code (Claude v2)", "Setting ⚙️"],
     title="AI ToolBox (powered by Bedrock)",
     theme="Base",
     css="footer {visibility: hidden}"
