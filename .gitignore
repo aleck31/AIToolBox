@@ -1,13 +1,17 @@
 # Byte-compiled / optimized / DLL files
+*.pyc
 __pycache__/
 *.py[cod]
+*.pyi
 *$py.class
 
 # Distribution / packaging
 .Python
 build/
+.eggs/
 develop-eggs/
 dist/
+node_modules
 
 # Environments
 .env
@@ -20,7 +24,7 @@ venv/
 .idea
 .DS_Store
 
-
 flagged
 *.log
 demo*
+tmp/*

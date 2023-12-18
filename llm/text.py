@@ -22,7 +22,7 @@ inference_modifier = {
     }
 
 textgen_llm = Bedrock(
-    model_id = "anthropic.claude-v2",
+    model_id = "anthropic.claude-v2:1",
     client = bedrock_runtime, 
     model_kwargs = inference_modifier 
     )
@@ -76,7 +76,7 @@ def text_rewrite(text, style):
         template="""
         Human: Polis the original paragraph in a {style} way to make the content more idiomatic and natural in the native language expression.
         You can modify the vocabulary, adjust sentences structure to make it more natural. But do not overextend or change the meaning.
-        Please provide only the polished contents, do not translate.
+        Please provide only the polished contents, do not translate the text.
         <original_paragraph>
         {text}
         </original_paragraph>

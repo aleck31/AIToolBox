@@ -8,8 +8,8 @@ from . import bedrock_runtime
 
 
 
-# model_id = "anthropic.claude-v2"
-model_id = 'anthropic.claude-instant-v1'
+model_id = "anthropic.claude-v2:1"
+# model_id = 'anthropic.claude-instant-v1'
 
 inference_modifier = {
     'max_tokens_to_sample':2048, 

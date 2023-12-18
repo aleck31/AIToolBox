@@ -15,7 +15,7 @@ inference_modifier = {
     }
 
 textgen_llm = Bedrock(
-    model_id = "anthropic.claude-v2",
+    model_id = "anthropic.claude-v2:1",
     client = bedrock_runtime, 
     model_kwargs = inference_modifier 
     )
