@@ -7,10 +7,11 @@ import base64
 import random
 from PIL import Image
 from . import bedrock_runtime
+from utils.common import translate_text
 
 
-model_id = "stability.stable-diffusion-xl-v0"
-# model_id = "stability.stable-diffusion-xl-v1"
+# model_id = "stability.stable-diffusion-xl-v0"
+model_id = "stability.stable-diffusion-xl-v1"
 
 negative_prompts = [
     "lower",
@@ -22,15 +23,11 @@ negative_prompts = [
 clip_guidance_preset = "FAST_GREEN" # (e.g. FAST_BLUE FAST_GREEN NONE SIMPLE SLOW SLOWER SLOWEST)
 sampler = "K_DPMPP_2S_ANCESTRAL" # (e.g. DDIM, DDPM, K_DPMPP_SDE, K_DPMPP_2M, K_DPMPP_2S_ANCESTRAL, K_DPM_2, K_DPM_2_ANCESTRAL, K_EULER, K_EULER_ANCESTRAL, K_HEUN, K_LMS)
 '''
-Recommended image sizes for different ratios:
-21:9 - 1536 x 640
-16:9 - 1344 x 768
-3:2 - 1216 x 832
-5:4 - 1152 x 896
-1:1 - 1024 x 1024
+The image sizes or dimension must be one of:
+1024x1024, 1152x896, 1216x832, 1344x768, or 1536x640
 '''
-width = 768
-
+height = 1152
+width = 896
 
 
 def random_seed():
@@ -45,8 +42,10 @@ def text_image(prompt:str, negative:str, style, step:int, seed):
         pattern = r'\((.*?)\)'
         style = re.findall(pattern, style)[0]
     else:
-        style = 'base'
+        style = 'enhance'
     
+    prompt = translate_text(prompt, 'en').get('translated_text')
+
     negative_prompts.append(negative)
 
     request_body = json.dumps({
@@ -59,6 +58,7 @@ def text_image(prompt:str, negative:str, style, step:int, seed):
         "style_preset": style,
         "clip_guidance_preset": clip_guidance_preset,
         "sampler": sampler,
+        "height": height,
         "width": width,
         "cfg_scale": 5
     })
