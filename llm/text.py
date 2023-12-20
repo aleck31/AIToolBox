@@ -29,7 +29,7 @@ textgen_llm = Bedrock(
 
 
 
-def text_translate(text, target_lang):
+def text_translate(text, Source_lang, target_lang):
     if text == '':
         return "Tell me something first."
     

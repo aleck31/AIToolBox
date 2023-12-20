@@ -1,7 +1,7 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
-from llm import chat, text, code, image
+from llm import chat, text, code, image, gemini
 from utils import common
 
 
@@ -29,15 +29,27 @@ def login(username, password):
     else:
         return False
 
+def post_text(message, history):
+    '''post message on the chatbox before get LLM response'''
+    # history = history + [(message, None)]
+    history.append((message, None))
+    return gr.Textbox(value="", interactive=False), message, history
 
-with gr.Blocks() as tab_chat:
+def post_media(file, history):
+    '''post media on the chatbox before get LLM response'''
+    history.append(((file.name,), None))
+    return history
+    
+
+with gr.Blocks() as tab_claude:
     description = gr.Markdown("Let's chat ... (Powered by Claude v2.1)")
     with gr.Column(variant="panel"):
         # Chatbot接收 chat history进行显示
-        chatbot = gr.Chatbot(
-            # avatar_images='',
+        chatbox = gr.Chatbot(
+            avatar_images=(None, "assets/avata_claude.jpg"),
             label="Chatbot",
             layout="bubble",
+            bubble_full_width=False,
             height=420
         )
         with gr.Group():
@@ -46,32 +58,87 @@ with gr.Blocks() as tab_chat:
                     show_label=False, container=False, autofocus=True, scale=7,
                     placeholder="Type a message..."
                 )
-                btn_submit = gr.Button('Chat', variant="primary", scale=1, min_width=150)                
-        with gr.Row():            
-            btn_clear = gr.ClearButton([input_msg, chatbot], value='🗑️ Clear')
-            btn_forget = gr.Button('💊 Forget All', scale=1, min_width=200)
-            btn_forget.click(chat.clear_memory, None, chatbot)
+                btn_submit = gr.Button('Chat', variant="primary", scale=1, min_width=150)          
+        with gr.Row():
+            btn_clear = gr.ClearButton([input_msg, chatbox], value='🗑️ Clear')
+            btn_forget = gr.Button('💊 Forget All', scale=1, min_width=150)
+            btn_forget.click(chat.clear_memory, None, chatbox)
             btn_flag = gr.Button('🏁 Flag', scale=1, min_width=150)
         with gr.Accordion(label='Chatbot Style', open=False):
             input_style = gr.Radio(label="Chatbot Style", choices=STYLES, value="正常", show_label=False)
-        input_msg.submit(chat.text_chat, [input_msg, chatbot, input_style], [input_msg, chatbot])
-        btn_submit.click(chat.text_chat, [input_msg, chatbot, input_style], [input_msg, chatbot])
+        
+        saved_msg = gr.State()
+        # saved_chats = (
+        #     gr.State(chatbot.value) if chatbot.value else gr.State([])
+        # )
+        input_msg.submit(
+            post_text, [input_msg, chatbox], [input_msg, saved_msg, chatbox], queue=False
+        ).then(
+            chat.text_chat, [saved_msg, chatbox, input_style], chatbox
+        ).then(
+            # restore interactive for input textbox
+            lambda: gr.Textbox(interactive=True), None, [input_msg]
+        )
 
-with gr.Blocks() as tab_chatm:
-    description = gr.Markdown("Let's chat ... (Powered by Gemini Por)")
+        btn_submit.click(
+            chat.text_chat, [input_msg, chatbox, input_style], [chatbox]
+        ).then(lambda: gr.Textbox(value=''), None, input_msg)
+
+
+with gr.Blocks() as tab_gemini:
+    description = gr.Markdown("Let's chat ... (Powered by Gemini Pro)")    
+    with gr.Column(variant="panel"):
+        chatbox = gr.Chatbot(
+            avatar_images=(None, "assets/avata_google.jpg"),
+            # elem_id="chatbot",
+            bubble_full_width=False,
+            height=420
+        )
+        with gr.Group():
+            with gr.Row():
+                input_msg = gr.Textbox(
+                    show_label=False, container=False, scale=12,
+                    placeholder="Enter text and press enter, or upload an image"
+                )
+                btn_file = gr.UploadButton("📁", file_types=["image", "video", "audio"], scale=1)
+                btn_submit = gr.Button('Chat', variant="primary", scale=2, min_width=150)
+
+        with gr.Row():
+            btn_clear = gr.ClearButton([input_msg, chatbox], value='🗑️ Clear', scale=1)
+            btn_forget = gr.Button('💊 Forget All', scale=1, min_width=150)
+            btn_forget.click(chat.clear_memory, None, chatbox)
+            btn_flag = gr.Button('🏁 Flag', scale=1, min_width=150)
+
+        # save input message in State()
+        saved_msg = gr.State()
+        media_msg = btn_file.upload(
+            post_media, [btn_file, chatbox], [chatbox], queue=False
+        ).then(
+            gemini.media_chat, [btn_file, chatbox], chatbox
+        )
+
+        txt_msg = input_msg.submit(
+            post_text, [input_msg, chatbox], [input_msg, saved_msg, chatbox], queue=False
+        ).then(
+            gemini.text_chat, [saved_msg, chatbox], chatbox
+        )
+        # restore interactive for input textbox
+        txt_msg.then(lambda: gr.Textbox(interactive=True), None, [input_msg])
 
 
 tab_translate = gr.Interface(
     text.text_translate,
     inputs=[
-        gr.Textbox(label="Original", lines=7, scale=5),
-        gr.Dropdown(label="Target Language", choices=LANGS, value='en_US', scale=1)
+        gr.Textbox(label="Original", lines=7),
+        gr.Dropdown(label="Source Language", choices=['auto'], value='auto', container=False),
+        gr.Dropdown(label="Target Language", choices=LANGS, value='en_US')
     ],
     outputs=gr.Textbox(label="Translated", lines=11, scale=5),
-    examples=[["Across the Great Wall we can reach every corner of the world.", "zh_CN"]],
+    examples=[["Across the Great Wall we can reach every corner of the world.", "auto", "zh_CN"]],
     cache_examples=False,
     description="Let me translate the text for you. (Powered by Claude v2)"
 )
+
 
 tab_rewrite = gr.Interface(
     text.text_rewrite,
@@ -87,6 +154,7 @@ tab_rewrite = gr.Interface(
     description="Let me help you polish the contents. (Powered by Claude v2)"
 )
 
+
 tab_summary = gr.Interface(
     text.text_summary,
     inputs=[
@@ -95,6 +163,7 @@ tab_summary = gr.Interface(
     outputs=gr.Textbox(label="Translated", lines=6, scale=5),
     description="Let me summary the contents for you. (Powered by Claude v2)"
 )
+
 
 with gr.Blocks() as tab_code:
     description = gr.Markdown("Let's build ... (Powered by Claude v2.1)")
@@ -170,19 +239,16 @@ with gr.Blocks() as tab_setting:
 
 
 app = gr.TabbedInterface(
-    [tab_chat, tab_translate, tab_rewrite, tab_summary, tab_draw, tab_code, tab_setting], 
-    tab_names= ["Chat 🤖", "Translate 🇺🇳", "ReWrite ✍🏼", "Summary 📰", "Draw 🎨", "Code 💻", "Setting ⚙️"],
-    # [tab_chat, tab_chatm, tab_translate, tab_rewrite, tab_summary, tab_draw, tab_code, tab_setting], 
-    # tab_names= ["Chat (Claude v2.1)", "Chat (Gemini-Pro)", "Translate (Claude v2)", "ReWrite (Claude v2)", "Summary (Claude v2)", "Draw (SDXL v1)", "Code (Claude v2)", "Setting ⚙️"],
-    title="AI ToolBox ",
+    [tab_claude, tab_gemini, tab_translate, tab_rewrite, tab_summary, tab_draw, tab_code, tab_setting], 
+    tab_names= ["Claude 🤖", "Gemini 👾", "Translate 🇺🇳", "ReWrite ✍🏼", "Summary 📰", "Draw 🎨", "Code 💻", "Setting ⚙️"],
+    title="AI ToolBox",
     theme="Base",
     css="footer {visibility: hidden}"
     )
 
 
 if __name__ == "__main__":
-    app.queue()
-    app.launch(
+    app.queue().launch(
         # share=True,
         # debug=True,
         auth=login,

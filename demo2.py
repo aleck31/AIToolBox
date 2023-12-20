@@ -1,34 +1,89 @@
 import gradio as gr
 import random
 import time
-from llm import chat
+from llm import chat, gemini
 
 
+# def clear_and_save_textbox(message: str) -> tuple[str, str]:
+#     return "", message
+
+def add_text(message, history):
+    # history = history + [(message, None)]
+    history.append((message, None))
+    return gr.Textbox(value="", interactive=False), message, history
+
+def add_file(file, history):
+    # history = history + [((file.name,), None)]
+    history.append(((file.name,), None))
+    return history
 
 with gr.Blocks() as tab_chat:
-    description = gr.Markdown("Let's chat ...")
+    description = gr.Markdown("Let's chat ... (Powered by Gemini Pro)")    
     with gr.Column(variant="panel"):
-        # Chatbot接收 chat history进行显示
-        chatbot = gr.Chatbot(label="Chatbot")
+        chatbox = gr.Chatbot(
+            avatar_images=(None, "assets/avata_google.jpg"),
+            # elem_id="chatbot",
+            bubble_full_width=False,
+            height=420
+        )
         with gr.Group():
             with gr.Row():
                 input_msg = gr.Textbox(
-                    show_label=False, container=False, autofocus=True, scale=7,
-                    placeholder="Type a message..."            
+                    show_label=False, container=False, scale=12,
+                    placeholder="Enter text and press enter, or upload an image"
                 )
-                btn_submit = gr.Button('Chat', variant="primary", scale=1, min_width=150)
+                btn_file = gr.UploadButton("📁", file_types=["image", "video", "audio"], scale=1)
+                btn_submit = gr.Button('Chat', variant="primary", scale=2, min_width=150)
+
         with gr.Row():
-            btn_undo = gr.Button('↩️ Undo', scale=1, min_width=150)
-            btn_clear = gr.ClearButton([input_msg, chatbot], value='🗑️  Clear')
-            btn_forget = gr.Button('🎲 Forget All', scale=1, min_width=200)
-            btn_forget.click(chat.clear_memory, None, chatbot)
-        with gr.Accordion(label='Chatbot Style', open=False):
-            input_style = gr.Radio(label="Chatbot Style", choices=['AA','b','c'], value="AA", show_label=False)
-        input_msg.submit(chat.text_chat, [input_msg, chatbot, input_style], [input_msg, chatbot])
+            btn_clear = gr.ClearButton([input_msg, chatbox], value='🗑️ Clear', scale=1)
+            btn_forget = gr.Button('💊 Forget All', scale=1, min_width=150)
+            btn_forget.click(chat.clear_memory, None, chatbox)
+            btn_flag = gr.Button('🏁 Flag', scale=1, min_width=150)
+
+        # save input message in State()
+        saved_msg = gr.State()
+        media_msg = btn_file.upload(
+            add_file, [btn_file, chatbox], [chatbox], queue=False
+        ).then(
+            gemini.media_chat, [btn_file, chatbox], chatbox
+        )
+
+        txt_msg = input_msg.submit(
+            add_text, [input_msg, chatbox], [input_msg, saved_msg, chatbox], queue=False
+        ).then(
+            gemini.text_chat, [saved_msg, chatbox], chatbox
+        )
+        # restore interactive for input textbox
+        txt_msg.then(lambda: gr.Textbox(interactive=True), None, [input_msg])
 
 
-tab_chat.load(chat.clear_memory, None, None)
-tab_chat.launch()
+# with gr.Blocks() as tab_chat2:
+#     description = gr.Markdown("Let's chat ...")
+#     with gr.Column(variant="panel"):
+#         # Chatbot接收 chat history进行显示
+#         chatbot = gr.Chatbot(label="Chatbot")
+#         with gr.Group():
+#             with gr.Row():
+#                 input_msg = gr.Textbox(
+#                     show_label=False, container=False, autofocus=True, scale=7,
+#                     placeholder="Type a message..."            
+#                 )
+#                 btn_submit = gr.Button('Chat', variant="primary", scale=1, min_width=150)
+#         with gr.Row():
+#             btn_undo = gr.Button('↩️ Undo', scale=1, min_width=150)
+#             btn_clear = gr.ClearButton([input_msg, chatbot], value='🗑️  Clear')
+#             btn_forget = gr.Button('🎲 Forget All', scale=1, min_width=200)
+#             btn_forget.click(chat.clear_memory, None, chatbot)
+#         with gr.Accordion(label='Chatbot Style', open=False):
+#             input_style = gr.Radio(label="Chatbot Style", choices=['AA','b','c'], value="AA", show_label=False)
+#         input_msg.submit(chat.text_chat, [input_msg, chatbot, input_style], [input_msg, chatbot])
+
+
+# tab_chat.load(chat.clear_memory, None, None)
+tab_chat.launch(
+    server_port=8889,
+)
 
 
 # def respond(message, chat_history):
