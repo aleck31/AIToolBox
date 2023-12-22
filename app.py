@@ -77,12 +77,14 @@ with gr.Blocks() as tab_claude:
             chat.text_chat, [saved_msg, chatbox, input_style], chatbox
         ).then(
             # restore interactive for input textbox
-            lambda: gr.Textbox(interactive=True), None, [input_msg]
+            lambda: gr.Textbox(interactive=True), None, input_msg
         )
 
         btn_submit.click(
-            chat.text_chat, [input_msg, chatbox, input_style], [chatbox]
-        ).then(lambda: gr.Textbox(value=''), None, input_msg)
+            post_text, [input_msg, chatbox], [input_msg, saved_msg, chatbox], queue=False
+        ).then(
+            chat.text_chat, [saved_msg, chatbox, input_style], [chatbox]
+        ).then(lambda: gr.Textbox(interactive=True), None, input_msg)
 
 
 with gr.Blocks() as tab_gemini:
@@ -106,7 +108,7 @@ with gr.Blocks() as tab_gemini:
         with gr.Row():
             btn_clear = gr.ClearButton([input_msg, chatbox], value='🗑️ Clear', scale=1)
             btn_forget = gr.Button('💊 Forget All', scale=1, min_width=150)
-            btn_forget.click(chat.clear_memory, None, chatbox)
+            btn_forget.click(gemini.clear_memory, None, chatbox)
             btn_flag = gr.Button('🏁 Flag', scale=1, min_width=150)
 
         # save input message in State()
@@ -124,6 +126,12 @@ with gr.Blocks() as tab_gemini:
         )
         # restore interactive for input textbox
         txt_msg.then(lambda: gr.Textbox(interactive=True), None, [input_msg])
+
+        btn_submit.click(
+            post_text, [input_msg, chatbox], [input_msg, saved_msg, chatbox], queue=False
+        ).then(
+            gemini.text_chat, [saved_msg, chatbox], [chatbox]
+        ).then(lambda: gr.Textbox(interactive=True), None, [input_msg])
 
 
 tab_translate = gr.Interface(
