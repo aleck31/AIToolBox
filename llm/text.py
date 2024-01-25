@@ -4,6 +4,7 @@ from langchain.prompts import PromptTemplate
 from langchain.llms.bedrock import Bedrock
 from . import bedrock_runtime
 from utils import format_resp
+from utils.common import translate_text
 
 
 
@@ -36,17 +37,18 @@ def text_translate(text, Source_lang, target_lang):
     translate_prompt = PromptTemplate(
         input_variables=["text", "target_lang"], 
         template="""
-        Human: Please translate the original paragraph in to {target_lang} language, 
-        match the expressions of the native language, and make suer there are no grammatical errors in the translated contents.
-        Provide only the translated contents, do not include any other content.
-        <original_paragraph>
+        You are an experienced multilingual translation expert. 
+        Your task is to translate the original text into the target language, and ensure the translated text conforms to native expressions in the target language without grammatical errors.
+        Important: The output only contain the translated text, do not include any other content.
+        
+        Human: Please translate the original paragraph in to {target_lang} language:
+        <original_text>
         {text}
-        </original_paragraph>
+        </original_text>
 
         Assistant:
         """
     )
-
     prompt = translate_prompt.format(text=text, target_lang=target_lang)
 
     response = textgen_llm(prompt)
@@ -57,26 +59,30 @@ def text_translate(text, Source_lang, target_lang):
 def text_rewrite(text, style):
     if text == '':
         return "Tell me something first."
+    
+    Source_lang_code = translate_text(text, 'en').get('source_lang_code')
 
     match style:
         case "极简":
-            style = "concise and clean"
+            style = "concise and clear"
         case "理性":
             style = "rational and rigorous"
         case "幽默":
             style = "great humor"   
         case "可爱":
-            style = "lovely"
+            style = "cute and lovely"
         case _:
-            pass
+            style = "general"
 
     # Create a prompt template that has multiple input variables
     rewrite_prompt = PromptTemplate(
-        input_variables=["text", "style"], 
+        input_variables=["text", "style", "source_lang_code"], 
         template="""
-        Human: Polis the original paragraph in a {style} way to make the content more idiomatic and natural in the native language expression.
-        You can modify the vocabulary, adjust sentences structure to make it more natural. But do not overextend or change the meaning.
-        Please provide only the polished contents, do not translate the text.
+        You are an experienced editor, your task is to refine the text provided by the user, making the expression more natural and fluent in the {source_lang_code} language.
+        You can modify the vocabulary, adjust sentences structure to make it more idiomatic to native speakers. But do not overextend or change the meaning.
+        Important: The output only contain the polished text, do not include any other content.
+
+        Human: Polish following original paragraph in a {style} manner:
         <original_paragraph>
         {text}
         </original_paragraph>
@@ -84,8 +90,7 @@ def text_rewrite(text, style):
         Assistant:
         """
     )
-
-    prompt = rewrite_prompt.format(text=text, style=style)
+    prompt = rewrite_prompt.format(text=text, style=style, source_lang_code=Source_lang_code)
 
     response = textgen_llm(prompt)
 
@@ -99,15 +104,19 @@ def text_summary(text):
     translate_prompt = PromptTemplate(
         input_variables=["text"], 
         template="""
+        You are a senior editor. Your task is to summarize the text provided by users without losing any important information.
+        Important: The output only contain the summary text, do not include any other content.
+
         Human: Please provide a summary of the following text:
         <text>
         {text}
         </text>
 
         Assistant:
+        <summarized_text>
+        </summarized_text>
         """
     )
-
     prompt = translate_prompt.format(text=text)
 
     response = textgen_llm(prompt)

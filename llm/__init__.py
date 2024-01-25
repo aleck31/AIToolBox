@@ -5,6 +5,7 @@ from utils import bedrock
 
 
 # os.environ["BEDROCK_ASSUME_ROLE"] = "<YOUR_ROLE_ARN>"  # E.g. "arn:aws:..."
+# 推荐使用 IAM role 授权方式
 # Create new bedrock client
 bedrock_runtime = bedrock.get_bedrock_client(
     assumed_role=os.environ.get("BEDROCK_ASSUME_ROLE", None),

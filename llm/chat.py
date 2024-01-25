@@ -13,9 +13,9 @@ model_id = "anthropic.claude-v2:1"
 
 inference_modifier = {
     'max_tokens_to_sample':2048, 
-    "temperature":1,
+    "temperature":0.9,
     "top_p":0.999,
-    "top_k":250,
+    "top_k":200,
     "stop_sequences": ["\n\nHuman:"]
     }
 
@@ -61,9 +61,9 @@ def text_chat(input_msg:str, chat_history:list, style:str):
     # Create a prompt template
     chat_prompt = PromptTemplate.from_template(
         """
-        Human: The following is a friendly conversation between a human and an AI.
-        The AI is talkative and provides lots of specific details from its context.         
-        If the AI does not know the answer to a question, it truthfully says it does not know.
+        You are an AI chatbot. You are talkative and provides lots of specific details from its context.
+        If you do not know the answer to a question, it truthfully says you don't know.
+        The following is a friendly conversation between a human and an AI.
 
         Current conversation:
         <conversation_history>
@@ -71,9 +71,10 @@ def text_chat(input_msg:str, chat_history:list, style:str):
         </conversation_history>
 
         Here is the human's next reply:
-        <human_reply>
+        Human:
+        <human_message>
         {input}
-        </human_reply>
+        </human_message>
 
         Assistant:
         """

@@ -30,9 +30,10 @@ def gen_code(requirement, language):
     architect_prompt = PromptTemplate(
         input_variables=["requirement", "programmingLanguage"], 
         template="""
+        You are an experienced solution architect at a software company. 
+        Your task is to help users design excellent code framework architectures as references for developers according to the human's requirements.
 
-        Human: You will be acting as an solution architect of a software company. 
-        Please Design excellent code framework architectures as references for {programmingLanguage} developers according to the following requirements.
+        Human: Provide {programmingLanguage} code framework architecture according to the following requirements:
         <requirement>
         {requirement}
         </requirement>
@@ -47,13 +48,13 @@ def gen_code(requirement, language):
     coder_prompt = PromptTemplate(
         input_variables=["instruction", "programmingLanguage"], 
         template="""
+        You are a senior software developer in {programmingLanguage}.
+        Your task is to generate runnable code according to the human's instructions. 
+        You should import any needed libraries first, and add code comments if necessary, and explain the code at the end.
 
-        Human: You will be acting as an expert software developer in {programmingLanguage}. 
-        Please generate runnable code according to the following instructions:        
+        Human:
         <instruction>
         {instruction}
-        You should import any needed libraries first, and add code comments if necessary.
-        At the end, write a comment to explain the code.
         </instruction>
 
         Assistant:"""
