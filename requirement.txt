@@ -1,4 +1,4 @@
-boto3       1.29.0
-langchain   0.0.335
-gradio      4.3.0
-google-generativeai 
+boto3       1.34.55
+langchain   0.1.10
+gradio      4.19.2
+google-generativeai 0.3.1

@@ -45,7 +45,7 @@ def text_chat(input_msg:str, chat_history:list):
 def media_chat(media_path, chat_history):
 
     media = Image.open(media_path)
-    prompt = "Describe this image?"
+    prompt = "Describe the contents of the picture in detail in both English and Chinese."
     response = llmv.generate_content(
         [media, prompt],
         generation_config=generation_config

@@ -48,11 +48,16 @@ def gen_code(requirement, language):
     coder_prompt = PromptTemplate(
         input_variables=["instruction", "programmingLanguage"], 
         template="""
-        You are a senior software developer in {programmingLanguage}.
-        Your task is to generate runnable code according to the human's instructions. 
-        You should import any needed libraries first, and add code comments if necessary, and explain the code at the end.
+        You are an experienced developer in {programmingLanguage}.
+        Your task is to generate high-quality code according to human's instructions, and explain the code at the end.
+        Make sure to include any imports required, and add comments for things that are non-obvious.
+
+        After you are done generating the code, check your work carefully to make sure there are no mistakes, errors, or inconsistencies. 
+        If there are errors, list those errors in <error> tags, then generate a new version with those errors fixed. 
+        If there are no errors, write "CHECKED: NO ERRORS" in <error> tags.
 
         Human:
+        Here is the instruction:
         <instruction>
         {instruction}
         </instruction>

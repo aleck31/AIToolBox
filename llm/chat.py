@@ -7,6 +7,9 @@ from langchain.llms.bedrock import Bedrock
 from . import bedrock_runtime
 
 
+"""
+These codes have been deprecated.
+"""
 
 model_id = "anthropic.claude-v2:1"
 # model_id = 'anthropic.claude-instant-v1'

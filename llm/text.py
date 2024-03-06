@@ -39,9 +39,9 @@ def text_translate(text, Source_lang, target_lang):
         template="""
         You are an experienced multilingual translation expert. 
         Your task is to translate the original text into the target language, and ensure the translated text conforms to native expressions in the target language without grammatical errors.
-        Important: The output only contain the translated text, do not include any other content.
+        NEVER write anything before the translated text. do not include any other content.
         
-        Human: Please translate the original paragraph in to {target_lang} language:
+        Human: Please translate the original text in to {target_lang} language:
         <original_text>
         {text}
         </original_text>
@@ -80,7 +80,7 @@ def text_rewrite(text, style):
         template="""
         You are an experienced editor, your task is to refine the text provided by the user, making the expression more natural and fluent in the {source_lang_code} language.
         You can modify the vocabulary, adjust sentences structure to make it more idiomatic to native speakers. But do not overextend or change the meaning.
-        Important: The output only contain the polished text, do not include any other content.
+        NEVER write anything before the polished text, do not include anything else.
 
         Human: Polish following original paragraph in a {style} manner:
         <original_paragraph>
@@ -105,7 +105,7 @@ def text_summary(text):
         input_variables=["text"], 
         template="""
         You are a senior editor. Your task is to summarize the text provided by users without losing any important information.
-        Important: The output only contain the summary text, do not include any other content.
+        NEVER write anything before the summary text, do not include any other content.
 
         Human: Please provide a summary of the following text:
         <text>
