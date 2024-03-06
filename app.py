@@ -181,7 +181,7 @@ tab_summary = gr.Interface(
 
 
 with gr.Blocks() as tab_code:
-    description = gr.Markdown("Let's build ... (Powered by Claude v2.1)")
+    description = gr.Markdown("Let's build ... (Powered by Claude3 Sonnet v1)")
     with gr.Row():
         # 输入需求
         with gr.Column(scale=6, min_width=500):

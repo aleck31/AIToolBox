@@ -34,3 +34,35 @@ def format_resp(response:str):
         return re.sub(r'<[^>]+>', '', response)
     else:
         return response
+
+
+def format_content(content, role, type):
+    if type == 'text':
+        formated_content = {
+            "role": role, 
+            "content": [
+                {
+                    "type": "text",
+                    "text": content
+                }
+            ]
+        }
+    elif type == 'image':
+        formated_content = {
+            "role": role,
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/jpeg",
+                        "data": content
+                    }
+                },
+                {
+                    "type": "text",
+                    "text": "Describe what you understand from the content in this picture, as much detail as possible."
+                }
+            ]
+        }                          
+    return formated_content

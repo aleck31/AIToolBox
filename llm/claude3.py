@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT-0
 import json
 import base64
+from utils import format_content
 from . import bedrock_runtime
 
 
@@ -30,38 +31,6 @@ def generate_message(messages, system, params):
     response_body = json.loads(response.get('body').read())
 
     return response_body
-
-
-def format_content(content, role, type):
-    if type == 'text':
-        content_format = {
-            "role": role, 
-            "content": [
-                {
-                    "type": "text",
-                    "text": content
-                }
-            ]
-        }
-    elif type == 'image':
-        content_format = {
-            "role": role,
-            "content": [
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/jpeg",
-                        "data": content
-                    }
-                },
-                {
-                    "type": "text",
-                    "text": "Describe what you understand from the content in this picture, as much detail as possible."
-                }
-            ]
-        }                          
-    return content_format
 
 
 def text_chat(input_msg:str, chat_history:list, style:str):
