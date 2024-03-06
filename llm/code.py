@@ -1,8 +1,7 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 from langchain.prompts import PromptTemplate
-import json
-from utils import format_content
+from utils import format_content, generate_content
 from . import bedrock_runtime
 
 
@@ -16,18 +15,6 @@ inference_params = {
     "top_k": 10,       # Use a lower value to ignore less probable options.  Claude 0-500, default 250
     "stop_sequences": ["end_turn"]
     }
-
-
-# Helper function to pass prompts and inference parameters
-def generate_content(messages, system, params):
-    params['system'] = system
-    params['messages'] = messages
-    body=json.dumps(params)
-    
-    response = bedrock_runtime.invoke_model(body=body, modelId=model_id)
-    response_body = json.loads(response.get('body').read())
-
-    return response_body
 
 
 def gen_code(requirement, program_language):
@@ -48,7 +35,7 @@ def gen_code(requirement, program_language):
     message_arch = [format_content(prompt_arch, 'user', 'text')]
 
     # Get the llm reply
-    resp_arch = generate_content(message_arch, system_arch, inference_params)
+    resp_arch = generate_content(bedrock_runtime, message_arch, system_arch, inference_params, model_id)
     instruction = resp_arch.get('content')[0].get('text')
 
     # Define system prompt for coder
@@ -72,7 +59,7 @@ def gen_code(requirement, program_language):
     message_coder = [format_content(prompt_coder, 'user', 'text')]
 
     # Get the llm reply
-    resp_coder = generate_content(message_coder, system_coder, inference_params)
+    resp_coder = generate_content(bedrock_runtime, message_coder, system_coder, inference_params, model_id)
     code_explanation = resp_coder.get('content')[0].get('text')
 
     return code_explanation

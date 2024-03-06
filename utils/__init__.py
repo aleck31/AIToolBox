@@ -5,6 +5,7 @@
 from io import StringIO
 import re
 import sys
+import json
 import textwrap
 
 
@@ -66,3 +67,15 @@ def format_content(content, role, type):
             ]
         }                          
     return formated_content
+
+
+# Helper function to pass prompts and inference parameters
+def generate_content(runtime, messages, system, params, model_id):
+    params['system'] = system
+    params['messages'] = messages
+    body=json.dumps(params)
+    
+    response = runtime.invoke_model(body=body, modelId=model_id)
+    response_body = json.loads(response.get('body').read())
+
+    return response_body

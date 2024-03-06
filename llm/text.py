@@ -1,16 +1,16 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
-from langchain.prompts import PromptTemplate
-from langchain.llms.bedrock import Bedrock
-from . import bedrock_runtime
-from utils import format_resp
+from utils import format_resp, format_content, generate_content
 from utils.common import translate_text
+from . import bedrock_runtime
 
 
+model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
 
-inference_modifier = {
+inference_params = {
+    "anthropic_version": "bedrock-2023-05-31",
     # maximum number of tokens to generate. Responses are not guaranteed to fill up to the maximum desired length.
-    'max_tokens_to_sample':4096, 
+    'max_tokens':4096, 
     # tunes the degree of randomness in generation. Lower temperatures mean less random generations.
     "temperature":0.5,
     # less than one keeps only the smallest set of most probable tokens with probabilities that add up to top_p or higher for generation.
@@ -19,41 +19,33 @@ inference_modifier = {
     # The higher the value, the stronger a penalty is applied to previously present tokens, 
     "top_k":200,
     # stop_sequences - are sequences where the API will stop generating further tokens. The returned text will not contain the stop sequence.
-    "stop_sequences": []
+    "stop_sequences": ["end_turn"]
     }
-
-textgen_llm = Bedrock(
-    model_id = "anthropic.claude-v2:1",
-    client = bedrock_runtime, 
-    model_kwargs = inference_modifier 
-    )
-
 
 
 def text_translate(text, Source_lang, target_lang):
     if text == '':
         return "Tell me something first."
     
-    translate_prompt = PromptTemplate(
-        input_variables=["text", "target_lang"], 
-        template="""
+    # Define prompts for text translate
+    system_tran = """
         You are an experienced multilingual translation expert. 
         Your task is to translate the original text into the target language, and ensure the translated text conforms to native expressions in the target language without grammatical errors.
         NEVER write anything before the translated text. do not include any other content.
-        
-        Human: Please translate the original text in to {target_lang} language:
+        """
+    prompt_tran = f"""
+        Translate the original text in to {target_lang} language:
         <original_text>
         {text}
         </original_text>
+        """    
+    message_tran = [format_content(prompt_tran, 'user', 'text')]
 
-        Assistant:
-        """
-    )
-    prompt = translate_prompt.format(text=text, target_lang=target_lang)
+    # Get the llm reply
+    resp = generate_content(bedrock_runtime, message_tran, system_tran, inference_params, model_id)
+    translated_text = resp.get('content')[0].get('text')
 
-    response = textgen_llm(prompt)
-
-    return format_resp(response)
+    return format_resp(translated_text)
 
 
 def text_rewrite(text, style):
@@ -74,51 +66,46 @@ def text_rewrite(text, style):
         case _:
             style = "general"
 
-    # Create a prompt template that has multiple input variables
-    rewrite_prompt = PromptTemplate(
-        input_variables=["text", "style", "source_lang_code"], 
-        template="""
-        You are an experienced editor, your task is to refine the text provided by the user, making the expression more natural and fluent in the {source_lang_code} language.
+    # Define prompts for text rewrite
+    system_rewrite = f"""
+        You are an experienced editor, your task is to refine the text provided by the user, making the expression more natural and fluent in the {Source_lang_code} language.
         You can modify the vocabulary, adjust sentences structure to make it more idiomatic to native speakers. But do not overextend or change the meaning.
         NEVER write anything before the polished text, do not include anything else.
-
-        Human: Polish following original paragraph in a {style} manner:
+        """
+    prompt_rewrite = f"""
+        Polish following original paragraph in a {style} manner:
         <original_paragraph>
         {text}
         </original_paragraph>
+        """    
+    message_rewrite = [format_content(prompt_rewrite, 'user', 'text')]
 
-        Assistant:
-        """
-    )
-    prompt = rewrite_prompt.format(text=text, style=style, source_lang_code=Source_lang_code)
+    # Get the llm reply
+    resp = generate_content(bedrock_runtime, message_rewrite, system_rewrite, inference_params, model_id)
+    polished_text = resp.get('content')[0].get('text')
 
-    response = textgen_llm(prompt)
-
-    return format_resp(response)
-
+    return format_resp(polished_text)
+    
 
 def text_summary(text):
     if text == '':
         return "Tell me something first."
-    
-    translate_prompt = PromptTemplate(
-        input_variables=["text"], 
-        template="""
+
+    # Define prompts for text summary
+    system_sum = """
         You are a senior editor. Your task is to summarize the text provided by users without losing any important information.
         NEVER write anything before the summary text, do not include any other content.
-
-        Human: Please provide a summary of the following text:
-        <text>
-        {text}
-        </text>
-
-        Assistant:
-        <summarized_text>
-        </summarized_text>
         """
-    )
-    prompt = translate_prompt.format(text=text)
+    prompt_sum = f"""
+        Provide a summary for the following text:
+        <original_text>
+        {text}
+        </original_text>
+        """    
+    message_sum = [format_content(prompt_sum, 'user', 'text')]
 
-    response = textgen_llm(prompt)
+    # Get the llm reply
+    resp = generate_content(bedrock_runtime, message_sum, system_sum, inference_params, model_id)
+    summarized_text = resp.get('content')[0].get('text')
 
-    return format_resp(response)
+    return format_resp(summarized_text)
