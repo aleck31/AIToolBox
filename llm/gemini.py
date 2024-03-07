@@ -1,7 +1,6 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 from PIL import Image
-import time
 import google.generativeai as gm
 from utils.common import get_secret
 

@@ -1,8 +1,7 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
-import json
 import base64
-from utils import format_content
+from utils import generate_content, ChatHistory
 from . import bedrock_runtime
 
 
@@ -20,33 +19,14 @@ inference_params = {
     "stop_sequences": ["end_turn"]
     }
 
-
-# Helper function to pass prompts and inference parameters
-def generate_message(messages, system, params):
-    params['system'] = system
-    params['messages'] = messages
-    body=json.dumps(params)
-    
-    response = bedrock_runtime.invoke_model(body=body, modelId=model_id)
-    response_body = json.loads(response.get('body').read())
-
-    return response_body
+chat_memory = ChatHistory()
 
 
 def text_chat(input_msg:str, chat_history:list, style:str):
     if input_msg == '':
         return "Please tell me something first :)"
 
-    chat_history.pop()
-
-    history_format = []
-    for human, assistant in chat_history:
-        history_format.append(format_content(human, "user", 'text'))
-        history_format.append(format_content(assistant, "assistant", 'text'))
-
-    history_format.append(
-        format_content(input_msg, "user", 'text')
-    )
+    chat_memory.add_user_text(input_msg)
 
     # AI的回复采用 {style} 的对话风格.
     match style:
@@ -69,11 +49,12 @@ def text_chat(input_msg:str, chat_history:list, style:str):
         """
 
     # Get the llm reply
-    resp = generate_message(history_format, system_prompt, inference_params)
+    resp = generate_content(bedrock_runtime, chat_memory.messages, system_prompt, inference_params, model_id)
     bot_reply = resp.get('content')[0].get('text')
-    # add current conversation to chat history
-    chat_history.append((input_msg, bot_reply))
-    # chat_history[-1][1] = bot_reply
+    # add current conversation to chat memory and history
+    chat_memory.add_bot_text(bot_reply)
+    # chat_history.append((input_msg, bot_reply))
+    chat_history[-1][1] = bot_reply
     
     # send <chat history> back to Chatbot
     return chat_history
@@ -86,21 +67,22 @@ def media_chat(media_path, chat_history:list):
     
     # Read reference image from file and encode as base64 strings.
     with open(media_path, "rb") as image_file:
-        content_img = base64.b64encode(image_file.read()).decode('utf8') 
+        content_img = base64.b64encode(image_file.read()).decode('utf8')
     
-    message_format = [format_content(content_img, "user", 'image')]
+    # message_format = [format_message(content_img, "user", 'image')]
+    chat_memory.add_user_image(content_img)
 
     # Get the llm reply
-    resp = generate_message(message_format, system_prompt, inference_params)
+    resp = generate_content(bedrock_runtime, chat_memory.messages, system_prompt, inference_params, model_id)
     bot_reply = resp.get('content')[0].get('text')
 
-    # add current conversation to chat history
-    chat_history[-1][0] = str(media_path)
+    # add current conversation to chat memory and history
+    chat_memory.add_bot_text(bot_reply)
     chat_history[-1][1] = bot_reply
 
     # send <chat history> back to Chatbot
     return chat_history
 
 def clear_memory():
-    # buffer_memory.clear()
+    chat_memory.clear()
     return [('/reset', 'Conversation history forgotten.')]

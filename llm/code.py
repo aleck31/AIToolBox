@@ -1,7 +1,7 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 from langchain.prompts import PromptTemplate
-from utils import format_content, generate_content
+from utils import format_message, generate_content
 from . import bedrock_runtime
 
 
@@ -32,7 +32,7 @@ def gen_code(requirement, program_language):
         {requirement}
         </requirement>
     """
-    message_arch = [format_content(prompt_arch, 'user', 'text')]
+    message_arch = [format_message(prompt_arch, 'user', 'text')]
 
     # Get the llm reply
     resp_arch = generate_content(bedrock_runtime, message_arch, system_arch, inference_params, model_id)
@@ -56,7 +56,7 @@ def gen_code(requirement, program_language):
         </instruction>
     """
 
-    message_coder = [format_content(prompt_coder, 'user', 'text')]
+    message_coder = [format_message(prompt_coder, 'user', 'text')]
 
     # Get the llm reply
     resp_coder = generate_content(bedrock_runtime, message_coder, system_coder, inference_params, model_id)

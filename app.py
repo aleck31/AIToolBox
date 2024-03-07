@@ -268,6 +268,6 @@ if __name__ == "__main__":
         # debug=True,
         auth=login,
         server_name='0.0.0.0',
-        server_port=8888,
+        server_port=8886,
         show_api=False
     )

@@ -1,6 +1,6 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
-from utils import format_resp, format_content, generate_content
+from utils import format_resp, format_message, generate_content
 from utils.common import translate_text
 from . import bedrock_runtime
 
@@ -39,7 +39,7 @@ def text_translate(text, Source_lang, target_lang):
         {text}
         </original_text>
         """    
-    message_tran = [format_content(prompt_tran, 'user', 'text')]
+    message_tran = [format_message(prompt_tran, 'user', 'text')]
 
     # Get the llm reply
     resp = generate_content(bedrock_runtime, message_tran, system_tran, inference_params, model_id)
@@ -78,7 +78,7 @@ def text_rewrite(text, style):
         {text}
         </original_paragraph>
         """    
-    message_rewrite = [format_content(prompt_rewrite, 'user', 'text')]
+    message_rewrite = [format_message(prompt_rewrite, 'user', 'text')]
 
     # Get the llm reply
     resp = generate_content(bedrock_runtime, message_rewrite, system_rewrite, inference_params, model_id)
@@ -102,7 +102,7 @@ def text_summary(text):
         {text}
         </original_text>
         """    
-    message_sum = [format_content(prompt_sum, 'user', 'text')]
+    message_sum = [format_message(prompt_sum, 'user', 'text')]
 
     # Get the llm reply
     resp = generate_content(bedrock_runtime, message_sum, system_sum, inference_params, model_id)

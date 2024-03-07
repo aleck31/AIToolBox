@@ -1,6 +1,6 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
-"""General helper utilities the workshop notebooks"""
+"""General helper utilities here"""
 # Python Built-Ins:
 from io import StringIO
 import re
@@ -37,21 +37,20 @@ def format_resp(response:str):
         return response
 
 
-def format_content(content, role, type):
-    if type == 'text':
-        formated_content = {
-            "role": role, 
-            "content": [
-                {
-                    "type": "text",
-                    "text": content
-                }
-            ]
-        }
-    elif type == 'image':
-        formated_content = {
-            "role": role,
-            "content": [
+MESSAGE_TYPES = ("text", "image")
+
+def format_message(content, role, msg_type):
+
+    if msg_type not in MESSAGE_TYPES:
+        raise ValueError(f"Invalid message type: {msg_type}")
+
+    base_msg = {"role": role, "content": []}
+
+    match msg_type:
+        case "text":
+            base_msg["content"] = [{"type": "text", "text": content}]
+        case "image":
+            base_msg["content"] = [
                 {
                     "type": "image",
                     "source": {
@@ -65,8 +64,10 @@ def format_content(content, role, type):
                     "text": "Describe what you understand from the content in this picture, as much detail as possible."
                 }
             ]
-        }                          
-    return formated_content
+        case _:                      
+            pass
+
+    return base_msg
 
 
 # Helper function to pass prompts and inference parameters
@@ -79,3 +80,50 @@ def generate_content(runtime, messages, system, params, model_id):
     response_body = json.loads(response.get('body').read())
 
     return response_body
+
+
+class ChatHistory:
+    """Abstract class for storing chat message history."""
+
+    def __init__(self, initial_history=None):
+        """
+        Initialize a ChatHistoryMemory instance.        
+        Args:
+            initial_messages (list, optional): List of initial chat messages. Defaults to None.
+        """
+        self.messages = []
+        if initial_history:
+            for user_msg, assistant_msg in initial_history:
+                self.add_user_text(user_msg)
+                self.add_bot_text(assistant_msg)
+
+    def add_message(self, message) -> None:
+        """Add a message to the history list"""
+        self.messages.append(message)
+
+    def clear(self) -> None:
+        """Clear memory"""
+        self.messages.clear()
+
+    def add_user_text(self, message: str) -> None:
+        self.add_message(
+            format_message(message, "user", 'text')                    
+        )
+
+    def add_user_image(self, message: str) -> None:
+        self.add_message(
+            format_message(message, "user", 'image')                    
+        )
+
+    def add_bot_text(self, message: str) -> None:
+        self.add_message(
+            format_message(message, "assistant", 'text')                    
+        )
+
+    def add_bot_image(self, message: str) -> None:
+        self.add_message(
+            format_message(message, "assistant", 'image')                    
+        )
+
+    def get_latest_message(self):
+        return self.messages[-1] if self.messages else None
