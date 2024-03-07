@@ -202,6 +202,28 @@ with gr.Blocks() as tab_code:
         error_box = gr.Textbox(label="Error", visible=False)
 
 
+with gr.Blocks() as tab_format:
+    description = gr.Markdown("A JSON Formatter... (Powered by Claude3 Sonnet v1)")
+    with gr.Row():
+        # 输入需求
+        with gr.Column(scale=6, min_width=500):
+            input_text =  gr.Textbox(label="Please input the text to be formatted.", lines=4)         
+        with gr.Column(scale=2, min_width=100):
+            input_format = gr.Radio(label="File format", choices=["JSON"], value="JSON")
+    with gr.Row():
+        # 输出代码结果
+        with gr.Column(scale=6, min_width=500):
+            support_formats = ["json","yaml","xml","csv"]
+            target_format = input_format.value.lower() if input_format.value.lower() in support_formats else None
+            output_codes = gr.Code(label="Code", language=target_format, lines=9)
+        with gr.Column(scale=2, min_width=100):
+            btn_code_submit = gr.Button(value='⌨️ Format')
+            btn_code_submit.click(fn=code.format_code, inputs=[input_text, input_format], outputs=output_codes)
+            btn_code_clear = gr.ClearButton([input_text, output_codes], value='🗑️ Clear')
+    with gr.Row():
+        error_box = gr.Textbox(label="Error", visible=False)
+
+
 with gr.Blocks() as tab_draw:
     description = gr.Markdown("Draw something interesting... (Powered by SDXL v1)")
     with gr.Tab("Text-Image"):
@@ -254,8 +276,8 @@ with gr.Blocks() as tab_setting:
 
 
 app = gr.TabbedInterface(
-    [tab_claude, tab_gemini, tab_translate, tab_rewrite, tab_summary, tab_draw, tab_code, tab_setting], 
-    tab_names= ["Claude 🤖", "Gemini 👾", "Translate 🇺🇳", "ReWrite ✍🏼", "Summary 📰", "Draw 🎨", "Code 💻", "Setting ⚙️"],
+    [tab_claude, tab_gemini, tab_translate, tab_rewrite, tab_summary, tab_code, tab_format, tab_draw, tab_setting], 
+    tab_names= ["Claude 🤖", "Gemini 👾", "Translate 🇺🇳", "ReWrite ✍🏼", "Summary 📰", "Code 💻", "JSON 🔣", "Draw 🎨", "Setting ⚙️"],
     title="AI ToolBox",
     theme="Base",
     css="footer {visibility: hidden}"

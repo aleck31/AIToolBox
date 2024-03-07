@@ -63,3 +63,50 @@ def gen_code(requirement, program_language):
     code_explanation = resp_coder.get('content')[0].get('text')
 
     return code_explanation
+
+
+def format_code(text, target_format):
+    if text == '':
+        return "Please input any text first."
+    
+    # Define system prompt for formatter
+    system_format = f"""
+        You are an experienced developer, you understand the {target_format} syntax rules very well.
+        Your task is to extract objects and attributes contained in the text and convert them to {target_format}.
+        After you are done generating the code, check your work carefully to make sure there are no mistakes, errors, or inconsistencies. 
+        NEVER write anything before the code.
+
+        For example, you will get a input text like this:
+        <input_example>
+        John Doe is 35-year-old, he lived in New York, he enjoys a variety of leisure activities such as reading, hiking and traveling.
+        </input_example>
+
+        Then you parse the text content and structure it into a valid JSON object with key/value pairs, like the output_example:
+        <output_example>
+        {{
+            "Name": "John Doe",
+            "Age": 35,
+            "City": "New York",
+            "Hobbies": [
+                "Reading",
+                "Hiking",
+                "Traveling"
+            ]
+        }}
+        <output_example>
+        """
+    
+    prompt_format = f"""
+        Write code according to the following instructions:
+        <instruction>
+        {text}
+        </instruction>
+    """
+
+    message_coder = [format_message(prompt_format, 'user', 'text')]
+
+    # Get the llm reply
+    resp = generate_content(bedrock_runtime, message_coder, system_format, inference_params, model_id)
+    formated_code = resp.get('content')[0].get('text')
+
+    return formated_code
