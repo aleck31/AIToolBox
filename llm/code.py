@@ -1,8 +1,8 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 from langchain.prompts import PromptTemplate
-from utils import format_message, generate_content
-from . import bedrock_runtime
+from utils import format_message
+from . import bedrock_runtime, generate_content
 
 
 model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
@@ -35,7 +35,7 @@ def gen_code(requirement, program_language):
     message_arch = [format_message(prompt_arch, 'user', 'text')]
 
     # Get the llm reply
-    resp_arch = generate_content(bedrock_runtime, message_arch, system_arch, inference_params, model_id)
+    resp_arch = generate_content(message_arch, system_arch, inference_params, model_id)
     instruction = resp_arch.get('content')[0].get('text')
 
     # Define system prompt for coder
@@ -59,7 +59,7 @@ def gen_code(requirement, program_language):
     message_coder = [format_message(prompt_coder, 'user', 'text')]
 
     # Get the llm reply
-    resp_coder = generate_content(bedrock_runtime, message_coder, system_coder, inference_params, model_id)
+    resp_coder = generate_content(message_coder, system_coder, inference_params, model_id)
     code_explanation = resp_coder.get('content')[0].get('text')
 
     return code_explanation
@@ -106,7 +106,7 @@ def format_code(text, target_format):
     message_coder = [format_message(prompt_format, 'user', 'text')]
 
     # Get the llm reply
-    resp = generate_content(bedrock_runtime, message_coder, system_format, inference_params, model_id)
+    resp = generate_content(message_coder, system_format, inference_params, model_id)
     formated_code = resp.get('content')[0].get('text')
 
     return formated_code

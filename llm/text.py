@@ -1,8 +1,8 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
-from utils import format_resp, format_message, generate_content
+from utils import format_resp, format_message
 from utils.common import translate_text
-from . import bedrock_runtime
+from . import bedrock_runtime, generate_content
 
 
 model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
@@ -23,7 +23,7 @@ inference_params = {
     }
 
 
-def text_translate(text, Source_lang, target_lang):
+def text_translate(text, source_lang, target_lang):
     if text == '':
         return "Tell me something first."
     
@@ -42,7 +42,7 @@ def text_translate(text, Source_lang, target_lang):
     message_tran = [format_message(prompt_tran, 'user', 'text')]
 
     # Get the llm reply
-    resp = generate_content(bedrock_runtime, message_tran, system_tran, inference_params, model_id)
+    resp = generate_content(message_tran, system_tran, inference_params, model_id)
     translated_text = resp.get('content')[0].get('text')
 
     return format_resp(translated_text)
@@ -81,7 +81,7 @@ def text_rewrite(text, style):
     message_rewrite = [format_message(prompt_rewrite, 'user', 'text')]
 
     # Get the llm reply
-    resp = generate_content(bedrock_runtime, message_rewrite, system_rewrite, inference_params, model_id)
+    resp = generate_content(message_rewrite, system_rewrite, inference_params, model_id)
     polished_text = resp.get('content')[0].get('text')
 
     return format_resp(polished_text)
@@ -105,7 +105,7 @@ def text_summary(text):
     message_sum = [format_message(prompt_sum, 'user', 'text')]
 
     # Get the llm reply
-    resp = generate_content(bedrock_runtime, message_sum, system_sum, inference_params, model_id)
+    resp = generate_content(message_sum, system_sum, inference_params, model_id)
     summarized_text = resp.get('content')[0].get('text')
 
     return format_resp(summarized_text)

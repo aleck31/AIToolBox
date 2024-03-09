@@ -25,7 +25,6 @@ def verify_user(username, password):
         # resp = user_table.get_item(Key={'userId' : '1001'})
         resp = user_table.get_item(Key={'username': username}) 
     except ClientError as ex:
-        # raise ex
         return False
 
     # Check if user exists

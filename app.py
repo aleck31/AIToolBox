@@ -2,42 +2,30 @@
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
 from llm import claude3, text, code, image, gemini
-from utils import common
+from utils import common, AppConf
 
-
-
-LANGS = ["en_US", "zh_CN", "zh_TW", "ja_JP", "de_DE", "fr_FR"]
-STYLES = ["正常", "幽默", "极简", "理性", "可爱"]
-PICSTYLES = [
-    "增强(enhance)", "照片(photographic)", "老照片(analog-film)",
-    "电影(cinematic)", "模拟电影(analog-film)", "美式漫画(comic-book)",  "动漫(anime)", "线稿(line-art)",
-    "3D模型(3d-model)", "低多边形(low-poly)", "霓虹朋克(neon-punk)", "复合建模(modeling-compound)",
-    "数字艺术(digital-art)", "奇幻艺术(fantasy-art)", "像素艺术(pixel-art)", "折纸艺术(origami)"
-]
-CODELANGS = ["Python", "Shell", "HTML", "Javascript", "Typescript", "Yaml", "GoLang", "Rust"]
-Login_USER = ''
 
 
 def login(username, password):
-    global Login_USER
+    # tobeFix: cannot set the value to login_user
+    AppConf.login_user = username 
     if common.verify_user(username, password):
         # If a new user logs in, clear the history by default
-        if username != Login_USER:
-            claude3.clear_memory()
-        Login_USER = username 
+        if username != AppConf.login_user:
+            claude3.clear_memory()        
         return True
     else:
         return False
 
 def post_text(message, history):
-    '''post message on the chatbox before get LLM response'''
+    '''post message on chatbox ui before get LLM response'''
     # history = history + [(message, None)]
-    history.append((message, None))
+    history.append([message, None])
     return gr.Textbox(value="", interactive=False), message, history
 
 def post_media(file, history):
-    '''post media on the chatbox before get LLM response'''
-    history.append(((file.name,), None))
+    '''post media on chatbox ui before get LLM response'''
+    history.append([(file.name,), None])
     return history
     
 
@@ -66,8 +54,9 @@ with gr.Blocks() as tab_claude:
             btn_forget.click(claude3.clear_memory, None, chatbox)
             btn_flag = gr.Button('🏁 Flag', scale=1, min_width=150)
         with gr.Accordion(label='Chatbot Style', open=False):
-            input_style = gr.Radio(label="Chatbot Style", choices=STYLES, value="正常", show_label=False)
+            input_style = gr.Radio(label="Chatbot Style", choices=AppConf.STYLES, value="正常", show_label=False)
         
+        # temp save user message in State()
         saved_msg = gr.State()
         # saved_chats = (
         #     gr.State(chatbot.value) if chatbot.value else gr.State([])
@@ -118,7 +107,7 @@ with gr.Blocks() as tab_gemini:
             btn_forget.click(gemini.clear_memory, None, chatbox)
             btn_flag = gr.Button('🏁 Flag', scale=1, min_width=150)
 
-        # save input message in State()
+        # temp save user message in State()
         saved_msg = gr.State()
         media_msg = btn_file.upload(
             post_media, [btn_file, chatbox], [chatbox], queue=False
@@ -146,7 +135,7 @@ tab_translate = gr.Interface(
     inputs=[
         gr.Textbox(label="Original", lines=7),
         gr.Dropdown(label="Source Language", choices=['auto'], value='auto', container=False),
-        gr.Dropdown(label="Target Language", choices=LANGS, value='en_US')
+        gr.Dropdown(label="Target Language", choices=AppConf.LANGS, value='en_US')
     ],
     outputs=gr.Textbox(label="Translated", lines=11, scale=5),
     examples=[["Across the Great Wall we can reach every corner of the world.", "auto", "zh_CN"]],
@@ -160,7 +149,7 @@ tab_rewrite = gr.Interface(
     inputs=[
         gr.Textbox(label="Original", lines=7, scale=5),
         # gr.Accordion(),
-        gr.Radio(label="Style", choices=STYLES, value="正常", scale=1)
+        gr.Radio(label="Style", choices=AppConf.STYLES, value="正常", scale=1)
     ],
     outputs=gr.Textbox(label="Polished", lines=11, scale=5),
     examples=[["人工智能将对人类文明的发展产生深远影响。", "幽默"]],
@@ -187,7 +176,7 @@ with gr.Blocks() as tab_code:
         with gr.Column(scale=6, min_width=500):
             input_requirement =  gr.Textbox(label="Describe your requirements:", lines=4)         
         with gr.Column(scale=2, min_width=100):
-            input_lang = gr.Radio(label="Programming Language", choices=CODELANGS, value="Python")
+            input_lang = gr.Radio(label="Programming Language", choices=AppConf.CODELANGS, value="Python")
     with gr.Row():
         # 输出代码结果
         with gr.Column(scale=6, min_width=500):
@@ -235,7 +224,7 @@ with gr.Blocks() as tab_draw:
                 input_negative = gr.Text(label="Negative Prompt")
                 with gr.Row():
                     # SDXL preset style
-                    input_style = gr.Dropdown(choices=PICSTYLES, value='增强(enhance)', label='Picture style:')
+                    input_style = gr.Dropdown(choices=AppConf.PICSTYLES, value='增强(enhance)', label='Picture style:')
                 with gr.Row():
                     input_seed = gr.Number(
                         value=-1, label="Seed", 
@@ -263,16 +252,25 @@ with gr.Blocks() as tab_draw:
         gr.Markdown('TBD')
 
 
+def update_setting(model_id):
+    AppConf.model_id = model_id
+    gr.Info("App settings updated.")
+
+
 with gr.Blocks() as tab_setting:
     description = gr.Markdown("Toolbox Settings")
     with gr.Row():
-        with gr.Column(scale=5):
-            # tobeFix: cannot get the value of global variable
-            gr.Textbox(Login_USER, label="Login User", max_lines=1)
-        with gr.Column(scale=2):
+        with gr.Column(scale=15):            
+            input_model = gr.Textbox(AppConf.model_id, label="Language Model", max_lines=1)
+            image_model = gr.Textbox(AppConf.image_llm, label="Image Model", max_lines=1, interactive=False)
+        with gr.Column(scale=1):
+            gr.Textbox(AppConf.login_user, label='User', max_lines=1, interactive=False)
+    with gr.Row():
+        with gr.Column(scale=1):   
+            btn_submit = gr.Button(value='✅ Update', min_width=120)
+            btn_submit.click(update_setting, input_model, None)
+        with gr.Column(scale=15):
             pass
-        with gr.Column(scale=2):
-            btn_logout = gr.Button('Logout ↪️', scale=1, min_width=150)
 
 
 app = gr.TabbedInterface(

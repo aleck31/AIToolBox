@@ -45,10 +45,13 @@ def media_chat(media_path, chat_history):
 
     media = Image.open(media_path)
     prompt = "Describe the contents of the picture in detail in both English and Chinese."
-    response = llmv.generate_content(
-        [media, prompt],
-        generation_config=generation_config
-    )
+    try:
+        response = llmv.generate_content(
+            [media, prompt],
+            generation_config=generation_config
+        )
+    except:
+        raise
 
     # add current conversation to chat history
     chat_history[-1][1] = response.text

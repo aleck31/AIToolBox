@@ -1,8 +1,8 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 import base64
-from utils import generate_content, ChatHistory
-from . import bedrock_runtime
+from utils import ChatHistory
+from . import bedrock_runtime, generate_content
 
 
 # https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html#model-ids-arns
@@ -49,7 +49,7 @@ def text_chat(input_msg:str, chat_history:list, style:str):
         """
 
     # Get the llm reply
-    resp = generate_content(bedrock_runtime, chat_memory.messages, system_prompt, inference_params, model_id)
+    resp = generate_content(chat_memory.messages, system_prompt, inference_params, model_id)
     bot_reply = resp.get('content')[0].get('text')
     # add current conversation to chat memory and history
     chat_memory.add_bot_text(bot_reply)
@@ -73,7 +73,7 @@ def media_chat(media_path, chat_history:list):
     chat_memory.add_user_image(content_img)
 
     # Get the llm reply
-    resp = generate_content(bedrock_runtime, chat_memory.messages, system_prompt, inference_params, model_id)
+    resp = generate_content(chat_memory.messages, system_prompt, inference_params, model_id)
     bot_reply = resp.get('content')[0].get('text')
 
     # add current conversation to chat memory and history

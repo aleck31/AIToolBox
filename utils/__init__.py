@@ -48,38 +48,30 @@ def format_message(content, role, msg_type):
 
     match msg_type:
         case "text":
-            base_msg["content"] = [{"type": "text", "text": content}]
+            formated_msg = {"role": role, "content": content}
         case "image":
-            base_msg["content"] = [
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/jpeg",
-                        "data": content
+            formated_msg = {
+                "role": role,
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/jpeg",
+                            "data": content
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": "Explain the image in detail."
                     }
-                },
-                {
-                    "type": "text",
-                    "text": "Describe what you understand from the content in this picture, as much detail as possible."
-                }
-            ]
+                ]
+            }
         case _:                      
             pass
 
-    return base_msg
+    return formated_msg
 
-
-# Helper function to pass prompts and inference parameters
-def generate_content(runtime, messages, system, params, model_id):
-    params['system'] = system
-    params['messages'] = messages
-    body=json.dumps(params)
-    
-    response = runtime.invoke_model(body=body, modelId=model_id)
-    response_body = json.loads(response.get('body').read())
-
-    return response_body
 
 
 class ChatHistory:
@@ -127,3 +119,32 @@ class ChatHistory:
 
     def get_latest_message(self):
         return self.messages[-1] if self.messages else None
+
+
+class AppConf:
+    """
+    A class to store and manage app configuration.
+    """
+
+    # Constants
+    STYLES = ["正常", "幽默", "极简", "理性", "可爱"]
+    LANGS = ["en_US", "zh_CN", "zh_TW", "ja_JP", "de_DE", "fr_FR"]
+    CODELANGS = ["Python", "Shell", "HTML", "Javascript", "Typescript", "Yaml", "GoLang", "Rust"]
+    PICSTYLES = [
+        "增强(enhance)", "照片(photographic)", "老照片(analog-film)",
+        "电影(cinematic)", "模拟电影(analog-film)", "美式漫画(comic-book)",  "动漫(anime)", "线稿(line-art)",
+        "3D模型(3d-model)", "低多边形(low-poly)", "霓虹朋克(neon-punk)", "复合建模(modeling-compound)",
+        "数字艺术(digital-art)", "奇幻艺术(fantasy-art)", "像素艺术(pixel-art)", "折纸艺术(origami)"
+    ]
+
+    # Variables, initialize with default values.
+    login_user = 'demo'
+    model_id = 'anthropic.claude-3-sonnet-20240229-v1:0'
+    image_llm = "stability.stable-diffusion-xl-v1"
+
+    def update(self, key, value):
+        # Update the value of a variable.
+        if hasattr(self, key):
+            setattr(self, key, value)
+        else:
+            raise AttributeError(f"Invalid configuration variable: {key}")
