@@ -81,7 +81,7 @@ def format_code(text, target_format):
         John Doe is 35-year-old, he lived in New York, he enjoys a variety of leisure activities such as reading, hiking and traveling.
         </input_example>
 
-        Then you parse the text content and structure it into a valid JSON object with key/value pairs, like the output_example:
+        Then you parse the text content and structure it into a valid JSON or YAML with key/value pairs, here is a JSON output example:
         <output_example>
         {{
             "Name": "John Doe",
@@ -93,14 +93,14 @@ def format_code(text, target_format):
                 "Traveling"
             ]
         }}
-        <output_example>
+        </output_example>
         """
     
     prompt_format = f"""
-        Write code according to the following instructions:
-        <instruction>
+        Convert the following text to {target_format} format:
+        <text>
         {text}
-        </instruction>
+        </text>
     """
 
     message_coder = [format_message(prompt_format, 'user', 'text')]

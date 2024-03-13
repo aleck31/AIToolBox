@@ -63,7 +63,7 @@ def text_chat(input_msg:str, chat_history:list, style:str):
 def media_chat(media_path, chat_history:list):
 
     # Define system prompt base on style
-    system_prompt = "Describe the picture in both English and Chinese."
+    system_prompt = "Reply in the corresponding language based on the context of the conversation."
     
     # Read reference image from file and encode as base64 strings.
     with open(media_path, "rb") as image_file:
@@ -86,3 +86,40 @@ def media_chat(media_path, chat_history:list):
 def clear_memory():
     chat_memory.clear()
     return [('/reset', 'Conversation history forgotten.')]
+
+
+def analyze_img(img_path, text_prompt):
+
+    # Define system prompt base on style
+    system_prompt = "Describe or analyze the content of the image based on user requirements."
+   
+    if text_prompt == '':
+        text_prompt = "Explain the image in detail."
+
+    # Read reference image from file and encode as base64 strings.
+    with open(img_path, "rb") as image_file:
+        content_img = base64.b64encode(image_file.read()).decode('utf8')
+
+    formated_msg = {
+        "role": 'user',
+        "content": [
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": content_img
+                }
+            },
+            {
+                "type": "text",
+                "text": text_prompt
+            }
+        ]
+    }
+
+    # Get the llm reply
+    resp = generate_content([formated_msg], system_prompt, inference_params, model_id)
+    bot_reply = resp.get('content')[0].get('text')
+
+    return bot_reply

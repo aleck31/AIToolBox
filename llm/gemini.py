@@ -20,7 +20,7 @@ generation_config = gm.GenerationConfig(
 )
 
 llm = gm.GenerativeModel("gemini-pro")
-llmv = gm.GenerativeModel("gemini-pro-vision")
+multimodal_model = gm.GenerativeModel("gemini-pro-vision")
 conversation = llm.start_chat(history=[])
 
 
@@ -46,7 +46,7 @@ def media_chat(media_path, chat_history):
     media = Image.open(media_path)
     prompt = "Describe the contents of the picture in detail in both English and Chinese."
     try:
-        response = llmv.generate_content(
+        response = multimodal_model.generate_content(
             [media, prompt],
             generation_config=generation_config
         )
@@ -65,3 +65,24 @@ def clear_memory():
     global conversation 
     conversation = llm.start_chat(history=[])
     return [('/reset', 'Conversation history forgotten.')]
+
+
+def analyze_img(img_path, text_prompt):
+
+    # Define system prompt base on style
+    system_prompt = "Describe or analyze the content of the image based on user requirements."
+   
+    if text_prompt == '':
+        text_prompt = "Explain the image in detail."
+
+    image_file = Image.open(img_path)
+
+    try:
+        resp = multimodal_model.generate_content(
+            [image_file, text_prompt],
+            generation_config=generation_config
+        )
+    except:
+        raise
+
+    return resp.text
