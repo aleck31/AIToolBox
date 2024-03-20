@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
 from llm import claude3
-from utils import common, AppConf
+from utils import common, AppConf, web
 from view import chatbox, text, code, vision, draw
 
 
@@ -19,8 +19,17 @@ def login(username, password):
         return False
 
 
-def update_setting(model_id):
-    AppConf.model_id = model_id
+css = """ 
+    footer {visibility: hidden}
+    .app.svelte-182fdeq.svelte-182fdeq {padding: var(--size-4) var(--size-3)}
+    """
+
+
+def update_setting(lang_model):
+    web.save_setting(lang_model)
+
+    # AppConf.model_id = model_id
+    
     gr.Info("App settings updated.")
 
 
@@ -28,14 +37,14 @@ with gr.Blocks() as tab_setting:
     description = gr.Markdown("Toolbox Settings")
     with gr.Row():
         with gr.Column(scale=15):            
-            input_model = gr.Textbox(AppConf.model_id, label="Language Model", max_lines=1)
-            image_model = gr.Textbox(AppConf.image_llm, label="Image Model", max_lines=1, interactive=False)
+            lang_model = gr.Textbox(AppConf.model_id, label="Language Model", max_lines=1)
+            vision_model = gr.Textbox(AppConf.image_llm, label="Image Model", max_lines=1, interactive=False)
         with gr.Column(scale=1):
             gr.Textbox(AppConf.login_user, label='User', max_lines=1, interactive=False)
     with gr.Row():
         with gr.Column(scale=1):   
             btn_submit = gr.Button(value='☑️ Update', min_width=120)
-            btn_submit.click(update_setting, input_model, None)
+            btn_submit.click(update_setting, lang_model, None)
         with gr.Column(scale=15):
             pass
 
@@ -57,7 +66,7 @@ app = gr.TabbedInterface(
     ],
     title="AI ToolBox",
     theme="Base",
-    css="footer {visibility: hidden}"
+    css=css
     )
 
 

@@ -1,6 +1,5 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
-from langchain.prompts import PromptTemplate
 from utils import format_message
 from . import bedrock_runtime, generate_content
 
@@ -65,7 +64,7 @@ def gen_code(requirement, program_language):
     return code_explanation
 
 
-def format_code(text, target_format):
+def format_text(text, target_format):
     if text == '':
         return "Please input any text first."
     
@@ -98,9 +97,9 @@ def format_code(text, target_format):
     
     prompt_format = f"""
         Convert the following text to {target_format} format:
-        <text>
+        <input>
         {text}
-        </text>
+        </input>
     """
 
     message_coder = [format_message(prompt_format, 'user', 'text')]

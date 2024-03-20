@@ -91,7 +91,7 @@ def clear_memory():
 def analyze_img(img_path, text_prompt):
 
     # Define system prompt base on style
-    system_prompt = "Describe or analyze the content of the image based on user requirements."
+    system_prompt = "Respond in the corresponding language based on the context of the conversation."
    
     if text_prompt == '':
         text_prompt = "Explain the image in detail."

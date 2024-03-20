@@ -35,7 +35,7 @@ with gr.Blocks() as tab_claude:
                     show_label=False, container=False, autofocus=True, scale=7,
                     placeholder="Type a message or upload an image"
                 )
-                btn_file = gr.UploadButton("📁", file_types=["image"], scale=1)
+                btn_file = gr.UploadButton("📁", file_count='single', file_types=['image', 'pdf'], scale=1)
                 btn_submit = gr.Button('Chat', variant="primary", scale=1, min_width=150)          
         with gr.Row():
             btn_clear = gr.ClearButton([input_msg, chatbox], value='🗑️ Clear')
@@ -50,7 +50,7 @@ with gr.Blocks() as tab_claude:
         # saved_chats = (
         #     gr.State(chatbot.value) if chatbot.value else gr.State([])
         # )
-        media_msg = btn_file.upload(
+        btn_file.upload(
             post_media, [btn_file, chatbox], [chatbox], queue=False
         ).then(
             claude3.media_chat, [btn_file, chatbox], chatbox
@@ -98,7 +98,7 @@ with gr.Blocks() as tab_gemini:
 
         # temp save user message in State()
         saved_msg = gr.State()
-        media_msg = btn_file.upload(
+        btn_file.upload(
             post_media, [btn_file, chatbox], [chatbox], queue=False
         ).then(
             gemini.media_chat, [btn_file, chatbox], chatbox

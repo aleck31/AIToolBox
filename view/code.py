@@ -7,7 +7,7 @@ from llm import code
 
 
 with gr.Blocks() as tab_code:
-    description = gr.Markdown("Let's build ... (Powered by Claude3 Sonnet v1)")
+    description = gr.Markdown("Let's build ... (Powered by Claude3)")
     with gr.Row():
         # 输入需求
         with gr.Column(scale=6, min_width=500):
@@ -29,7 +29,7 @@ with gr.Blocks() as tab_code:
 
 
 tab_format = gr.Interface(
-    code.format_code,
+    code.format_text,
     inputs=[
         gr.Textbox(label="Please input the text:", lines=9, scale=5),
         gr.Radio(label="File format", choices=["JSON", "YAML"], value="JSON")
@@ -43,7 +43,7 @@ tab_format = gr.Interface(
         """, "JSON"]],
     cache_examples=False,
     # live=True,
-    description="A json/yaml formatter... (Powered by Claude3 Sonnet v1)",
+    description="A json/yaml formatter... (Powered by Claude3)",
     submit_btn= gr.Button("⌨️ Format"),
     clear_btn=gr.Button("🗑️ Clear")
 )
