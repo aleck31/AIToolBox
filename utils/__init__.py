@@ -129,7 +129,7 @@ class AppConf:
     # Constants
     STYLES = ["正常", "幽默", "极简", "理性", "可爱"]
     LANGS = ["en_US", "zh_CN", "zh_TW", "ja_JP", "de_DE", "fr_FR"]
-    CODELANGS = ["Python", "Shell", "HTML", "Javascript", "Typescript", "Yaml", "GoLang", "Rust"]
+    CODELANGS = ["Python", "GoLang", "Rust", "Java", "C++", "Swift", "Javascript", "Typescript", "HTML", "SQL", "Shell"]
     PICSTYLES = [
         "增强(enhance)", "照片(photographic)", "老照片(analog-film)",
         "电影(cinematic)", "模拟电影(analog-film)", "美式漫画(comic-book)",  "动漫(anime)", "线稿(line-art)",

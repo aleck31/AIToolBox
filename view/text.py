@@ -17,7 +17,7 @@ tab_translate = gr.Interface(
     examples=[["Across the Great Wall we can reach every corner of the world.", "auto", "zh_CN"]],
     cache_examples=False,
     description="Let me translate the text for you. (Powered by Claude3)",
-    submit_btn= gr.Button("↩️ Run"),
+    submit_btn= gr.Button("↩️ Go"),
     clear_btn=gr.Button("🗑️ Clear")
 )
 
@@ -34,7 +34,7 @@ tab_rewrite = gr.Interface(
     cache_examples=False,
     # live=True,
     description="Let me help you polish the contents. (Powered by Claude3)",
-    submit_btn= gr.Button("↩️ Run"),
+    submit_btn= gr.Button("↩️ Go"),
     clear_btn=gr.Button("🗑️ Clear")
 )
 
@@ -49,37 +49,36 @@ tab_rewrite = gr.Interface(
 #     submit_btn= gr.Button("↩️ Run"),
 #     clear_btn=gr.Button("🗑️ Clear")
 # )
-def save_input(input):
+
+def save_to_state(input):
     '''save input content into tmp State'''
-    if input.startswith('http'):
-        content = web.fetch_url_content(input)
-    else:
-        content = input
-    return content
+    state = input
+    return state
 
 
 with gr.Blocks() as tab_summary:
-    description = gr.Markdown("Let me summary the contents for you. (Powered by Claude3)")           
+    description = gr.Markdown("Summarize articles or webpage for you.   (Powered by Claude3)")           
     with gr.Row():
-        saved_content = gr.State()
+        saved_text = gr.State()       
         with gr.Column(scale=6, min_width=450):
             with gr.Row():
                 with gr.Tab("Original Text"):
                     input_text =  gr.Textbox(label='text', show_label=False, container=False, lines=8)
-                    input_text.change(save_input, input_text, saved_content)
+                    input_text.change(save_to_state, input_text, saved_text)
                 with gr.Tab("Web URL"): 
                     input_url = gr.Textbox(label='url',show_label=False, container=False, lines=1)
-                    input_url.change(save_input, input_url, saved_content)
-                    # btn_url = gr.Button(value='⌨️ Fetch')
+                    input_url.change(save_to_state, input_url, saved_text)
+                    # fetch webpage content for debug
+                    # btn_fetch = gr.Button(value='⌨️ Fetch')
                     # fetched_text = gr.Textbox(label="Fetched text", lines=5)
-                    # btn_url.click(web.fetch_url_content, input_url, fetched_text)
+                    # btn_fetch.click(web.fetch_web_text, input_url, fetched_text)
             with gr.Row():
                 # btn_clear = gr.ClearButton([input_text, input_url, output], value='🗑️ Clear')
                 btn_clear = gr.Button("🗑️ Clear") 
-                btn_summit = gr.Button("↩️ Run")           
+                btn_summit = gr.Button("↩️ Go")
 
         with gr.Column(scale=6, min_width=450):
             output = gr.Textbox(label="Summary text", lines=11)        
         
         btn_clear.click(None, None, [input_text, input_url, output])
-        btn_summit.click(fn=lang.text_summary, inputs=saved_content, outputs=output)
+        btn_summit.click(fn=lang.text_summary, inputs=saved_text, outputs=output)

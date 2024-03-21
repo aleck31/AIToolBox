@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT-0
 from utils import format_resp, format_message
 from utils.common import translate_text
+from utils.web import fetch_web_text
 from . import bedrock_runtime, generate_content
 
 
@@ -87,17 +88,25 @@ def text_rewrite(text, style):
     return format_resp(polished_text)
     
 
-def text_summary(text):
+def text_summary(text: str):
     if text == '':
         return "Tell me something first."
+    elif text.startswith('http'):
+        text = fetch_web_text(text)
 
     # Define prompts for text summary
     system_sum = """
-        You are a senior editor. Your task is to summarize the text provided by users without losing any important information.
-        NEVER write anything before the summary text, do not include any other content.
+        You are a highly capable text summarization assistant. Your task is to summarize the given text comprehensively and faithfully.
+        Here are some guidelines for your summary:
+        1. Analyze the original text to determine its primary language, and provide a summary in that language.
+        2. Start with a one-sentence overview, then break it down by section, identifying key points, evidence and conclusions. 
+        3. Aim for around 20% of the original text length, adjusting as needed based on the complexity and density of information.
+        4. Use your own words where possible, but retain important verbatim quotes or terms that are critical to the meaning.
+        5. Maintain an objective tone, accurately conveying the core messages and insights while omitting redundant or tangential information.
+        NEVER write anything before the overview text.
         """
     prompt_sum = f"""
-        Provide a summary for the following text:
+        Provide a comprehensive summary for the following text according to the guidelines:
         <original_text>
         {text}
         </original_text>

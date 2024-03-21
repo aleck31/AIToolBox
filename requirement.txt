@@ -1,4 +1,4 @@
 boto3
 gradio
 google-generativeai
-gne
+selectolax
