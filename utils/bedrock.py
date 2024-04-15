@@ -10,21 +10,23 @@ import boto3
 from botocore.config import Config
 
 
+_BEDROCK_RUNTIME = None
+
+
 def get_bedrock_client(
+    region: Optional[str],
     assumed_role: Optional[str] = None,
-    region: Optional[str] = None,
     runtime: Optional[bool] = True,
 ):
     """Create a boto3 client for Amazon Bedrock, with optional configuration overrides
 
     Parameters
     ----------
+    region :
+        AWS Region name in which the service should be called (e.g. "us-east-1").
     assumed_role :
         Optional ARN of an AWS IAM role to assume for calling the Bedrock service. If not
         specified, the current active credentials will be used.
-    region :
-        Optional name of the AWS Region in which the service should be called (e.g. "us-east-1").
-        If not specified, AWS_REGION or AWS_DEFAULT_REGION environment variable will be used.
     runtime :
         Optional choice of getting different client to perform operations with the Amazon Bedrock service.
         Bedrock.Client: 
@@ -34,13 +36,24 @@ def get_bedrock_client(
             describes the API operations for running inference using Bedrock models.
             https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-runtime.html
     """
-    if region is None:
-        target_region = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION"))
-    else:
-        target_region = region
 
-    print(f"Create new client\n  Using region: {target_region}")
-    session_kwargs = {"region_name": target_region}
+    global _BEDROCK_RUNTIME
+    if runtime and _BEDROCK_RUNTIME:
+        return _BEDROCK_RUNTIME
+
+    if assumed_role:
+        print(f"  Using role: {assumed_role}", end='')
+        sts = session.client("sts")
+        response = sts.assume_role(
+            RoleArn=str(assumed_role),
+            RoleSessionName="bedrock-llm-1"
+        )
+        print(" ... successful!")
+        client_kwargs["aws_access_key_id"] = response["Credentials"]["AccessKeyId"]
+        client_kwargs["aws_secret_access_key"] = response["Credentials"]["SecretAccessKey"]
+        client_kwargs["aws_session_token"] = response["Credentials"]["SessionToken"]
+
+    session_kwargs = {"region_name": region}
     client_kwargs = {**session_kwargs}
 
     profile_name = os.environ.get("AWS_PROFILE")
@@ -48,34 +61,17 @@ def get_bedrock_client(
         print(f"  Using profile: {profile_name}")
         session_kwargs["profile_name"] = profile_name
 
+    session = boto3.Session(**session_kwargs)
+
     retry_config = Config(
-        region_name=target_region,
+        region_name=region,
         retries={
             "max_attempts": 10,
             "mode": "standard",
         },
     )
-    session = boto3.Session(**session_kwargs)
-
-    if assumed_role:
-        print(f"  Using role: {assumed_role}", end='')
-        sts = session.client("sts")
-        response = sts.assume_role(
-            RoleArn=str(assumed_role),
-            RoleSessionName="langchain-llm-1"
-        )
-        print(" ... successful!")
-        client_kwargs["aws_access_key_id"] = response["Credentials"]["AccessKeyId"]
-        client_kwargs["aws_secret_access_key"] = response["Credentials"]["SecretAccessKey"]
-        client_kwargs["aws_session_token"] = response["Credentials"]["SessionToken"]
-
-    if runtime:
-        service_name='bedrock-runtime'
-    else:
-        service_name='bedrock'
-
     bedrock_client = session.client(
-        service_name=service_name,
+        service_name=['bedrock', 'bedrock-runtime'][runtime],
         config=retry_config,
         **client_kwargs
     )

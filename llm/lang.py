@@ -3,7 +3,7 @@
 from utils import format_resp, format_message
 from utils.common import translate_text
 from utils.web import fetch_web_text
-from . import bedrock_runtime, generate_content
+from . import generate_content
 
 
 model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
@@ -11,23 +11,23 @@ model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
 inference_params = {
     "anthropic_version": "bedrock-2023-05-31",
     # maximum number of tokens to generate. Responses are not guaranteed to fill up to the maximum desired length.
-    'max_tokens':4096, 
+    'max_tokens': 4096,
     # tunes the degree of randomness in generation. Lower temperatures mean less random generations.
-    "temperature":0.5,
+    "temperature": 0.5,
     # less than one keeps only the smallest set of most probable tokens with probabilities that add up to top_p or higher for generation.
-    "top_p":0.5,
-    # top_k - can be used to reduce repetitiveness of generated tokens. 
-    # The higher the value, the stronger a penalty is applied to previously present tokens, 
-    "top_k":200,
+    "top_p": 0.5,
+    # top_k - can be used to reduce repetitiveness of generated tokens.
+    # The higher the value, the stronger a penalty is applied to previously present tokens,
+    "top_k": 200,
     # stop_sequences - are sequences where the API will stop generating further tokens. The returned text will not contain the stop sequence.
     "stop_sequences": ["end_turn"]
-    }
+}
 
 
 def text_translate(text, source_lang, target_lang):
     if text == '':
         return "Tell me something first."
-    
+
     # Define prompts for text translate
     system_tran = """
         You are an experienced multilingual translation expert. 
@@ -39,11 +39,12 @@ def text_translate(text, source_lang, target_lang):
         <original_text>
         {text}
         </original_text>
-        """    
+        """
     message_tran = [format_message(prompt_tran, 'user', 'text')]
 
     # Get the llm reply
-    resp = generate_content(message_tran, system_tran, inference_params, model_id)
+    resp = generate_content(message_tran, system_tran,
+                            inference_params, model_id)
     translated_text = resp.get('content')[0].get('text')
 
     return format_resp(translated_text)
@@ -52,7 +53,7 @@ def text_translate(text, source_lang, target_lang):
 def text_rewrite(text, style):
     if text == '':
         return "Tell me something first."
-    
+
     Source_lang_code = translate_text(text, 'en').get('source_lang_code')
 
     match style:
@@ -61,7 +62,7 @@ def text_rewrite(text, style):
         case "理性":
             style = "rational and rigorous"
         case "幽默":
-            style = "great humor"   
+            style = "great humor"
         case "可爱":
             style = "cute and lovely"
         case _:
@@ -78,15 +79,16 @@ def text_rewrite(text, style):
         <original_paragraph>
         {text}
         </original_paragraph>
-        """    
+        """
     message_rewrite = [format_message(prompt_rewrite, 'user', 'text')]
 
     # Get the llm reply
-    resp = generate_content(message_rewrite, system_rewrite, inference_params, model_id)
+    resp = generate_content(
+        message_rewrite, system_rewrite, inference_params, model_id)
     polished_text = resp.get('content')[0].get('text')
 
     return format_resp(polished_text)
-    
+
 
 def text_summary(text: str):
     if text == '':
@@ -110,11 +112,12 @@ def text_summary(text: str):
         <original_text>
         {text}
         </original_text>
-        """    
+        """
     message_sum = [format_message(prompt_sum, 'user', 'text')]
 
     # Get the llm reply
-    resp = generate_content(message_sum, system_sum, inference_params, model_id)
+    resp = generate_content(message_sum, system_sum,
+                            inference_params, model_id)
     summarized_text = resp.get('content')[0].get('text')
 
     return format_resp(summarized_text)

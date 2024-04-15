@@ -5,8 +5,9 @@
 from io import StringIO
 import re
 import sys
-import json
+import base64
 import textwrap
+
 
 
 def print_ww(*args, width: int = 100, **kwargs):
@@ -23,7 +24,7 @@ def print_ww(*args, width: int = 100, **kwargs):
         print("\n".join(textwrap.wrap(line, width=width)))
 
 
-def format_resp(response:str):
+def format_resp(response: str):
     """Format the output content, remove xml tags"""
     # Trims leading whitespace using regular expressions
     pattern = '^\\s+'
@@ -37,44 +38,58 @@ def format_resp(response:str):
         return response
 
 
+def load_media(media_path):
+    """Read reference image from file and encode as base64 strings"""
+    with open(media_path, "rb") as image_file:
+        med_content = base64.b64encode(image_file.read()).decode('utf8')
+    return med_content
+
+
 MESSAGE_TYPES = ("text", "image")
 
-def format_message(content, role, msg_type):
 
-    if msg_type not in MESSAGE_TYPES:
-        raise ValueError(f"Invalid message type: {msg_type}")
+def format_message(message: dict, role):
+    '''
+    :input: message dict
+    {
+        "text": "user input", 
+        "files": [
+            {'path': "file_path1", 'url': '/file=file_path1', 'size': 111},
+            {'path': "file_path2", 'url': '/file=file_path2', 'size': 222}, 
+            ...
+        ]
+    }    
+    '''
+    # if msg_type not in MESSAGE_TYPES:
+    #     raise ValueError(f"Invalid message type: {msg_type}")
 
-    base_msg = {"role": role, "content": []}
-
-    match msg_type:
-        case "text":
-            formated_msg = {"role": role, "content": content}
-        case "image":
-            formated_msg = {
-                "role": role,
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/jpeg",
-                            "data": content
-                        }
-                    },
-                    {
-                        "type": "text",
-                        "text": "Explain the image in detail."
+    if not message.get('files'):
+        formated_msg = {'role': role, 'content': message.get('text')}
+    else:
+        text_msg = message.get('text')
+        file_path = message.get('files')[0]['path']
+        formated_msg = {
+            'role': role,
+            'content': [
+                {
+                    "type": "text",
+                    "text": text_msg
+                },
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/jpeg",
+                        "data": load_media(file_path)
                     }
-                ]
-            }
-        case _:                      
-            pass
+                }
+            ]
+        }
 
     return formated_msg
 
 
-
-class ChatHistory:
+class ChatHistory(object):
     """Abstract class for storing chat message history."""
 
     def __init__(self, initial_history=None):
@@ -84,10 +99,10 @@ class ChatHistory:
             initial_messages (list, optional): List of initial chat messages. Defaults to None.
         """
         self.messages = []
-        if initial_history:
+        while initial_history:
             for user_msg, assistant_msg in initial_history:
-                self.add_user_text(user_msg)
-                self.add_bot_text(assistant_msg)
+                self.add_user_msg({'text': user_msg})
+                self.add_bot_msg({'text': assistant_msg})
 
     def add_message(self, message) -> None:
         """Add a message to the history list"""
@@ -97,28 +112,22 @@ class ChatHistory:
         """Clear memory"""
         self.messages.clear()
 
-    def add_user_text(self, message: str) -> None:
+    def add_user_msg(self, message: dict) -> None:
         self.add_message(
-            format_message(message, "user", 'text')                    
+            format_message(message, "user")
         )
+        # print(f"FULL_History: {self.messages}")
 
-    def add_user_image(self, message: str) -> None:
+    def add_bot_msg(self, message: dict) -> None:
         self.add_message(
-            format_message(message, "user", 'image')                    
-        )
-
-    def add_bot_text(self, message: str) -> None:
-        self.add_message(
-            format_message(message, "assistant", 'text')                    
-        )
-
-    def add_bot_image(self, message: str) -> None:
-        self.add_message(
-            format_message(message, "assistant", 'image')                    
+            format_message(message, "assistant")
         )
 
     def get_latest_message(self):
         return self.messages[-1] if self.messages else None
+
+    def del_latest_message(self):
+        self.messages.pop()
 
 
 class AppConf:
@@ -129,7 +138,8 @@ class AppConf:
     # Constants
     STYLES = ["正常", "幽默", "极简", "理性", "可爱"]
     LANGS = ["en_US", "zh_CN", "zh_TW", "ja_JP", "de_DE", "fr_FR"]
-    CODELANGS = ["Python", "GoLang", "Rust", "Java", "C++", "Swift", "Javascript", "Typescript", "HTML", "SQL", "Shell"]
+    CODELANGS = ["Python", "GoLang", "Rust", "Java", "C++",
+                 "Swift", "Javascript", "Typescript", "HTML", "SQL", "Shell"]
     PICSTYLES = [
         "增强(enhance)", "照片(photographic)", "老照片(analog-film)",
         "电影(cinematic)", "模拟电影(analog-film)", "美式漫画(comic-book)",  "动漫(anime)", "线稿(line-art)",

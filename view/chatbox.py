@@ -5,12 +5,12 @@ from utils import AppConf
 from llm import claude3, gemini
 
 
-
 def post_text(message, history):
     '''post message on chatbox ui before get LLM response'''
     # history = history + [(message, None)]
     history.append([message, None])
     return gr.Textbox(value="", interactive=False), message, history
+
 
 def post_media(file, history):
     '''post media on chatbox ui before get LLM response'''
@@ -18,7 +18,33 @@ def post_media(file, history):
     return history
 
 
-with gr.Blocks() as tab_claude:
+tab_claude = gr.ChatInterface(
+    claude3.multimodal_chat,
+    multimodal=True,
+    description="Let's chat ... (Powered by Claude3 Sonnet v1)",
+    chatbot=gr.Chatbot(
+        avatar_images=(None, "assets/avata_claude.jpg"),
+        label="Chatbot",
+        layout="bubble",
+        bubble_full_width=False,
+        height=420
+    ),
+    # undo_btn="↩️ Undo",
+    # retry_btn='🔃 Retry',
+    # clear_btn="💊 Forget All",
+    undo_btn=None,
+    retry_btn=None,
+    clear_btn=None,
+    stop_btn='🟥',
+    additional_inputs_accordion=gr.Accordion(label='Chatbot Style', open=False),
+    additional_inputs=gr.Radio(
+        label="style", choices=AppConf.STYLES,
+        value="正常", show_label=False
+    )
+)
+
+
+with gr.Blocks() as tab_claude_deprecated:
     description = gr.Markdown("Let's chat ... (Powered by Claude3 Sonnet v1)")
     with gr.Column(variant="panel"):
         # Chatbot接收 chat history进行显示
@@ -35,16 +61,22 @@ with gr.Blocks() as tab_claude:
                     show_label=False, container=False, autofocus=True, scale=7,
                     placeholder="Type a message or upload an image"
                 )
-                btn_file = gr.UploadButton("📁", file_count='single', file_types=['image', 'pdf'], scale=1)
-                btn_submit = gr.Button('Chat', variant="primary", scale=1, min_width=150)          
+                btn_file = gr.UploadButton(
+                    "📁", file_count='single', scale=1,
+                    file_types=['image', 'pdf']
+                )
+                btn_submit = gr.Button(
+                    'Chat', variant="primary", scale=1, min_width=150
+                )
         with gr.Row():
             btn_clear = gr.ClearButton([input_msg, chatbox], value='🗑️ Clear')
             btn_forget = gr.Button('💊 Forget All', scale=1, min_width=150)
             btn_forget.click(claude3.clear_memory, None, chatbox)
             btn_flag = gr.Button('🏁 Flag', scale=1, min_width=150)
         with gr.Accordion(label='Chatbot Style', open=False):
-            input_style = gr.Radio(label="Chatbot Style", choices=AppConf.STYLES, value="正常", show_label=False)
-        
+            input_style = gr.Radio(
+                label="Chatbot Style", choices=AppConf.STYLES, value="正常", show_label=False)
+
         # temp save user message in State()
         saved_msg = gr.State()
         # saved_chats = (
@@ -57,7 +89,8 @@ with gr.Blocks() as tab_claude:
         )
 
         input_msg.submit(
-            post_text, [input_msg, chatbox], [input_msg, saved_msg, chatbox], queue=False
+            post_text, [input_msg, chatbox], [
+                input_msg, saved_msg, chatbox], queue=False
         ).then(
             claude3.text_chat, [saved_msg, chatbox, input_style], chatbox
         ).then(
@@ -66,14 +99,15 @@ with gr.Blocks() as tab_claude:
         )
 
         btn_submit.click(
-            post_text, [input_msg, chatbox], [input_msg, saved_msg, chatbox], queue=False
+            post_text, [input_msg, chatbox], [
+                input_msg, saved_msg, chatbox], queue=False
         ).then(
             claude3.text_chat, [saved_msg, chatbox, input_style], [chatbox]
         ).then(lambda: gr.Textbox(interactive=True), None, input_msg)
 
 
 with gr.Blocks() as tab_gemini:
-    description = gr.Markdown("Let's chat ... (Powered by Gemini Pro)")    
+    description = gr.Markdown("Let's chat ... (Powered by Gemini Pro)")
     with gr.Column(variant="panel"):
         chatbox = gr.Chatbot(
             avatar_images=(None, "assets/avata_google.jpg"),
@@ -87,11 +121,14 @@ with gr.Blocks() as tab_gemini:
                     show_label=False, container=False, scale=12,
                     placeholder="Enter text or upload an image"
                 )
-                btn_file = gr.UploadButton("📁", file_types=["image", "video", "audio"], scale=1)
-                btn_submit = gr.Button('Chat', variant="primary", scale=2, min_width=150)
+                btn_file = gr.UploadButton(
+                    "📁", file_types=["image", "video", "audio"], scale=1)
+                btn_submit = gr.Button(
+                    'Chat', variant="primary", scale=2, min_width=150)
 
         with gr.Row():
-            btn_clear = gr.ClearButton([input_msg, chatbox], value='🗑️ Clear', scale=1)
+            btn_clear = gr.ClearButton(
+                [input_msg, chatbox], value='🗑️ Clear', scale=1)
             btn_forget = gr.Button('💊 Forget All', scale=1, min_width=150)
             btn_forget.click(gemini.clear_memory, None, chatbox)
             btn_flag = gr.Button('🏁 Flag', scale=1, min_width=150)
@@ -105,7 +142,8 @@ with gr.Blocks() as tab_gemini:
         )
 
         txt_msg = input_msg.submit(
-            post_text, [input_msg, chatbox], [input_msg, saved_msg, chatbox], queue=False
+            post_text, [input_msg, chatbox], [
+                input_msg, saved_msg, chatbox], queue=False
         ).then(
             gemini.text_chat, [saved_msg, chatbox], chatbox
         )
@@ -113,7 +151,8 @@ with gr.Blocks() as tab_gemini:
         txt_msg.then(lambda: gr.Textbox(interactive=True), None, [input_msg])
 
         btn_submit.click(
-            post_text, [input_msg, chatbox], [input_msg, saved_msg, chatbox], queue=False
+            post_text, [input_msg, chatbox], [
+                input_msg, saved_msg, chatbox], queue=False
         ).then(
             gemini.text_chat, [saved_msg, chatbox], [chatbox]
         ).then(lambda: gr.Textbox(interactive=True), None, [input_msg])
