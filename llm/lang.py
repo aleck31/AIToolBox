@@ -40,7 +40,7 @@ def text_translate(text, source_lang, target_lang):
         {text}
         </original_text>
         """
-    message_tran = [format_message(prompt_tran, 'user', 'text')]
+    message_tran = [format_message({"text": prompt_tran}, 'user')]
 
     # Get the llm reply
     resp = generate_content(message_tran, system_tran,
@@ -80,7 +80,7 @@ def text_rewrite(text, style):
         {text}
         </original_paragraph>
         """
-    message_rewrite = [format_message(prompt_rewrite, 'user', 'text')]
+    message_rewrite = [format_message({"text": prompt_rewrite}, 'user')]
 
     # Get the llm reply
     resp = generate_content(
@@ -113,7 +113,7 @@ def text_summary(text: str):
         {text}
         </original_text>
         """
-    message_sum = [format_message(prompt_sum, 'user', 'text')]
+    message_sum = [format_message({"text": prompt_sum}, 'user')]
 
     # Get the llm reply
     resp = generate_content(message_sum, system_sum,

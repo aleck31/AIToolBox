@@ -12,7 +12,7 @@ with gr.Blocks() as tab_draw:
     with gr.Row():
         with gr.Column(scale=6):
             # input_params = []
-            input_prompt = gr.Textbox(label="Prompt", lines=5)
+            input_prompt = gr.Textbox(label="Description:", lines=5)
             # optional parameters
             input_negative = gr.Text(label="Negative Prompt")
             with gr.Row():
@@ -20,12 +20,12 @@ with gr.Blocks() as tab_draw:
                 input_style = gr.Dropdown(choices=AppConf.PICSTYLES, value='增强(enhance)', label='Picture style:')
             with gr.Row():
                 input_seed = gr.Number(
-                    value=-1, label="Seed", 
+                    value=0, label="Seed", 
                     container=False, scale=5
                 )
                 # with gr.Column(scale=1):
-                btn_random = gr.Button('🎲 Random', scale=1)
-                btn_random.click(image.random_seed, None, input_seed)
+                seed_random = gr.Checkbox(True, label='🎲 Random', scale=1)
+                # btn_random.click(image.random_seed, None, input_seed)
             with gr.Row():
                 input_step = gr.Slider(10, 150, value=50, step=1, label="Step", scale=6)
                 # with gr.Column(scale=5):
@@ -37,8 +37,8 @@ with gr.Blocks() as tab_draw:
             output_image = gr.Image(interactive=False)            
         btn_img_gen.click(
             fn=image.text_image, 
-            inputs=[input_prompt, input_negative, input_style, input_step, input_seed], 
-            outputs=output_image
+            inputs=[input_prompt, input_negative, input_style, input_step, input_seed, seed_random], 
+            outputs=[output_image, input_seed]
         )
 
     # with gr.Tab("Image-Image"):

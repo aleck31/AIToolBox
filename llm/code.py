@@ -31,7 +31,7 @@ def gen_code(requirement, program_language):
         {requirement}
         </requirement>
     """
-    message_arch = [format_message(prompt_arch, 'user', 'text')]
+    message_arch = [format_message({"text": prompt_arch}, 'user')]
 
     # Get the llm reply
     resp_arch = generate_content(message_arch, system_arch, inference_params, model_id)
@@ -55,7 +55,7 @@ def gen_code(requirement, program_language):
         </instruction>
     """
 
-    message_coder = [format_message(prompt_coder, 'user', 'text')]
+    message_coder = [format_message({"text": prompt_coder}, 'user')]
 
     # Get the llm reply
     resp_coder = generate_content(message_coder, system_coder, inference_params, model_id)
@@ -102,7 +102,7 @@ def format_text(text, target_format):
         </input>
     """
 
-    message_coder = [format_message(prompt_format, 'user', 'text')]
+    message_coder = [format_message({"text": prompt_format}, 'user')]
 
     # Get the llm reply
     resp = generate_content(message_coder, system_format, inference_params, model_id)

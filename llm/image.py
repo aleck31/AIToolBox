@@ -34,9 +34,9 @@ def random_seed():
     return random.randrange(10000000, 99999999)
 
 
-def text_image(prompt:str, negative:str, style, step:int, seed):
+def text_image(prompt:str, negative:str, style, step:int, seed, seed_random):
     # chang seed from Double to Int
-    seed = random_seed() if seed == -1 else int(seed)
+    seed = random_seed() if seed_random else int(seed)
     # extracts the style string contained within ()
     if style:
         pattern = r'\((.*?)\)'
@@ -75,4 +75,4 @@ def text_image(prompt:str, negative:str, style, step:int, seed):
     decoded_img = Image.open(io.BytesIO(base64.b64decode(base_64_img_str)))
     # decoded_img = Image.open(io.BytesIO(base64.decodebytes(bytes(base_64_img_str, "utf-8"))))
 
-    return decoded_img
+    return decoded_img, seed

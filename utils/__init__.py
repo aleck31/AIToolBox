@@ -54,37 +54,35 @@ def format_message(message: dict, role):
     {
         "text": "user input", 
         "files": [
-            {'path': "file_path1", 'url': '/file=file_path1', 'size': 111},
-            {'path': "file_path2", 'url': '/file=file_path2', 'size': 222}, 
+            {'path': "file_path1", 'url': '/file=file_path1', 'size': 123},
+            {'path': "file_path2", 'url': '/file=file_path2', 'size': 123}, 
             ...
         ]
     }    
     '''
-    # if msg_type not in MESSAGE_TYPES:
-    #     raise ValueError(f"Invalid message type: {msg_type}")
 
     if not message.get('files'):
         formated_msg = {'role': role, 'content': message.get('text')}
     else:
-        text_msg = message.get('text')
-        file_path = message.get('files')[0]['path']
-        formated_msg = {
-            'role': role,
-            'content': [
-                {
-                    "type": "text",
-                    "text": text_msg
-                },
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/jpeg",
-                        "data": load_media(file_path)
-                    }
+        msg_content = [
+            {
+                "type": "text",
+                "text": message.get('text')
+            }
+        ]        
+        file_list = message.get('files')
+        for file in file_list:  
+            img_msg = {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": load_media(file['path'])
                 }
-            ]
-        }
+            }
+            msg_content.append(img_msg)
+
+        formated_msg = { 'role': role, 'content': msg_content }
 
     return formated_msg
 
