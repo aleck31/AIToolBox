@@ -1,7 +1,7 @@
-version v0.9
+version v0.96
 ---
 
-AI Toolbox, built on AWS Bedrock services, showcases typical use cases for large language models, including chatbot, translation, summary, coding and image recognition etc.
+AI Toolbox, built on AWS Bedrock services, showcases typical use cases for large language models, including chatbot, translation, summary, image/pdf recognition, coding and text-to-image etc.
 
 Its user-friendly Gradio-based web interface provides an intuitive experience, as shown below.
 

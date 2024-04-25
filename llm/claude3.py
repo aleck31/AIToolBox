@@ -1,15 +1,13 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
-import base64
 import json
-from utils import ChatHistory
+from common import USER_CONF
+from utils import ChatHistory, image
 from . import generate_content, generate_stream
 
 
-# https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html#model-ids-arns
-model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
-# model_id = "anthropic.claude-v2:1"
-# model_id = 'anthropic.claude-instant-v1'
+
+model_id = USER_CONF.get_model_id('claude3')
 
 inference_params = {
     "anthropic_version": "bedrock-2023-05-31",
@@ -24,6 +22,11 @@ inference_params = {
 }
 
 chat_memory = ChatHistory()
+
+
+def clear_memory():
+    chat_memory.clear()
+    return [('/reset', 'Conversation history forgotten.')]
 
 
 def text_chat(input_msg: str, chat_history: list, style: str):
@@ -66,7 +69,6 @@ def text_chat(input_msg: str, chat_history: list, style: str):
 
 
 def media_chat(media_path, chat_history: list):
-
     # Define system prompt base on style
     system_prompt = "Reply in the corresponding language based on the context of the conversation."
 
@@ -74,7 +76,7 @@ def media_chat(media_path, chat_history: list):
         'text': 'Explain the image in detail.',
         'file': media_path
     }
-    
+
     # message_format = [format_message(content_img, "user", 'image')]
     chat_memory.add_user_msg(user_msg)
 
@@ -116,11 +118,11 @@ def multimodal_chat(message: dict, history: list, style: str):
     system_prompt = f"""
         You are an AI chatbot. You are talkative and provides lots of specific details from its context.
         {prompt_style}
-        If you do not know the answer to a question, it truthfully says you don't know.
+        If you are unsure or don't have enough information to provide a confident answer, simply say "I don't know" or "I'm not sure."
         """
 
     if history:
-        last_bot_msg = { "text": history[-1][0] }
+        last_bot_msg = {"text": history[-1][1]}
         chat_memory.add_bot_msg(last_bot_msg)
     else:
         chat_memory.clear()
@@ -131,7 +133,7 @@ def multimodal_chat(message: dict, history: list, style: str):
     # Get the llm reply
     resp = generate_stream(
         chat_memory.messages,
-        system_prompt, 
+        system_prompt,
         inference_params, model_id
     )
 
@@ -142,48 +144,50 @@ def multimodal_chat(message: dict, history: list, style: str):
             if chunk['delta']['type'] == 'text_delta':
                 print(chunk['delta']['text'], end="")
                 partial_message = partial_message + chunk['delta']['text']
-                yield partial_message        
+                yield partial_message
 
 
-def clear_memory():
-    chat_memory.clear()
-    return [('/reset', 'Conversation history forgotten.')]
-
-
-def clear_memory():
-    chat_memory.clear()
-    return [('/reset', 'Conversation history forgotten.')]
-
-
-def analyze_img(img_path, text_prompt):
-
+def vision_analyze(file_path: str, require_desc):
+    '''
+    :input: image or pdf file path
+    '''
     # Define system prompt base on style
-    system_prompt = "Respond in the corresponding language based on the context of the conversation."
+    system_prompt = '''
+    Analyze or describe the content of the image(s) according to the user's requirement.
+    Respond using the language onsistent with the user or the language specified in the requirement.
+    '''
 
-    if text_prompt == '':
-        text_prompt = "Explain the image in detail."
+    text_prompt = require_desc or "Explain the image in detail."
+    msg_content = [
+        {"type": "text", "text": f"<requirement>{text_prompt}</requirement>" }
+    ]
 
-    # Read reference image from file and encode as base64 strings.
-    with open(img_path, "rb") as image_file:
-        content_img = base64.b64encode(image_file.read()).decode('utf8')
+    if file_path.endswith('.pdf'):
+        img_list = image.pdf_to_imgs(file_path)    
+        for img in img_list:
+            img_msg = {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": image.pil_to_base64(img)
+                }
+            }  
+            msg_content.append(img_msg)
 
-    formated_msg = {
-        "role": 'user',
-        "content": [
+    else:
+        msg_content.append(
             {
                 "type": "image",
                 "source": {
                     "type": "base64",
                     "media_type": "image/jpeg",
-                    "data": content_img
+                    "data": image.path_to_base64(file_path)
                 }
-            },
-            {
-                "type": "text",
-                "text": text_prompt
             }
-        ]
-    }
+        )
+
+    formated_msg = {'role': 'user', 'content': msg_content}
 
     # Get the llm reply
     resp = generate_content(

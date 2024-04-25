@@ -2,3 +2,4 @@ boto3
 gradio
 google-generativeai
 selectolax
+pdf2image

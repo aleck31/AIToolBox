@@ -7,11 +7,11 @@ import base64
 import random
 from PIL import Image
 from . import bedrock_runtime
-from utils.common import translate_text
+from common import USER_CONF, translate_text
 
 
 # model_id = "stability.stable-diffusion-xl-v0"
-model_id = "stability.stable-diffusion-xl-v1"
+model_id = USER_CONF.get_model_id('image')
 
 negative_prompts = [
     "lower",

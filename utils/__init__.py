@@ -5,8 +5,8 @@
 from io import StringIO
 import re
 import sys
-import base64
 import textwrap
+from . import image
 
 
 
@@ -38,19 +38,9 @@ def format_resp(response: str):
         return response
 
 
-def load_media(media_path):
-    """Read reference image from file and encode as base64 strings"""
-    with open(media_path, "rb") as image_file:
-        med_content = base64.b64encode(image_file.read()).decode('utf8')
-    return med_content
-
-
-MESSAGE_TYPES = ("text", "image")
-
-
 def format_message(message: dict, role):
     '''
-    :input: message dict
+    :input: Multimodal Message Dict
     {
         "text": "user input", 
         "files": [
@@ -77,7 +67,7 @@ def format_message(message: dict, role):
                 "source": {
                     "type": "base64",
                     "media_type": "image/jpeg",
-                    "data": load_media(file['path'])
+                    "data": image.path_to_base64(file['path'])
                 }
             }
             msg_content.append(img_msg)
@@ -126,33 +116,3 @@ class ChatHistory(object):
 
     def del_latest_message(self):
         self.messages.pop()
-
-
-class AppConf:
-    """
-    A class to store and manage app configuration.
-    """
-
-    # Constants
-    STYLES = ["正常", "幽默", "极简", "理性", "可爱"]
-    LANGS = ["en_US", "zh_CN", "zh_TW", "ja_JP", "de_DE", "fr_FR"]
-    CODELANGS = ["Python", "GoLang", "Rust", "Java", "C++",
-                 "Swift", "Javascript", "Typescript", "HTML", "SQL", "Shell"]
-    PICSTYLES = [
-        "增强(enhance)", "照片(photographic)", "老照片(analog-film)",
-        "电影(cinematic)", "模拟电影(analog-film)", "美式漫画(comic-book)",  "动漫(anime)", "线稿(line-art)",
-        "3D模型(3d-model)", "低多边形(low-poly)", "霓虹朋克(neon-punk)", "复合建模(modeling-compound)",
-        "数字艺术(digital-art)", "奇幻艺术(fantasy-art)", "像素艺术(pixel-art)", "折纸艺术(origami)"
-    ]
-
-    # Variables, initialize with default values.
-    login_user = 'demo'
-    model_id = 'anthropic.claude-3-sonnet-20240229-v1:0'
-    image_llm = "stability.stable-diffusion-xl-v1"
-
-    def update(self, key, value):
-        # Update the value of a variable.
-        if hasattr(self, key):
-            setattr(self, key, value)
-        else:
-            raise AttributeError(f"Invalid configuration variable: {key}")

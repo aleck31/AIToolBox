@@ -1,8 +1,8 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
-from utils import AppConf
-from llm import image
+from common import AppConf
+from llm import draw
 
 
 
@@ -30,13 +30,13 @@ with gr.Blocks() as tab_draw:
                 input_step = gr.Slider(10, 150, value=50, step=1, label="Step", scale=6)
                 # with gr.Column(scale=5):
                 # seed randrange(10000000, 99999999)
-            with gr.Row():        
-                btn_img_gen = gr.Button("🪄 Draw")                
+            with gr.Row():                            
                 btn_text_clean = gr.ClearButton([input_prompt, input_negative], value='🗑️ Clear')
+                btn_img_gen = gr.Button("🪄 Draw")
         with gr.Column(scale=6):
             output_image = gr.Image(interactive=False)            
         btn_img_gen.click(
-            fn=image.text_image, 
+            fn=draw.text_image, 
             inputs=[input_prompt, input_negative, input_style, input_step, input_seed, seed_random], 
             outputs=[output_image, input_seed]
         )

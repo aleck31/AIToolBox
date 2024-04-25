@@ -1,7 +1,7 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
-from utils import AppConf
+from common import AppConf
 from llm import code
 
 

@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: MIT-0
 from PIL import Image
 import google.generativeai as gm
-from utils.common import get_secret
+from common import USER_CONF, get_secret
+from utils import image
+
 
 
 # gemini/getting-started guide:
@@ -19,9 +21,16 @@ generation_config = gm.GenerationConfig(
     candidate_count=1    
 )
 
-llm = gm.GenerativeModel("gemini-pro")
-multimodal_model = gm.GenerativeModel("gemini-pro-vision")
+llm = gm.GenerativeModel(USER_CONF.get_model_id('gemini'))
+multimodal_model = gm.GenerativeModel(USER_CONF.get_model_id('gemini-vision'))
 conversation = llm.start_chat(history=[])
+
+
+def clear_memory():
+    # conversation.rewind()
+    global conversation 
+    conversation = llm.start_chat(history=[])
+    return [('/reset', 'Conversation history forgotten.')]
 
 
 def text_chat(input_msg:str, chat_history:list):
@@ -60,26 +69,21 @@ def media_chat(media_path, chat_history):
     return chat_history
 
 
-def clear_memory():
-    # conversation.rewind()
-    global conversation 
-    conversation = llm.start_chat(history=[])
-    return [('/reset', 'Conversation history forgotten.')]
+def vision_analyze(file_path: str, require_desc):
 
+    # Define prompt templete
+    text_prompt = require_desc or "Explain the image in detail."
+    msg_content = [f"Analyze or describe the content of the image(s) according to the requirement:{text_prompt}"]
 
-def analyze_img(img_path, text_prompt):
-
-    # Define system prompt base on style
-    system_prompt = "Describe or analyze the content of the image based on user requirements."
-   
-    if text_prompt == '':
-        text_prompt = "Explain the image in detail."
-
-    image_file = Image.open(img_path)
-
+    if file_path.endswith('.pdf'):
+        img_list = image.pdf_to_imgs(file_path)
+        msg_content.extend(img_list)
+    else:
+        img_file = Image.open(file_path)
+        msg_content.append(img_file)
     try:
         resp = multimodal_model.generate_content(
-            [image_file, text_prompt],
+            contents=msg_content,
             generation_config=generation_config
         )
     except:

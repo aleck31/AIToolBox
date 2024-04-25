@@ -1,10 +1,12 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
+from common import USER_CONF
 from utils import format_message
 from . import bedrock_runtime, generate_content
 
 
-model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
+# model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
+model_id = USER_CONF.get_model_id('code')
 
 inference_params = {
     "anthropic_version": "bedrock-2023-05-31",

@@ -1,12 +1,13 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 from utils import format_resp, format_message
-from utils.common import translate_text
+from common import USER_CONF, translate_text
 from utils.web import fetch_web_text
 from . import generate_content
 
 
-model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
+
+# model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
 
 inference_params = {
     "anthropic_version": "bedrock-2023-05-31",
@@ -44,7 +45,7 @@ def text_translate(text, source_lang, target_lang):
 
     # Get the llm reply
     resp = generate_content(message_tran, system_tran,
-                            inference_params, model_id)
+                            inference_params, USER_CONF.get_model_id('translate'))
     translated_text = resp.get('content')[0].get('text')
 
     return format_resp(translated_text)
@@ -84,7 +85,8 @@ def text_rewrite(text, style):
 
     # Get the llm reply
     resp = generate_content(
-        message_rewrite, system_rewrite, inference_params, model_id)
+        message_rewrite, system_rewrite, inference_params, 
+        USER_CONF.get_model_id('rewrite'))
     polished_text = resp.get('content')[0].get('text')
 
     return format_resp(polished_text)
@@ -117,7 +119,7 @@ def text_summary(text: str):
 
     # Get the llm reply
     resp = generate_content(message_sum, system_sum,
-                            inference_params, model_id)
+                            inference_params, USER_CONF.get_model_id('summary'))
     summarized_text = resp.get('content')[0].get('text')
 
     return format_resp(summarized_text)
