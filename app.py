@@ -12,7 +12,7 @@ def login(username, password):
     if verify_user(username, password):
         if USER_CONF.username != username:
             USER_CONF.set_user(username)
-        # If a new user logs in, clear the history by default
+        # Clear history when new user login
         # if username != AppConf.login_user:
         #     claude3.clear_memory()
         return True
@@ -53,6 +53,6 @@ if __name__ == "__main__":
         # debug=True,
         auth=login,
         server_name='0.0.0.0',
-        server_port=5006,
+        server_port=8886,
         show_api=False
     )

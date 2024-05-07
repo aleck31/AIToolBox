@@ -15,7 +15,7 @@ _BEDROCK_RUNTIME = None
 
 def get_bedrock_client(
     region: Optional[str],
-    assumed_role: Optional[str] = None,
+    assume_role_arn: Optional[str] = None,
     runtime: Optional[bool] = True,
 ):
     """Create a boto3 client for Amazon Bedrock, with optional configuration overrides
@@ -41,17 +41,18 @@ def get_bedrock_client(
     if runtime and _BEDROCK_RUNTIME:
         return _BEDROCK_RUNTIME
 
-    if assumed_role:
-        print(f"  Using role: {assumed_role}", end='')
+    if assume_role_arn:
+        print(f"  Using role: {assume_role_arn}", end='')
         sts = session.client("sts")
         response = sts.assume_role(
-            RoleArn=str(assumed_role),
-            RoleSessionName="bedrock-llm-1"
+            RoleArn=str(assume_role_arn),
+            RoleSessionName="br-tmp-session1"
         )
-        print(" ... successful!")
-        client_kwargs["aws_access_key_id"] = response["Credentials"]["AccessKeyId"]
-        client_kwargs["aws_secret_access_key"] = response["Credentials"]["SecretAccessKey"]
-        client_kwargs["aws_session_token"] = response["Credentials"]["SessionToken"]
+        temp_credentials = response["Credentials"]
+        print(" ... got temporary credentials successful!")
+        client_kwargs["aws_access_key_id"] = temp_credentials["AccessKeyId"]
+        client_kwargs["aws_secret_access_key"] = temp_credentials["SecretAccessKey"]
+        client_kwargs["aws_session_token"] = temp_credentials["SessionToken"]
 
     session_kwargs = {"region_name": region}
     client_kwargs = {**session_kwargs}

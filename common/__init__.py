@@ -15,6 +15,7 @@ app_table = ddb.Table(CONFIG_TAB)
 
 session = boto3.session.Session(region_name=DEFAULT_REGION)
 
+
 def verify_user(username: str, password: str):
     '''Verify username and password for login'''
     ddb = session.resource('dynamodb')
@@ -96,6 +97,7 @@ def translate_text(text, target_lang_code):
         'source_lang_code': source_lang_code
     }
 
+
 class AppConf:
     """
     A class to store and manage app configuration.
@@ -162,7 +164,7 @@ class AppConf:
 
 
 def get_model_list(username: str):
-
+    '''Get the user's model list from database.'''
     try:
         resp = app_table.get_item(Key={'user': username})
 
@@ -180,7 +182,7 @@ def get_model_list(username: str):
 
 
 def get_model_id(username: str, model_name: str):
-
+    '''Get the model ID specified by the user from database'''
     try:
         resp = app_table.get_item(Key={'user': username})
 
@@ -213,7 +215,7 @@ class UserConf(object):
 
     def set_user(self, new_username):
         self.username = new_username
-        self.model_list = get_model_list(self.username)        
+        self.model_list = get_model_list(self.username)
 
     def get_model_id(self, model_name):
         return get_model_id(self.username, model_name)
@@ -236,4 +238,6 @@ class UserConf(object):
             print(str(ex))
             return False
 
+
+# Default user configuration without login
 USER_CONF = UserConf('demo')

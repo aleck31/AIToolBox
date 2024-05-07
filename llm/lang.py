@@ -6,7 +6,6 @@ from utils.web import fetch_web_text
 from . import generate_content
 
 
-
 # model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
 
 inference_params = {
@@ -33,6 +32,7 @@ def text_translate(text, source_lang, target_lang):
     system_tran = """
         You are an experienced multilingual translation expert. 
         Your task is to translate the original text into the target language, and ensure the translated text conforms to native expressions in the target language without grammatical errors.
+        For proper nouns, such as personal names, company names, and specialized terminology, keep them in their original form.
         NEVER write anything before the translated text. do not include any other content.
         """
     prompt_tran = f"""
@@ -85,7 +85,7 @@ def text_rewrite(text, style):
 
     # Get the llm reply
     resp = generate_content(
-        message_rewrite, system_rewrite, inference_params, 
+        message_rewrite, system_rewrite, inference_params,
         USER_CONF.get_model_id('rewrite'))
     polished_text = resp.get('content')[0].get('text')
 

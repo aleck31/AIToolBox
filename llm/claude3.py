@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT-0
 import json
 from common import USER_CONF
-from utils import ChatHistory, image
+from utils import ChatHistory, file
 from . import generate_content, generate_stream
 
 
@@ -163,14 +163,14 @@ def vision_analyze(file_path: str, require_desc):
     ]
 
     if file_path.endswith('.pdf'):
-        img_list = image.pdf_to_imgs(file_path)    
+        img_list = file.pdf_to_imgs(file_path)    
         for img in img_list:
             img_msg = {
                 "type": "image",
                 "source": {
                     "type": "base64",
                     "media_type": "image/jpeg",
-                    "data": image.pil_to_base64(img)
+                    "data": file.pil_to_base64(img)
                 }
             }  
             msg_content.append(img_msg)
@@ -182,7 +182,7 @@ def vision_analyze(file_path: str, require_desc):
                 "source": {
                     "type": "base64",
                     "media_type": "image/jpeg",
-                    "data": image.path_to_base64(file_path)
+                    "data": file.path_to_base64(file_path)
                 }
             }
         )

@@ -3,7 +3,7 @@
 from PIL import Image
 import google.generativeai as gm
 from common import USER_CONF, get_secret
-from utils import image
+from utils import file
 
 
 
@@ -76,7 +76,7 @@ def vision_analyze(file_path: str, require_desc):
     msg_content = [f"Analyze or describe the content of the image(s) according to the requirement:{text_prompt}"]
 
     if file_path.endswith('.pdf'):
-        img_list = image.pdf_to_imgs(file_path)
+        img_list = file.pdf_to_imgs(file_path)
         msg_content.extend(img_list)
     else:
         img_file = Image.open(file_path)

@@ -6,8 +6,7 @@ from io import StringIO
 import re
 import sys
 import textwrap
-from . import image
-
+from . import file
 
 
 def print_ww(*args, width: int = 100, **kwargs):
@@ -59,20 +58,20 @@ def format_message(message: dict, role):
                 "type": "text",
                 "text": message.get('text')
             }
-        ]        
+        ]
         file_list = message.get('files')
-        for file in file_list:  
+        for file in file_list:
             img_msg = {
                 "type": "image",
                 "source": {
                     "type": "base64",
                     "media_type": "image/jpeg",
-                    "data": image.path_to_base64(file['path'])
+                    "data": file.path_to_base64(file['path'])
                 }
             }
             msg_content.append(img_msg)
 
-        formated_msg = { 'role': role, 'content': msg_content }
+        formated_msg = {'role': role, 'content': msg_content}
 
     return formated_msg
 

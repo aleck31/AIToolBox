@@ -13,7 +13,7 @@ from botocore.exceptions import ClientError
 # Create new bedrock client
 bedrock_runtime = bedrock.get_bedrock_client(
     region=os.environ.get("AWS_DEFAULT_REGION", "us-west-2"),
-    assumed_role=os.environ.get("BEDROCK_ASSUME_ROLE")
+    assume_role_arn=os.environ.get("BEDROCK_ASSUME_ROLE")
 )
 
 
@@ -25,7 +25,7 @@ def test_connection():
     """
     bedrock_client = bedrock.get_bedrock_client(
         region=os.environ.get("AWS_DEFAULT_REGION", "us-west-2"),
-        assumed_role=os.environ.get("BEDROCK_ASSUME_ROLE"),
+        assume_role_arn=os.environ.get("BEDROCK_ASSUME_ROLE"),
         runtime=False
     )
 
