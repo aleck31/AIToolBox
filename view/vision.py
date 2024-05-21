@@ -30,12 +30,6 @@ def handle_file(file_url, prompt, model):
 # )
 
 
-def save_to_state(input):
-    '''save input content into tmp State'''
-    state = input
-    return state
-
-
 with gr.Blocks() as tab_vision:
     description = gr.Markdown("I can see 乛◡乛")
     with gr.Row():
@@ -43,27 +37,32 @@ with gr.Blocks() as tab_vision:
         with gr.Column(scale=6, min_width=450):
             with gr.Row():
                 with gr.Tab("Image"):
-                    input_img = gr.Image(label='Image', type='filepath', sources=[
-                                         'upload', 'webcam'], show_download_button=False, scale=2)
-                    input_img.change(save_to_state, input_img, saved_path)
+                    input_img = gr.Image(
+                        label='Image', type='filepath',
+                        sources=['upload', 'webcam'],
+                        show_download_button=False
+                    )
+                    input_img.change(lambda x: x, input_img, saved_path)
                 with gr.Tab("PDF"):
-                    input_pdf = PDF(label='Document', scale=2)
-                    input_pdf.change(save_to_state, input_pdf, saved_path)
+                    input_pdf = PDF(label='PDF (up to 20 pages)')
+                    input_pdf.change(lambda x: x, input_pdf, saved_path)
             with gr.Row():
-                with gr.Column(scale=6):
-                    input_desc = gr.Textbox(
-                        label="What do you want me to do?", lines=2, scale=4)
-                with gr.Column(scale=1, min_width=120):
-                    input_model = gr.Radio(label="Model", show_label=False, interactive=True,
-                                           choices=['Claude3', 'Gemini'], value='Claude3')
+                input_desc = gr.Textbox(
+                    label="What do you want me to do?", lines=3, scale=6)
+                input_model = gr.Radio(
+                    label="Model:", interactive=True, scale=1, min_width=120,
+                    choices=['Claude3', 'Gemini'], value='Claude3', visible=False)
             with gr.Row():
                 # btn_clear = gr.ClearButton([input_img, input_pdf, input_desc, output], value='🗑️ Clear')
                 btn_clear = gr.Button("🗑️ Clear")
-                btn_summit = gr.Button("▶️ Go")
+                btn_summit = gr.Button("▶️ Go", variant='primary')
 
         with gr.Column(scale=6, min_width=450):
             output = gr.Textbox(label="Output", lines=15, show_label=True)
 
         btn_clear.click(None, None, [input_img, input_pdf, output])
-        btn_summit.click(fn=handle_file, inputs=[
-                         saved_path, input_desc, input_model], outputs=output)
+        btn_summit.click(
+            fn=handle_file,
+            inputs=[saved_path, input_desc, input_model],
+            outputs=output
+        )

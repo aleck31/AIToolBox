@@ -2,18 +2,16 @@
 # SPDX-License-Identifier: MIT-0
 import ast
 import hashlib
-import boto3
+from boto3 import Session
 from botocore.exceptions import ClientError
 
 
 DEFAULT_REGION = "ap-southeast-1"
 CONFIG_TAB = 'aibox-db'
 
-session = boto3.session.Session(region_name=DEFAULT_REGION)
+session = Session(region_name=DEFAULT_REGION)
 ddb = session.resource('dynamodb')
 app_table = ddb.Table(CONFIG_TAB)
-
-session = boto3.session.Session(region_name=DEFAULT_REGION)
 
 
 def verify_user(username: str, password: str):

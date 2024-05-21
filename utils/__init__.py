@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: MIT-0
 """General helper utilities here"""
 # Python Built-Ins:
-from io import StringIO
 import re
 import sys
 import textwrap
-from . import file
+from io import StringIO
+from typing import Literal
+from utils import file
 
 
 def print_ww(*args, width: int = 100, **kwargs):
@@ -37,7 +38,7 @@ def format_resp(response: str):
         return response
 
 
-def format_message(message: dict, role):
+def format_message(message: dict, role: Literal["user", "assistant"] ):
     '''
     :input: Multimodal Message Dict
     {
@@ -60,13 +61,13 @@ def format_message(message: dict, role):
             }
         ]
         file_list = message.get('files')
-        for file in file_list:
+        for f in file_list:
             img_msg = {
                 "type": "image",
                 "source": {
                     "type": "base64",
                     "media_type": "image/jpeg",
-                    "data": file.path_to_base64(file['path'])
+                    "data": file.path_to_base64(f['path'])
                 }
             }
             msg_content.append(img_msg)
