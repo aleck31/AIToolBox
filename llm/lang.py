@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT-0
 from utils import format_resp, format_message
 from common import USER_CONF, translate_text
-from utils.web import fetch_web_text
+from utils.web import convert_url_text
 from . import generate_content
 
 
@@ -30,10 +30,10 @@ def text_translate(text, source_lang, target_lang):
 
     # Define prompts for text translate
     system_tran = """
-        You are an experienced multilingual translation expert. 
-        Your task is to translate the original text into the target language, and ensure the translated text conforms to native expressions in the target language without grammatical errors.
-        For proper nouns, such as personal names, company names, and specialized terminology, keep them in their original form.
-        NEVER write anything before the translated text. do not include any other content.
+       	You are a highly skilled translator with expertise in many languages. 
+        Your task is to identify the language of the text I provide and accurately translate it into the specified target language while preserving the meaning, tone, and nuance of the original text. 
+        Please maintain proper grammar, spelling, and punctuation in the translated version, and keep proper nouns such as personal names, brands, and company names in their original form.
+        NEVER output anything before the translated text, such as "翻译如下".
         """
     prompt_tran = f"""
         Translate the original text in to {target_lang} language:
@@ -44,8 +44,12 @@ def text_translate(text, source_lang, target_lang):
     message_tran = [format_message({"text": prompt_tran}, 'user')]
 
     # Get the llm reply
-    resp = generate_content(message_tran, system_tran,
-                            inference_params, USER_CONF.get_model_id('translate'))
+    resp = generate_content(
+        messages=message_tran,
+        system=system_tran,
+        params=inference_params,
+        model_id=USER_CONF.get_model_id('translate')
+    )
     translated_text = resp.get('content')[0].get('text')
 
     return format_resp(translated_text)
@@ -71,12 +75,13 @@ def text_rewrite(text, style):
 
     # Define prompts for text rewrite
     system_rewrite = f"""
-        You are an experienced editor, your task is to refine the text provided by the user, making the expression more natural and fluent in the {Source_lang_code} language.
-        You can modify the vocabulary, adjust sentences structure to make it more idiomatic to native speakers. But do not overextend or change the meaning.
-        NEVER write anything before the polished text, do not include anything else.
+        You are an experienced editor with a keen eye for detail and a deep understanding of language, style, and grammar.
+        Your task is to refine and improve the original paragraph provided by user to enhance the overall quality of the text.
+        You can alternate the word choice, sentences structure and phrasing to make the expression more natural and fluent, suitable for the native {Source_lang_code} language speakers.
+        NEVER write anything before the refined text.
         """
     prompt_rewrite = f"""
-        Polish following original paragraph in a {style} manner:
+        Rewrite following paragraph in the {style} manner:
         <original_paragraph>
         {text}
         </original_paragraph>
@@ -95,8 +100,6 @@ def text_rewrite(text, style):
 def text_summary(text: str):
     if text == '':
         return "Tell me something first."
-    elif text.startswith('http'):
-        text = fetch_web_text(text)
 
     # Define prompts for text summary
     system_sum = """
