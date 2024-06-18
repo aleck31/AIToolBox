@@ -43,11 +43,7 @@ def format_message(message: dict, role: Literal["user", "assistant"] ):
     :input: Multimodal Message Dict
     {
         "text": "user input", 
-        "files": [
-            {'path': "file_path1", 'url': '/file=file_path1', 'size': 123},
-            {'path': "file_path2", 'url': '/file=file_path2', 'size': 123}, 
-            ...
-        ]
+        "files": ["file_path1", "file_path2", ...]
     }    
     '''
 
@@ -61,13 +57,13 @@ def format_message(message: dict, role: Literal["user", "assistant"] ):
             }
         ]
         file_list = message.get('files')
-        for f in file_list:
+        for path in file_list:
             img_msg = {
                 "type": "image",
                 "source": {
                     "type": "base64",
                     "media_type": "image/jpeg",
-                    "data": file.path_to_base64(f['path'])
+                    "data": file.path_to_base64(path)
                 }
             }
             msg_content.append(img_msg)

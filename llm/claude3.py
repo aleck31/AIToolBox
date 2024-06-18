@@ -33,7 +33,10 @@ def text_chat(input_msg: str, chat_history: list, style: str):
     if input_msg == '':
         return "Please tell me something first :)"
 
-    chat_memory.add_user_text(input_msg)
+    user_msg = { 'text': input_msg }
+    
+    # message_format = [format_message(content_img, "user", 'image')]
+    chat_memory.add_user_msg(user_msg)
 
     # AI的回复采用 {style} 的对话风格.
     match style:
@@ -74,7 +77,7 @@ def media_chat(media_path, chat_history: list):
 
     user_msg = {
         'text': 'Explain the image in detail.',
-        'file': media_path
+        'files': media_path
     }
 
     # message_format = [format_message(content_img, "user", 'image')]
@@ -153,9 +156,9 @@ def vision_analyze(file_path: str, require_desc):
     '''
     # Define system prompt base on style
     system_prompt = '''
-    Analyze or describe the content of the image(s) according to the user's requirement.
-    Respond using the language onsistent with the user or the language specified in the requirement.
-    '''
+        Analyze or describe the content of the image(s) according to the user's requirement.
+        Respond using the language onsistent with the user or the language specified in the <requirement> tags.
+        '''
 
     text_prompt = require_desc or "Explain the image in detail."
     msg_content = [
