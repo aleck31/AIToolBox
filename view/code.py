@@ -7,23 +7,24 @@ from llm import code
 
 
 with gr.Blocks() as tab_code:
-    description = gr.Markdown("Let's build ... (Powered by Claude3)")
+    description = gr.Markdown("Let's build ... (Powered by Bedrock)")
     with gr.Row():
         # 输入需求
-        with gr.Column(scale=6, min_width=500):
-            input_requirement =  gr.Textbox(label="Describe your requirements:", lines=4)         
-        with gr.Column(scale=2, min_width=100):
+        with gr.Column(scale=7, min_width=500):
+            input_requirement =  gr.Textbox(label="Describe your requirements:", lines=5)         
+        with gr.Column(scale=3, min_width=120):
             input_lang = gr.Radio(label="Programming Language", choices=AppConf.CODELANGS, value="Python")
     with gr.Row():
         # 输出代码结果
-        with gr.Column(scale=6, min_width=500):
+        with gr.Column(scale=7, min_width=500):
             support_langs = ["python","markdown","json","html","javascript","typescript","yaml"]
             lang_format = input_lang.value.lower() if input_lang.value.lower() in support_langs else None
             output_codes = gr.Code(label="Code", language=lang_format, lines=9)
-        with gr.Column(scale=2, min_width=100):
-            btn_code_clear = gr.ClearButton([input_requirement, output_codes], value='🗑️ Clear')
-            btn_code_submit = gr.Button(value='⌨️ Generate')
-            btn_code_submit.click(fn=code.gen_code, inputs=[input_requirement, input_lang], outputs=output_codes)
+        with gr.Column(scale=3, min_width=100):
+            with gr.Row():
+                btn_code_clear = gr.ClearButton([input_requirement, output_codes], value='🗑️ Clear')
+                btn_code_submit = gr.Button(value='⌨️ Generate', variant='primary')
+                btn_code_submit.click(fn=code.gen_code, inputs=[input_requirement, input_lang], outputs=output_codes)
     with gr.Row():
         error_box = gr.Textbox(label="Error", visible=False)
 
@@ -43,7 +44,7 @@ tab_format = gr.Interface(
         """, "JSON"]],
     cache_examples=False,
     # live=True,
-    description="A json/yaml formatter... (Powered by Claude3)",
-    submit_btn= gr.Button("⌨️ Format"),
+    description="A Json/YAML formatter... (Powered by Bedrock)",
+    submit_btn= gr.Button("⌨️ Format", variant='primary'),
     clear_btn=gr.Button("🗑️ Clear")
 )

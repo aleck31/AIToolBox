@@ -45,13 +45,13 @@ def gen_code(requirement, program_language):
         Your task is to generate high-quality code according to given instructions, and provide a concise explanation at the end.
         Make sure to include any imports required, and add comments for things that are non-obvious.
         NEVER write anything before the code.
-        After you are done generating the code, check your work carefully to make sure there are no mistakes, errors, or inconsistencies. 
+        After you generate the code, double-check your work carefully to make sure there are no mistakes, errors, or inconsistencies. 
         If there are errors, list those errors in <error> tags, then generate a new version with those errors fixed. 
         If there are no errors, write "CHECKED: NO ERRORS" in <error> tags.
         """
     
     prompt_coder = f"""
-        Write code according to the following instructions:
+        Write code according to the following requirement in the <instruction> tags:
         <instruction>
         {instruction}
         </instruction>

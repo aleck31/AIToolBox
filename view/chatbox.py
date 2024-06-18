@@ -21,7 +21,7 @@ def post_media(file, history):
 tab_claude = gr.ChatInterface(
     claude3.multimodal_chat,
     multimodal=True,
-    description="Let's chat ... (Powered by Claude3)",
+    description="Let's chat ... (Powered by Bedrock)",
     chatbot=gr.Chatbot(
         avatar_images=(None, "assets/avata_claude.jpg"),
         label="Chatbot",
@@ -29,10 +29,12 @@ tab_claude = gr.ChatInterface(
         bubble_full_width=False,
         height=420
     ),
-    # textbox=gr.MultimodalTextbox(
-    #     file_types=['image'],
-    #     placeholder="Type a message or upload image(s)"
-    # ),
+    textbox=gr.MultimodalTextbox(
+        file_types=['image'],
+        placeholder="Type a message or upload image(s)",
+        scale=13,
+        min_width=60
+    ),
     # undo_btn="↩️ Undo",
     undo_btn=None,
     # retry_btn='🔃 Retry',

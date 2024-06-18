@@ -33,10 +33,10 @@ def text_translate(text, source_lang, target_lang):
        	You are a highly skilled translator with expertise in many languages. 
         Your task is to identify the language of the text I provide and accurately translate it into the specified target language while preserving the meaning, tone, and nuance of the original text. 
         Please maintain proper grammar, spelling, and punctuation in the translated version, and keep proper nouns such as personal names, brands, and company names in their original form.
-        NEVER output anything before the translated text, such as "翻译如下".
+        NEVER output any explanations or tags before the translated text.
         """
     prompt_tran = f"""
-        Translate the original text in to {target_lang} language:
+        Translate the text within <original_text> tags to {target_lang} language:
         <original_text>
         {text}
         </original_text>
@@ -78,10 +78,10 @@ def text_rewrite(text, style):
         You are an experienced editor with a keen eye for detail and a deep understanding of language, style, and grammar.
         Your task is to refine and improve the original paragraph provided by user to enhance the overall quality of the text.
         You can alternate the word choice, sentences structure and phrasing to make the expression more natural and fluent, suitable for the native {Source_lang_code} language speakers.
-        NEVER write anything before the refined text.
+        NEVER output any explanations or tags before the refined text.
         """
     prompt_rewrite = f"""
-        Rewrite following paragraph in the {style} manner:
+        Rewrite the text within <original_paragraph> tags in a {style} manner:
         <original_paragraph>
         {text}
         </original_paragraph>
@@ -110,10 +110,10 @@ def text_summary(text: str):
         3. Aim for around 20% of the original text length, adjusting as needed based on the complexity and density of information.
         4. Use your own words where possible, but retain important verbatim quotes or terms that are critical to the meaning.
         5. Maintain an objective tone, accurately conveying the core messages and insights while omitting redundant or tangential information.
-        NEVER write anything before the overview text.
+        NEVER output any explanations or tags before the summary text.
         """
     prompt_sum = f"""
-        Provide a comprehensive summary for the following text according to the guidelines:
+        Provide a comprehensive summary for the text within <original_text> tags according to the guidelines:
         <original_text>
         {text}
         </original_text>
