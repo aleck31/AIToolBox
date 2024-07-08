@@ -5,12 +5,12 @@ from gradio_pdf import PDF
 from llm import claude3, gemini
 
 
-def handle_file(file_url, prompt, model):
+def handle_file(file_path, prompt, model):
     match model:
         case 'Claude3':
-            resp = claude3.vision_analyze(file_url, prompt)
+            resp = claude3.vision_analyze(file_path, prompt)
         case 'Gemini':
-            resp = gemini.vision_analyze(file_url, prompt)
+            resp = gemini.vision_analyze(file_path, prompt)
         case _:
             pass
     return resp
@@ -38,20 +38,20 @@ with gr.Blocks() as tab_vision:
             with gr.Row():
                 with gr.Tab("Image"):
                     input_img = gr.Image(
-                        label='Image', type='filepath',
+                        label='Preview', type='filepath',
                         sources=['upload', 'webcam'],
                         show_download_button=False
                     )
                     input_img.change(lambda x: x, input_img, saved_path)
-                with gr.Tab("PDF"):
-                    input_pdf = PDF(label='PDF (up to 20 pages)')
+                with gr.Tab("Document"):
+                    input_pdf = PDF(label='PDF preview')
                     input_pdf.change(lambda x: x, input_pdf, saved_path)
             with gr.Row():
                 input_desc = gr.Textbox(
                     label="What do you want me to do?", lines=3, scale=6)
                 input_model = gr.Radio(
                     label="Model:", interactive=True, scale=1, min_width=120,
-                    choices=['Claude3', 'Gemini'], value='Claude3', visible=False)
+                    choices=['Claude3', 'Gemini'], value='Claude3')
             with gr.Row():
                 # btn_clear = gr.ClearButton([input_img, input_pdf, input_desc, output], value='🗑️ Clear')
                 btn_clear = gr.Button("🗑️ Clear")

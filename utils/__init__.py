@@ -3,11 +3,16 @@
 """General helper utilities here"""
 # Python Built-Ins:
 import re
+import os
 import sys
 import textwrap
 from io import StringIO
 from typing import Literal
 from utils import file
+
+
+FORMAT_IMG = ['png', 'jpeg', 'gif', 'webp']
+FORMAT_DOC = ['pdf', 'csv', 'doc', 'docx', 'xls', 'xlsx', 'html', 'txt', 'md']
 
 
 def print_ww(*args, width: int = 100, **kwargs):
@@ -38,9 +43,65 @@ def format_resp(response: str):
         return response
 
 
-def format_message(message: dict, role: Literal["user", "assistant"] ):
+def format_msg(message: dict, role: Literal["user", "assistant"]):
     '''
-    :input: Multimodal Message Dict
+    Args:
+    - message: Multimodal Message Dict
+    {
+        "text": "user input", 
+        "files": ["file_path1", "file_path2", ...]
+    }
+    '''
+
+    msg_content = [
+        {"text": message.get('text')}
+    ]
+
+    if message.get('files'):
+        file_list = message.get('files')
+        for file_path in file_list:
+            base_name, file_extension = os.path.splitext(file_path)
+            file_name = os.path.basename(base_name)
+            file_extension = file_extension.lower()[1:]
+            if file_extension == 'jpg':
+                file_extension = 'jpeg'
+
+            with open(file_path, "rb") as fr:
+                file_bytes = fr.read()
+            if file_extension in FORMAT_IMG:
+                file_msg = {
+                    'image': {
+                        'format': file_extension,
+                        'source': {
+                            'bytes': file_bytes
+                        }
+                    }
+                }
+            elif file_extension in FORMAT_DOC:
+                file_msg = {
+                    'document': {
+                        'format': file_extension,
+                        'name': file_name,
+                        'source': {
+                            'bytes': file_bytes
+                        }
+                    }
+                }
+            else:
+                raise ValueError('Unsupported extension.')
+
+            msg_content.append(file_msg)
+
+    return {
+        'role': role,
+        'content': msg_content
+    }
+
+
+def format_message(message: dict, role: Literal["user", "assistant"]):
+    '''
+    Args:
+    - message : Multimodal Message Dict
     {
         "text": "user input", 
         "files": ["file_path1", "file_path2", ...]
@@ -80,31 +141,43 @@ class ChatHistory(object):
         """
         Initialize a ChatHistoryMemory instance.        
         Args:
-            initial_messages (list, optional): List of initial chat messages. Defaults to None.
+        - initial_messages (list, optional): List of initial chat messages. Defaults to None.
         """
-        self.messages = []
+        self.conversation = []
         while initial_history:
             for user_msg, assistant_msg in initial_history:
                 self.add_user_msg({'text': user_msg})
                 self.add_bot_msg({'text': assistant_msg})
 
-    def add_message(self, message) -> None:
-        """Add a message to the history list"""
-        self.messages.append(message)
+    def add_message(self, message: dict) -> None:
+        """
+        Add a message to the history list.
+        Args:
+        - message (dict): The messages send to the model.
+        {
+            'role': 'user'|'assistant', 
+            'content': [{
+                'text': 'string',
+                'image': {},
+                'document': {}
+            }]
+        }
+        """
+        self.conversation.append(message)
 
     def clear(self) -> None:
         """Clear memory"""
-        self.messages.clear()
+        self.conversation.clear()
 
     def add_user_msg(self, message: dict) -> None:
         self.add_message(
-            format_message(message, "user")
+            format_msg(message, "user")
         )
         # print(f"FULL_History: {self.messages}")
 
     def add_bot_msg(self, message: dict) -> None:
         self.add_message(
-            format_message(message, "assistant")
+            format_msg(message, "assistant")
         )
 
     def get_latest_message(self):

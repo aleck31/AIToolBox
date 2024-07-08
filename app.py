@@ -41,7 +41,7 @@ app = gr.TabbedInterface(
         "Code 💻", "Formatter 🔣",
         "Draw 🎨", "Setting ⚙️"
     ],
-    title="AI ToolBox",
+    title="GenAI ToolBox - 懒人工具箱",
     theme="Base",
     css=css
 )
@@ -52,7 +52,7 @@ if __name__ == "__main__":
         # share=True,
         # debug=True,
         auth=login,
-        server_name='0.0.0.0',
+        # server_name='0.0.0.0',
         server_port=8886,
         show_api=False
     )

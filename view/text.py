@@ -42,18 +42,6 @@ tab_rewrite = gr.Interface(
 )
 
 
-# tab_summary = gr.Interface(
-#     lang.text_summary,
-#     inputs=[
-#         gr.Textbox(label="Original", lines=12, scale=5),
-#     ],
-#     outputs=gr.Textbox(label="Summary text", lines=6, scale=5),
-#     description="Let me summary the contents for you. (Powered by Claude3 Sonnet v1)",
-#     submit_btn= gr.Button("↩️ Run"),
-#     clear_btn=gr.Button("🗑️ Clear")
-# )
-
-
 with gr.Blocks() as tab_summary:
     description = gr.Markdown(
         "Summarize article or webpage for you.  (Powered by Bedrock)")
@@ -63,7 +51,7 @@ with gr.Blocks() as tab_summary:
             with gr.Row():
                 with gr.Tab("Original Text"):
                     input_text = gr.Textbox(
-                        label='text', show_label=False, container=False, lines=8)
+                        label='text', show_label=False, container=False, lines=11)
                     input_text.change(lambda x: x, input_text, saved_text)
                 with gr.Tab("Web URL"):
                     with gr.Row():
@@ -73,10 +61,14 @@ with gr.Blocks() as tab_summary:
                         # Test only: fetch webpage content
                         # fetched_text = gr.Textbox(label="Fetched text", lines=5)
                         # btn_fetch.click(web.convert_url_text, input_url, fetched_text)
-                        input_url.change(lambda: gr.Button(visible=True, interactive=True), None, btn_fetch)
-                        btn_fetch.click(web.convert_url_text, input_url, saved_text).then(
-                            lambda: gr.Button('🟢', interactive=False), None, btn_fetch)
-                    
+                        input_url.change(lambda: gr.Button(
+                            visible=True, interactive=True), None, btn_fetch)
+                        btn_fetch.click(lambda: gr.Button('⏳', interactive=False), None, btn_fetch).then(
+                            web.convert_url_text, input_url, saved_text).success(lambda: gr.Button('🟢'), None, btn_fetch)
+
+            with gr.Row():
+                input_lang = gr.Radio(label="Language", choices=[
+                                      'original', 'Chinese', 'English'], value="original", scale=1, interactive=False)
             with gr.Row():
                 btn_clear = gr.Button("🗑️ Clear")
                 btn_summit = gr.Button("▶️ Go", variant='primary')
@@ -85,5 +77,5 @@ with gr.Blocks() as tab_summary:
             output = gr.Textbox(label="Summary text", lines=11)
 
         btn_clear.click(None, None, [input_text, input_url, output])
-        btn_summit.click(lang.text_summary, saved_text, output).then(
-                        lambda: gr.Button('🧲', ), None, btn_fetch)
+        btn_summit.click(lang.text_summary, [saved_text, input_lang], output).then(
+            lambda: gr.Button('🧲', ), None, btn_fetch)

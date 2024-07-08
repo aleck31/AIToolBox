@@ -107,4 +107,71 @@ def generate_stream(messages, system, params, model_id, runtime=bedrock_runtime)
             err.response["Error"]["Code"],
             err.response["Error"]["Message"],
         )
-        raise
+
+
+def bedrock_generate(messages, system, model_id, params, additional_params=None, runtime=bedrock_runtime):
+    """
+    Invokes Bedrock LLM to run inference using the input provided and return the response in a stream.
+    https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-runtime/client/converse.html
+
+    :return: Inference response from the model.
+    """
+
+    try:
+        # print(f"User_Prompt: {messages}")
+        resp = runtime.converse(
+            modelId=model_id,
+            messages=messages,
+            system=system,
+            inferenceConfig=params,
+            additionalModelRequestFields = additional_params
+        )
+
+        # Log token usage and metrics.
+        # token_usage = resp['usage']
+        # logger.info("Input tokens: %s", token_usage['inputTokens'])
+        # logger.info("Output tokens: %s", token_usage['outputTokens'])
+        # logger.info("Total tokens: %s", token_usage['totalTokens'])
+        # logger.info("Stop reason: %s", response['stopReason'])
+        # token_metrics = resp['metrics']
+        # logger.info("Latency: %s", token_metrics['latencyMs'])
+        
+        resp_message = resp['output']['message']
+
+        return resp_message
+
+    except ClientError as err:
+        print(
+            "Invoke LLM [%s] faild. A client error occurred: [Error code: %s] %s",
+            model_id,
+            err.response["Error"]["Code"],
+            err.response["Error"]["Message"],
+        )
+
+
+def bedrock_stream(messages, system,  model_id, params, additional_params=None, runtime=bedrock_runtime):
+    """
+    Invokes Bedrock LLM to run inference using the input provided and return the response in a stream.
+    https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-runtime/client/converse_stream.html
+
+    :return: Inference response from the model.
+    """
+
+    try:
+        # print(f"User_Prompt: {messages}")
+        streaming_resp = runtime.converse_stream(
+            modelId=model_id,
+            messages=messages,
+            system=system,
+            inferenceConfig=params,
+            additionalModelRequestFields = additional_params
+        )
+        return streaming_resp
+
+    except ClientError as err:
+        print(
+            "Invoke LLM [%s] faild. A client error occurred: [Error code: %s] %s",
+            model_id,
+            err.response["Error"]["Code"],
+            err.response["Error"]["Message"],
+        )
