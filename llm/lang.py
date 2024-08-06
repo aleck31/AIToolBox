@@ -36,7 +36,7 @@ def text_translate(text, source_lang, target_lang):
         NEVER output any explanations or tags before the translated text.
         """
     prompt_tran = f"""
-        Translate the text within <original_text> tags to {target_lang} language:
+        Translate the text within <original_text></original_text> tags to {target_lang} language:
         <original_text>
         {text}
         </original_text>
@@ -83,7 +83,7 @@ def text_rewrite(text, style):
         NEVER output any explanations or tags before the refined text.
         """
     prompt_rewrite = f"""
-        Rewrite the text within <original_paragraph> tags in a {style} manner:
+        Rewrite the text within <original_paragraph> </original_paragraph> tags in a {style} manner:
         <original_paragraph>
         {text}
         </original_paragraph>
@@ -120,7 +120,7 @@ def text_summary(text: str, lang: str):
         NEVER output any explanations or tags before the summary.
         """
     prompt_sum = f"""
-        Provide a comprehensive summary for the text within <original_text> tags according to the guidelines, reply in the {lang} language:
+        Provide a comprehensive summary for the text within <original_text> </original_text> tags according to the guidelines in the {lang} language:
         <original_text>
         {text}
         </original_text>

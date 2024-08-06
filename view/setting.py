@@ -9,8 +9,8 @@ def save_setting(m1, m2, m3, m4, m5, m6, m7, m8, m9):
     try:
         USER_CONF.set_model_list([
             {"name": "claude3", "model_id": m1},
-            {"name": "gemini", "model_id": m2},
-            {"name": "gemini-vision", "model_id": m3},
+            {"name": "gemini-pro", "model_id": m2},
+            {"name": "gemini-flash", "model_id": m3},
             {"name": "summary", "model_id": m4},
             {"name": "translate", "model_id": m5},
             {"name": "rewrite", "model_id": m6},
@@ -27,8 +27,8 @@ def save_setting(m1, m2, m3, m4, m5, m6, m7, m8, m9):
 def load_setting():
     '''Load settings from database'''
     m1 = USER_CONF.get_model_id('claude3')
-    m2 = USER_CONF.get_model_id('gemini')
-    m3 = USER_CONF.get_model_id('gemini-vision')
+    m2 = USER_CONF.get_model_id('gemini-pro')
+    m3 = USER_CONF.get_model_id('gemini-flash')
     m4 = USER_CONF.get_model_id('summary')
     m5 = USER_CONF.get_model_id('translate')
     m6 = USER_CONF.get_model_id('rewrite')
@@ -45,10 +45,10 @@ with gr.Blocks() as tab_setting:
         with gr.Column(scale=14):
             m1 = gr.Textbox(USER_CONF.get_model_id('claude3'),
                             label="Model for Chatbot", max_lines=1, interactive=True)
-            m2 = gr.Textbox(USER_CONF.get_model_id('gemini'),
-                            label="Gemini", max_lines=1, visible=False)
-            m3 = gr.Textbox(USER_CONF.get_model_id('gemini-vision'),
-                            label="Gemini-Vision", max_lines=1, visible=False)
+            m2 = gr.Textbox(USER_CONF.get_model_id('gemini-pro'),
+                            label="Gemini Pro", max_lines=1, visible=False)
+            m3 = gr.Textbox(USER_CONF.get_model_id('gemini-flash'),
+                            label="Gemini Flash", max_lines=1, visible=False)
             m4 = gr.Textbox(USER_CONF.get_model_id('summary'),
                             label="Model for Text", max_lines=1)
             m5 = gr.Textbox(USER_CONF.get_model_id('translate'),

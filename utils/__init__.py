@@ -58,8 +58,7 @@ def format_msg(message: dict, role: Literal["user", "assistant"]):
     ]
 
     if message.get('files'):
-        file_list = message.get('files')
-        for file_path in file_list:
+        for file_path in message.get('files'):
             base_name, file_extension = os.path.splitext(file_path)
             file_name = os.path.basename(base_name)
             file_extension = file_extension.lower()[1:]

@@ -55,7 +55,7 @@ def multimodal_chat(message: dict, history: list, style: str):
 
     # Define system prompt base on style
     system_prompt = f"""
-        You are an AI chatbot. You are talkative and provides lots of specific details from its context.
+        You are a friendly chatbot. You are talkative and provides lots of specific details from its context.
         {prompt_style}
         If you are unsure or don't have enough information to provide a confident answer, simply say "I don't know" or "I'm not sure."
         """
@@ -86,21 +86,21 @@ def multimodal_chat(message: dict, history: list, style: str):
             yield partial_msg
 
 
-def vision_analyze(file_path: str, require_desc):
+def vision_analyze(file_path: str, req_description=None):
     '''
     :input: image or pdf file path
     '''
     # Define system prompt base on style
     system_prompt = '''
-        Analyze or describe the content of the image(s) according to the user's requirement.
-        Respond using the language onsistent with the user or the language specified in the <requirement> tags.
+        Analyze or describe the multimodal content according to the user's requirement.
+        Respond using the language onsistent with the user or the language specified in the <requirement> </requirement> tags.
         '''
 
-    text_prompt = require_desc or "Explain the image in detail."
+    req_description = req_description or "Describe the picture or document in detail."
 
     formated_msg = format_msg(
         {
-            "text": f"<requirement>{text_prompt}</requirement>",
+            "text": f"<requirement>{req_description}</requirement>",
             "files": [file_path]
         },
         "user"

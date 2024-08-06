@@ -74,7 +74,8 @@ with gr.Blocks() as tab_summary:
                 btn_summit = gr.Button("▶️ Go", variant='primary')
 
         with gr.Column(scale=6, min_width=450):
-            output = gr.Textbox(label="Summary text", lines=11)
+            with gr.Accordion('Summary text:', open=True):
+                output = gr.Markdown(label="Summary", show_label=True, line_breaks=True)            
 
         btn_clear.click(None, None, [input_text, input_url, output])
         btn_summit.click(lang.text_summary, [saved_text, input_lang], output).then(

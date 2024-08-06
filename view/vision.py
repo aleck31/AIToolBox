@@ -58,7 +58,8 @@ with gr.Blocks() as tab_vision:
                 btn_summit = gr.Button("▶️ Go", variant='primary')
 
         with gr.Column(scale=6, min_width=450):
-            output = gr.Textbox(label="Output", lines=15, show_label=True)
+            with gr.Accordion('Output:', open=True):
+                output = gr.Markdown(label="Output", show_label=True, line_breaks=True)
 
         btn_clear.click(None, None, [input_img, input_pdf, output])
         btn_summit.click(

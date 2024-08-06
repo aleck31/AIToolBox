@@ -120,12 +120,12 @@ class AppConf:
             "name": "claude3"
         },
         {
-            "model_id": "gemini-pro",
-            "name": "gemini"
+            "model_id": "gemini-1.5-pro-001",
+            "name": "gemini-pro"
         },
         {
-            "model_id": "gemini-pro-vision",
-            "name": "gemini-vision"
+            "model_id": "gemini-1.5-flash-001",
+            "name": "gemini-flash"
         },
         {
             "model_id": "anthropic.claude-3-haiku-20240307-v1:0",

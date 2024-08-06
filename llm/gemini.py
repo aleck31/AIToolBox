@@ -6,14 +6,15 @@ from common import USER_CONF, get_secret
 from utils import file
 
 
-
 # gemini/getting-started guide:
 # https://github.com/GoogleCloudPlatform/generative-ai/blob/main/gemini/getting-started/intro_gemini_python.ipynb
 gemini_api_key = get_secret('dev_gemini_api').get('api_key')
-
 gm.configure(api_key=gemini_api_key)
 
-generation_config = gm.GenerationConfig(
+
+model_id = USER_CONF.get_model_id('gemini-pro')
+
+default_config = gm.GenerationConfig(
     max_output_tokens=8192,
     temperature=0.9,
     top_p=0.999,
@@ -21,72 +22,96 @@ generation_config = gm.GenerationConfig(
     candidate_count=1    
 )
 
-llm = gm.GenerativeModel(USER_CONF.get_model_id('gemini'))
-multimodal_model = gm.GenerativeModel(USER_CONF.get_model_id('gemini-vision'))
-conversation = llm.start_chat(history=[])
+# Set customize safety settings
+# See https://ai.google.dev/gemini-api/docs/safety-settings
+safety_settings={
+    'HATE': 'BLOCK_NONE',
+    'HARASSMENT': 'BLOCK_NONE',
+    'SEXUAL' : 'BLOCK_NONE',
+    'DANGEROUS' : 'BLOCK_NONE'
+}
+
+llm_chat = gm.GenerativeModel(
+    # model_name="gemini-1.5-pro-001",
+    model_name=USER_CONF.get_model_id('gemini-pro'),
+    generation_config=default_config,
+    system_instruction=[
+        "You are a friendly chatbot.",
+        "You are talkative and provides lots of specific details from its context.",
+        "If you are unsure or don't have enough information to provide a confident answer, just say 'I do not know' or 'I am not sure.'"
+    ]
+    # safety_settings = safety_settings
+)
+
+conversation = llm_chat.start_chat(history=[])
 
 
 def clear_memory():
     # conversation.rewind()
     global conversation 
-    conversation = llm.start_chat(history=[])
+    conversation = llm_chat.start_chat(history=[])
     return [('/reset', 'Conversation history forgotten.')]
 
 
-def text_chat(input_msg:str, chat_history:list):
-    # remove the last user message from history
-    # chat_history.pop()
-    # conversation = llm.start_chat(history=chat_history)
-    response = conversation.send_message(
-        input_msg,
-        # stream=True,
-        generation_config=generation_config
-    )
-    # add current conversation to chat history
-    # chat_history.append((input_msg, response.text))
-    chat_history[-1][1] = response.text
+def multimodal_chat(message: dict, history: list):
+    '''
+    Args:
+    - message (dict):
+    {
+        "text": "user's text message", 
+        "files": ["file_path1", "file_path2", ...]
+    }
+    '''
+
+    contents = [message.get('text')]
+
+    if message.get('files'):
+        for file_path in message.get('files'):
+            file_ref = gm.upload_file(path=file_path)
+            contents.append(file_ref)
+    # print(llm.count_tokens(contents))
+
+    if not history:
+        clear_memory()
+
+    resp = conversation.send_message(contents, stream=True)
     
-    # send <chat history> back to Chatbot
-    return chat_history
+    partial_msg = ""
+    for chunk in resp:
+        partial_msg = partial_msg + chunk.text
+        yield(partial_msg)
 
 
-def media_chat(media_path, chat_history):
+vision_config = gm.GenerationConfig(
+    max_output_tokens=4096,
+    temperature=0.9,
+    top_p=0.999,
+    top_k=200,
+    candidate_count=1
+)
 
-    media = Image.open(media_path)
-    prompt = "Describe the contents of the picture in detail in both English and Chinese."
-    try:
-        response = multimodal_model.generate_content(
-            [media, prompt],
-            generation_config=generation_config
-        )
-    except:
-        raise
-
-    # add current conversation to chat history
-    chat_history[-1][1] = response.text
-    
-    # send <chat history> back to Chatbot
-    return chat_history
+llm_vision = gm.GenerativeModel(
+    model_name=USER_CONF.get_model_id('gemini-pro'),
+    generation_config=vision_config,
+    # safety_settings = safety_settings
+)
 
 
-def vision_analyze(file_path: str, require_desc):
+def vision_analyze(file_path: str, req_description=None):
 
     # Define prompt templete
-    text_prompt = require_desc or "Explain the image in detail."
-    msg_content = [f"Analyze or describe the content of the image(s) according to the requirement:{text_prompt}"]
+    req_description = req_description or "Describe the media or document in detail."
+    text_prompt = f"Analyze or describe the multimodal content according to the requirement:{req_description}"
 
-    if file_path.endswith('.pdf'):
-        img_list = file.pdf_to_imgs(file_path)
-        msg_content.extend(img_list)
-    else:
-        img_file = Image.open(file_path)
-        msg_content.append(img_file)
+    file_ref = gm.upload_file(path=file_path)    
+    # print(llm.count_tokens([file_ref, msg_content]))
+    
     try:
-        resp = multimodal_model.generate_content(
-            contents=msg_content,
-            generation_config=generation_config
+        resp = llm_vision.generate_content(
+            contents = [file_ref, text_prompt],
+            generation_config=vision_config
         )
     except:
-        raise
+        return "Sorry, no information generated by the model."
 
     return resp.text
