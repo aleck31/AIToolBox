@@ -1,6 +1,7 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 from common import USER_CONF
+from common.logs import log_info
 from utils import ChatHistory, format_msg, format_resp
 from . import bedrock_generate, bedrock_stream
 
@@ -107,6 +108,7 @@ def vision_analyze(file_path: str, req_description=None):
     )
 
     # Get the llm reply
+    # Restriction：document file name 不支持中文字符
     resp = bedrock_generate(
         messages=[formated_msg],
         system=[{'text': system_prompt}],

@@ -4,6 +4,7 @@ import random
 import requests
 from requests.exceptions import HTTPError
 from selectolax.parser import HTMLParser
+from common.logs import log_error
 # from gne import GeneralNewsExtractor
 
 
@@ -47,7 +48,7 @@ def fetch_web_text(url):
 
     except requests.exceptions.RequestException as ex:
         # Handle request exceptions
-        print(f"Error: {ex}")
+        log_error(ex)
         return None
 
 
@@ -78,7 +79,7 @@ def convert_url_text(url):
         return f"{title}'\n'{content}"
     
     except HTTPError as http_err:
-        print(f"HTTP error occurred: {http_err}")
+        log_error(f"HTTP error occurred: {http_err}")
         return None
     
 
@@ -114,5 +115,5 @@ def convert_url_text(url):
 
 #     except requests.exceptions.RequestException as ex:
 #         # Handle request exceptions
-#         print(f"Error: {ex}")
+#         log_error(f"Error: {ex}")
 #         return None

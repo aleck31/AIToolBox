@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
 from common import USER_CONF, verify_user
-# from llm import claude3
 from view import chatbox, text, code, vision, draw, setting
 
 
@@ -41,7 +40,7 @@ app = gr.TabbedInterface(
         "Code 💻", "Formatter 🔣",
         "Draw 🎨", "Setting ⚙️"
     ],
-    title="GenAI ToolBox - 懒人工具箱",
+    title="AI Box - GenAI懒人工具箱",
     theme="Base",
     css=css
 )

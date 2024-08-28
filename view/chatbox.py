@@ -54,7 +54,7 @@ tab_claude = gr.ChatInterface(
 tab_gemini = gr.ChatInterface(
     gemini.multimodal_chat,
     multimodal=True,
-    description="Let's chat ... (Powered by Gemini Pro)",
+    description="Let's chat ... (Powered by Gemini)",
     chatbot=gr.Chatbot(
         avatar_images=(None, "assets/avata_google.jpg"),
         label="Chatbot",

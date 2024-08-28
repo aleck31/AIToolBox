@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT-0
 import ast
 import hashlib
+from .logs import log_info, log_error
 from boto3 import Session
 from botocore.exceptions import ClientError
 
@@ -24,7 +25,7 @@ def verify_user(username: str, password: str):
         # resp = user_table.get_item(Key={'userId' : '1001'})
         resp = app_table.get_item(Key={'user': username})
     except ClientError as ex:
-        print(ex)
+        log_error(ex)
         return False
 
     # Check if user exists
@@ -36,8 +37,10 @@ def verify_user(username: str, password: str):
         encrypted_password = hashlib.sha256(
             password.encode("utf-8")).hexdigest()
         if encrypted_password == user.get('password'):
+            log_info(f"[{username}] logged in successfully.")
             return True
         else:
+            log_error(f"[{username}] failed to log in.")
             return False
     else:
         return False
@@ -88,7 +91,7 @@ def translate_text(text, target_lang_code):
 
     except ClientError as ex:
         # Log error and set result & source_lang_code to None if fails
-        raise ex
+        log_error(ex)
 
     return {
         'translated_text': translated_text,
@@ -120,12 +123,12 @@ class AppConf:
             "name": "claude3"
         },
         {
-            "model_id": "gemini-1.5-pro-001",
-            "name": "gemini-pro"
+            "model_id": "gemini-1.5-flash",
+            "name": "gemini-chat"
         },
         {
-            "model_id": "gemini-1.5-flash-001",
-            "name": "gemini-flash"
+            "model_id": "gemini-1.5-pro",
+            "name": "gemini-vision"
         },
         {
             "model_id": "anthropic.claude-3-haiku-20240307-v1:0",
@@ -175,7 +178,7 @@ def get_model_list(username: str):
         return model_list
 
     except Exception as ex:
-        print(f"Error getting model list for user {username}: {ex}")
+        log_error(f"Error getting model list for user {username}: {ex}")
         return None
 
 
@@ -194,7 +197,7 @@ def get_model_id(username: str, model_name: str):
                     return model['model_id']
 
     except Exception as ex:
-        print(str(ex))
+        log_error(str(ex))
         return None
 
 
@@ -233,7 +236,7 @@ class UserConf(object):
             # update self.model_list
             self.model_list = get_model_list(self.username)
         except Exception as ex:
-            print(str(ex))
+            log_error(str(ex))
             return False
 
 
