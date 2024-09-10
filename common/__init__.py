@@ -111,10 +111,10 @@ class AppConf:
     CODELANGS = ["Python", "GoLang", "Rust", "Java", "C++",
                  "Swift", "Javascript", "Typescript", "HTML", "SQL", "Shell"]
     PICSTYLES = [
-        "增强(enhance)", "照片(photographic)", "老照片(analog-film)",
-        "电影(cinematic)", "模拟电影(analog-film)", "美式漫画(comic-book)",  "动漫(anime)", "线稿(line-art)",
-        "3D模型(3d-model)", "低多边形(low-poly)", "霓虹朋克(neon-punk)", "复合建模(modeling-compound)",
-        "数字艺术(digital-art)", "奇幻艺术(fantasy-art)", "像素艺术(pixel-art)", "折纸艺术(origami)"
+        "增强(enhance)", "照片(photographic)", "模拟胶片(analog-film)", "电影(cinematic)",
+        "数字艺术(digital-art)",  "美式漫画(comic-book)",  "动漫(anime)", "3D模型(3d-model)", "低多边形(low-poly)",
+        "线稿(line-art)", "等距插画(isometric)", "霓虹朋克(neon-punk)", "复合建模(modeling-compound)",  
+        "奇幻艺术(fantasy-art)", "像素艺术(pixel-art)", "折纸艺术(origami)", "瓷砖纹理(tile-texture)"
     ]
     # initialize model list with default values.
     # https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html#model-ids-arns

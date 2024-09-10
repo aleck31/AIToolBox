@@ -6,7 +6,6 @@ from . import bedrock_generate, bedrock_stream
 
 
 # model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
-model_id = USER_CONF.get_model_id('code')
 
 inference_params = {
     "maxTokens": 4096,
@@ -44,7 +43,7 @@ def gen_code(requirement, program_language):
     resp_arch = bedrock_generate(
         messages=[message_arch],
         system=[{'text': system_arch}],
-        model_id=model_id,
+        model_id=USER_CONF.get_model_id('rewrite'),
         params=inference_params,
         additional_params=additional_model_fields
     )
@@ -74,7 +73,7 @@ def gen_code(requirement, program_language):
     stream_resp = bedrock_stream(
         messages=[message_coder],
         system=[{'text': system_coder}],
-        model_id=model_id,
+        model_id=USER_CONF.get_model_id('code'),
         params=inference_params,
         additional_params=additional_model_fields
     )

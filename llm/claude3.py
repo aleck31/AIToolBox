@@ -74,7 +74,7 @@ def multimodal_chat(message: dict, history: list, style: str):
     stream_resp = bedrock_stream(
         messages=chat_memory.conversation,
         system=[{'text': system_prompt}],
-        model_id=model_id,
+        model_id=USER_CONF.get_model_id('claude3'),
         params=inference_params,
         additional_params=additional_model_fields
     )
@@ -112,7 +112,7 @@ def vision_analyze(file_path: str, req_description=None):
     resp = bedrock_generate(
         messages=[formated_msg],
         system=[{'text': system_prompt}],
-        model_id=model_id,
+        model_id=USER_CONF.get_model_id('vision'),
         params=inference_params,
         additional_params=additional_model_fields
     )

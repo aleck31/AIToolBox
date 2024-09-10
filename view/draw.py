@@ -7,7 +7,7 @@ from llm import draw
 
 with gr.Blocks() as tab_draw:
     description = gr.Markdown(
-        "Draw something interesting... (Powered by SDXL v1)")
+        "Draw something interesting... (Powered by Stable Diffusion)")
     # with gr.Tab("Text-Image"):
     with gr.Row():
         with gr.Column(scale=6):
@@ -27,7 +27,7 @@ with gr.Blocks() as tab_draw:
                     container=False, scale=5
                 )
                 # with gr.Column(scale=1):
-                # seed randrange(10000000, 99999999)
+                # seed randrange(000000001, 4294967295)
                 seed_random = gr.Checkbox(True, label='🎲 Random', scale=1)
                 # btn_random.click(image.random_seed, None, input_seed)
             with gr.Row():
