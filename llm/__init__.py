@@ -3,7 +3,7 @@
 import os
 import json
 from utils import bedrock
-from common.logs import log_info, log_error
+from common.logger import logger
 from botocore.exceptions import ClientError
 
 
@@ -38,7 +38,7 @@ def test_connection():
         return models
 
     except ClientError as ex:
-        log_error(ex)
+        logger.error(ex)
 
 
 def moc_chat(name, message, history):
@@ -74,7 +74,7 @@ def generate_content(messages, system, params, model_id, runtime=bedrock_runtime
         return resp_body
 
     except ClientError as ex:
-        log_error(f"Invoke LLM faild. {ex.response['Error']['Code']} - {ex.response['Error']['Message']}")
+        logger.error(f"Invoke LLM faild. {ex.response['Error']['Code']} - {ex.response['Error']['Message']}")
 
 
 def generate_stream(messages, system, params, model_id, runtime=bedrock_runtime):
@@ -98,7 +98,7 @@ def generate_stream(messages, system, params, model_id, runtime=bedrock_runtime)
 
     except ClientError as ex:
         print(params)
-        log_error(f"Invoke LLM faild. {ex.response['Error']['Code']} - {ex.response['Error']['Message']}")
+        logger.error(f"Invoke LLM faild. {ex.response['Error']['Code']} - {ex.response['Error']['Message']}")
 
 
 def bedrock_generate(messages, system, model_id, params, additional_params=None, runtime=bedrock_runtime):
@@ -118,15 +118,13 @@ def bedrock_generate(messages, system, model_id, params, additional_params=None,
             inferenceConfig=params,
             additionalModelRequestFields = additional_params
         )
-
-        # Log token usage and metrics.
-        # token_usage = resp['usage']
-        # log_info("Input tokens: %s", token_usage['inputTokens'])
-        # log_info("Output tokens: %s", token_usage['outputTokens'])
-        # log_info("Total tokens: %s", token_usage['totalTokens'])
-        # log_info("Stop reason: %s", response['stopReason'])
-        # token_metrics = resp['metrics']
-        # log_info("Latency: %s", token_metrics['latencyMs'])
+ 
+        # Log token usage and metrics          
+        tk_usage = resp.get('usage')
+        metrics = resp.get('metrics')
+        stop_reason = resp.get('stopReason')
+        logger.info(f"*bedrock_generate* called the model [{model_id}]")
+        logger.info(f"Usage: {json.dumps(tk_usage)} | {json.dumps(metrics)} | Stop reason: {stop_reason}")
         
         resp_message = resp['output']['message']
 
@@ -134,7 +132,7 @@ def bedrock_generate(messages, system, model_id, params, additional_params=None,
 
     except ClientError as ex:
         print(messages)
-        log_error(f"Invoke LLM [{model_id}] faild. {ex.response['Error']['Code']} - {ex.response['Error']['Message']}")
+        logger.error(f"Invoke LLM [{model_id}] faild. {ex.response['Error']['Code']} - {ex.response['Error']['Message']}")
 
 
 def bedrock_stream(messages, system,  model_id, params, additional_params=None, runtime=bedrock_runtime):
@@ -154,7 +152,8 @@ def bedrock_stream(messages, system,  model_id, params, additional_params=None, 
             inferenceConfig=params,
             additionalModelRequestFields = additional_params
         )
+        logger.info(f"*bedrock_stream* called the model [{model_id}]") 
         return streaming_resp
 
     except ClientError as ex:
-        log_error(f"Invoke LLM {model_id} faild. {ex.response['Error']['Code']} - {ex.response['Error']['Message']}")        
+        logger.error(f"Invoke LLM {model_id} faild. {ex.response['Error']['Code']} - {ex.response['Error']['Message']}")        

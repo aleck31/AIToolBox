@@ -1,7 +1,7 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 from common import USER_CONF
-from common.logs import log_info
+from common.logger import logger
 from utils import ChatHistory, format_msg, format_resp
 from . import bedrock_generate, bedrock_stream
 
@@ -67,7 +67,7 @@ def multimodal_chat(message: dict, history: list, style: str):
     else:
         chat_memory.clear()
 
-    # print(f"USER_Message: {message}")
+    # logger.info(f"USER_Message: {message}")
     chat_memory.add_user_msg(message)
 
     # Get the llm reply

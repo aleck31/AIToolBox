@@ -1,10 +1,10 @@
-# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# Copyright iX.
 # SPDX-License-Identifier: MIT-0
 """Helper utilities for working with Amazon Bedrock from Python notebooks"""
 # Python Built-Ins:
 import os
 from typing import Optional
-from common.logs import log_info
+from common.logger import logger
 # External Dependencies:
 import boto3
 from botocore.config import Config
@@ -42,14 +42,14 @@ def get_bedrock_client(
         return _BEDROCK_RUNTIME
 
     if assume_role_arn:
-        log_info(f" Using role: {assume_role_arn}", end='')
+        logger.info(f" Using role: {assume_role_arn}", end='')
         sts = session.client("sts")
         response = sts.assume_role(
             RoleArn=str(assume_role_arn),
             RoleSessionName="br-tmp-session1"
         )
         temp_credentials = response["Credentials"]
-        log_info("... got temporary credentials successful!")
+        logger.info("... got temporary credentials successful!")
         client_kwargs["aws_access_key_id"] = temp_credentials["AccessKeyId"]
         client_kwargs["aws_secret_access_key"] = temp_credentials["SecretAccessKey"]
         client_kwargs["aws_session_token"] = temp_credentials["SessionToken"]
@@ -59,7 +59,7 @@ def get_bedrock_client(
 
     profile_name = os.environ.get("AWS_PROFILE")
     if profile_name:
-        log_info(f" Using profile: {profile_name}")
+        logger.info(f" Using profile: {profile_name}")
         session_kwargs["profile_name"] = profile_name
 
     session = boto3.Session(**session_kwargs)
@@ -77,6 +77,6 @@ def get_bedrock_client(
         **client_kwargs
     )
 
-    log_info("boto3 Bedrock client successfully created!")
-    log_info(bedrock_client._endpoint)
+    logger.info("boto3 Bedrock client successfully created!")
+    logger.info(bedrock_client._endpoint)
     return bedrock_client

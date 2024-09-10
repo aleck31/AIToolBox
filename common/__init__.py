@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT-0
 import ast
 import hashlib
-from .logs import log_info, log_error
+from .logger import logger
 from boto3 import Session
 from botocore.exceptions import ClientError
 
@@ -25,7 +25,7 @@ def verify_user(username: str, password: str):
         # resp = user_table.get_item(Key={'userId' : '1001'})
         resp = app_table.get_item(Key={'user': username})
     except ClientError as ex:
-        log_error(ex)
+        logger.error(ex)
         return False
 
     # Check if user exists
@@ -37,12 +37,13 @@ def verify_user(username: str, password: str):
         encrypted_password = hashlib.sha256(
             password.encode("utf-8")).hexdigest()
         if encrypted_password == user.get('password'):
-            log_info(f"[{username}] logged in successfully.")
+            logger.info(f"User [{username}] logged in successfully.")
             return True
         else:
-            log_error(f"[{username}] failed to log in.")
+            logger.error(f"User [{username}] failed to log in.")
             return False
     else:
+        logger.warning(f"User [{username}] does not exist.")
         return False
 
 
@@ -91,7 +92,7 @@ def translate_text(text, target_lang_code):
 
     except ClientError as ex:
         # Log error and set result & source_lang_code to None if fails
-        log_error(ex)
+        logger.error(ex)
 
     return {
         'translated_text': translated_text,
@@ -178,7 +179,7 @@ def get_model_list(username: str):
         return model_list
 
     except Exception as ex:
-        log_error(f"Error getting model list for user {username}: {ex}")
+        logger.error(f"Error getting model list for user {username}: {ex}")
         return None
 
 
@@ -197,7 +198,7 @@ def get_model_id(username: str, model_name: str):
                     return model['model_id']
 
     except Exception as ex:
-        log_error(str(ex))
+        logger.error(str(ex))
         return None
 
 
@@ -236,7 +237,7 @@ class UserConf(object):
             # update self.model_list
             self.model_list = get_model_list(self.username)
         except Exception as ex:
-            log_error(str(ex))
+            logger.error(str(ex))
             return False
 
 
