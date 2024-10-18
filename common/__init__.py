@@ -72,7 +72,7 @@ def get_secret(secret_name):
 
 def translate_text(text, target_lang_code):
     '''
-    Supported languages: 
+    Translates input text to the target language. Supported languages: 
     https://docs.aws.amazon.com/translate/latest/dg/what-is-languages.html
     '''
     client = session.client(
@@ -110,6 +110,8 @@ class AppConf:
     LANGS = ["en_US", "zh_CN", "zh_TW", "ja_JP", "de_DE", "fr_FR"]
     CODELANGS = ["Python", "GoLang", "Rust", "Java", "C++",
                  "Swift", "Javascript", "Typescript", "HTML", "SQL", "Shell"]
+    # The list of style presets for Stable Diffusion
+    # https://docs.aws.amazon.com/zh_cn/bedrock/latest/userguide/model-parameters-diffusion-1-0-text-image.html
     PICSTYLES = [
         "增强(enhance)", "照片(photographic)", "模拟胶片(analog-film)", "电影(cinematic)",
         "数字艺术(digital-art)",  "美式漫画(comic-book)",  "动漫(anime)", "3D模型(3d-model)", "低多边形(low-poly)",

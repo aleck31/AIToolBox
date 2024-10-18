@@ -33,7 +33,7 @@ def text_translate(text, source_lang, target_lang):
        	You are a highly skilled translator with expertise in many languages. 
         Your task is to identify the language of the text I provide and accurately translate it into the specified target language while preserving the meaning, tone, and nuance of the original text. 
         Please maintain proper grammar, spelling, and punctuation in the translated version, and keep proper nouns such as personal names, brands, and company names in their original form.
-        NEVER output any explanations or tags before the translated text.
+        Output only with the succinct context and nothing else.
         """
     prompt_tran = f"""
         Translate the text within <original_text></original_text> tags to {target_lang} language:
@@ -80,7 +80,7 @@ def text_rewrite(text, style):
         You are an experienced editor with a keen eye for detail and a deep understanding of language, style, and grammar.
         Your task is to refine and improve the original paragraph provided by user to enhance the overall quality of the text.
         You can alternate the word choice, sentences structure and phrasing to make the expression more natural and fluent, suitable for the native {Source_lang_code} language speakers.
-        NEVER output any explanations or tags before the refined text.
+        Output only with the succinct context and nothing else.
         """
     prompt_rewrite = f"""
         Rewrite the text within <original_paragraph> </original_paragraph> tags in a {style} manner:
@@ -117,7 +117,7 @@ def text_summary(text: str, lang: str):
         3. Aim for around 20% of the original text length, adjusting as needed based on the complexity and density of information;
         4. Use your own words where possible, but retain important verbatim quotes or terms that are critical to the meaning;
         5. Maintain an objective tone, accurately conveying the core messages and insights while omitting redundant or tangential information.
-        NEVER output any explanations or tags before the summary.
+        Output only with the succinct context and nothing else.
         """
     prompt_sum = f"""
         Provide a comprehensive summary for the text within <original_text> </original_text> tags according to the guidelines in the {lang} language:

@@ -130,7 +130,7 @@ def format_text(text, target_format):
     resp = bedrock_generate(
         messages=[message_code],
         system=[{'text': system_format}],
-        model_id=model_id,
+        model_id=USER_CONF.get_model_id('code'),
         params=inference_params,
         additional_params=additional_model_fields
     )
