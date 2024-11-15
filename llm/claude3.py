@@ -1,8 +1,8 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 from common import USER_CONF
-from common.logger import logger
-from utils import ChatHistory, format_msg, format_resp
+from common.chat_memory import chat_memory
+from utils import format_msg, format_resp
 from . import bedrock_generate, bedrock_stream
 
 
@@ -24,13 +24,9 @@ additional_model_fields = {
     "top_k": 200
 }
 
-chat_memory = ChatHistory()
-
-
 def clear_memory():
     chat_memory.clear()
     return {"role": "assistant", "content": "Conversation history forgotten."}
-
 
 def multimodal_chat(message: dict, history: list, style: str):
     '''
@@ -94,7 +90,7 @@ def vision_analyze(file_path: str, req_description=None):
     # Define system prompt base on style
     system_prompt = '''
         Analyze or describe the multimodal content according to the user's requirement.
-        Respond using the language onsistent with the user or the language specified in the <requirement> </requirement> tags.
+        Respond using the language consistent with the user or the language specified in the <requirement> </requirement> tags.
         '''
 
     req_description = req_description or "Describe the picture or document in detail."

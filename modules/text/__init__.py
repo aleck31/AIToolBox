@@ -3,7 +3,7 @@
 from utils import format_resp, format_msg
 from common import USER_CONF, translate_text
 # from utils.web import convert_url_text
-from . import bedrock_generate
+from llm import bedrock_generate
 
 
 inference_params = {

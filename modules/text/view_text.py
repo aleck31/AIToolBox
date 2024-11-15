@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
 from common import AppConf
-from llm import lang
 from utils import web
+from . import text_translate, text_rewrite, text_summary
 
 
 tab_translate = gr.Interface(
-    lang.text_translate,
+    text_translate,
     inputs=[
         gr.Textbox(label="Original", lines=7),
         gr.Dropdown(label="Source Language", choices=[
@@ -26,7 +26,7 @@ tab_translate = gr.Interface(
 
 
 tab_rewrite = gr.Interface(
-    lang.text_rewrite,
+    text_rewrite,
     inputs=[
         gr.Textbox(label="Original", lines=7, scale=5),
         # gr.Accordion(),
@@ -51,12 +51,12 @@ with gr.Blocks() as tab_summary:
             with gr.Row():
                 with gr.Tab("Original Text"):
                     input_text = gr.Textbox(
-                        label='text', show_label=False, container=False, lines=11)
+                        label='text', show_label=False, lines=11)
                     input_text.change(lambda x: x, input_text, saved_text)
                 with gr.Tab("Web URL"):
                     with gr.Row():
                         input_url = gr.Textbox(
-                            label='url', show_label=False, container=False, lines=1, scale=11)
+                            label='url', show_label=False, lines=1, scale=11)
                         btn_fetch = gr.Button('🧲', min_width=16, visible=False, size='sm', scale=1)
                         # Test only: fetch webpage content
                         # fetched_text = gr.Textbox(label="Fetched text", lines=5)
@@ -78,5 +78,5 @@ with gr.Blocks() as tab_summary:
                 output = gr.Markdown(label="Summary", show_label=True, line_breaks=True)            
 
         btn_clear.click(None, None, [input_text, input_url, output])
-        btn_summit.click(lang.text_summary, [saved_text, input_lang], output).then(
+        btn_summit.click(text_summary, [saved_text, input_lang], output).then(
             lambda: gr.Button('🧲', ), None, btn_fetch)

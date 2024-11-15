@@ -6,7 +6,7 @@ import json
 import base64
 import random
 from PIL import Image
-from . import bedrock_runtime, bedrock_generate
+from llm import bedrock_runtime, bedrock_generate
 from common import USER_CONF, translate_text
 from common.logger import logger
 from botocore.exceptions import ClientError

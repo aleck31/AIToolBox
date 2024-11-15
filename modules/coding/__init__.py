@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT-0
 from common import USER_CONF
 from utils import format_msg
-from . import bedrock_generate, bedrock_stream
+from llm import bedrock_generate, bedrock_stream
 
 
 # model_id = "anthropic.claude-3-sonnet-20240229-v1:0"

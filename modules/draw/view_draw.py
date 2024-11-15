@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
 from common import AppConf
-from llm import draw
+from . import text_image
 
 
 with gr.Blocks() as tab_draw:
@@ -37,7 +37,7 @@ with gr.Blocks() as tab_draw:
         with gr.Column(scale=6):
             output_image = gr.Image(interactive=False)
         btn_img_gen.click(
-            fn=draw.text_image,
+            fn=text_image,
             inputs=[input_prompt, input_negative, input_style,
                     input_step, input_seed, seed_random],
             outputs=[output_image, input_seed]

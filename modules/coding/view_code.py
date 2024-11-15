@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
 from common import AppConf
-from llm import code
+from modules import coding
 
 
 with gr.Blocks() as tab_code:
@@ -29,14 +29,14 @@ with gr.Blocks() as tab_code:
                     [input_requirement, output_codes], value='🗑️ Clear')
                 btn_code_submit = gr.Button(
                     value='⌨️ Generate', variant='primary')
-                btn_code_submit.click(fn=code.gen_code, inputs=[
+                btn_code_submit.click(fn=coding.gen_code, inputs=[
                                       input_requirement, input_lang], outputs=output_codes)
     with gr.Row():
         error_box = gr.Textbox(label="Error", visible=False)
 
 
 tab_format = gr.Interface(
-    code.format_text,
+    coding.format_text,
     inputs=[
         gr.Textbox(label="Please input the text:", lines=9, scale=5),
         gr.Radio(label="File format", choices=["JSON", "YAML"], value="JSON")
