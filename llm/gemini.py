@@ -1,5 +1,7 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
+import os
+import traceback
 from PIL import Image
 import google.generativeai as gm
 from common import USER_CONF, get_secret
@@ -9,7 +11,16 @@ from utils import file
 
 # gemini/getting-started guide:
 # https://github.com/GoogleCloudPlatform/generative-ai/blob/main/gemini/getting-started/intro_gemini_python.ipynb
-gemini_api_key = get_secret('dev_gemini_api').get('api_key')
+try:
+    gemini_api_key = get_secret('dev_gemini_api').get('api_key')
+except Exception as e:
+    logger.warning(f"Failed to get Gemini API key from Secrets Manager: {str(e)}")
+    # Fallback to environment variable
+    gemini_api_key = os.getenv('GEMINI_API_KEY')
+    if not gemini_api_key:
+        logger.warning("No Gemini API key found in Secrets Manager or environment variables")
+        raise ValueError("Gemini API key not found")
+
 gm.configure(api_key=gemini_api_key)
 
 
@@ -30,26 +41,36 @@ safety_settings={
     'DANGEROUS' : 'BLOCK_NONE'
 }
 
-llm_chat = gm.GenerativeModel(
-    # model_name="gemini-1.5-pro-001",
-    model_name=USER_CONF.get_model_id('gemini-chat'),
-    generation_config=default_config,
-    system_instruction=[
-        "You are a friendly chatbot.",
-        "You are talkative and provides lots of specific details from its context.",
-        "If you are unsure or don't have enough information to provide a confident answer, just say 'I do not know' or 'I am not sure.'"
-    ]
-    # safety_settings = safety_settings
-)
+
+chat_model = USER_CONF.get_model_id('gemini-chat')
+logger.debug(f"Start chat using model: {chat_model}")
+
+# Initialize global conversation variable
+conversation = None
+
+try:
+    llm_chat = gm.GenerativeModel(
+        # model_name="gemini-1.5-flash",
+        model_name=chat_model,
+        generation_config=default_config,
+        system_instruction=[
+            "You are a friendly chatbot.",
+            "You are talkative and provides lots of specific details from its context.",
+            "If you are unsure or don't have enough information to provide a confident answer, just say 'I do not know' or 'I am not sure.'"
+        ]
+        # safety_settings = safety_settings
+    )
+    
+except Exception as e:
+    logger.warning(f"Failed to initialize chat model: {e}")
 
 conversation = llm_chat.start_chat(history=[])
 
-
 def clear_memory():
-    # conversation.rewind()
-    global conversation 
-    conversation = llm_chat.start_chat(history=[])
-    return [('/reset', 'Conversation history forgotten.')]
+    global conversation
+    if conversation:
+        conversation = llm_chat.start_chat(history=[])
+    return {"role": "assistant", "content": "Conversation history forgotten."}
 
 
 def multimodal_chat(message: dict, history: list):
@@ -61,27 +82,38 @@ def multimodal_chat(message: dict, history: list):
         "files": ["file_path1", "file_path2", ...]
     }
     '''
-
-    contents = [message.get('text')]
-
-    if message.get('files'):
-        for file_path in message.get('files'):
-            file_ref = gm.upload_file(path=file_path)
-            contents.append(file_ref)
-    # print(llm.count_tokens(contents))
-
-    if not history:
-        clear_memory()
-
     try:
+        # Add debug logging
+        logger.debug(f"Received message: {message}")
+        # logger.debug(f"History: {history}")
+
+        # Handle string message from gr.ChatInterface
+        if isinstance(message, str):
+            contents = [message]
+        else:
+            contents = [message.get('text')]
+            if message.get('files'):
+                logger.debug(f"Processing files: {message.get('files')}")
+                for file_path in message.get('files'):
+                    file_ref = gm.upload_file(path=file_path)
+                    contents.append(file_ref)
+        
+        logger.debug(f"Final contents to send: {contents}")
+
+        if not history:
+            clear_memory()
+
         resp = conversation.send_message(contents, stream=True)
-    except:
-        return "Oops, looks like I had a brain fart! Pls allow me a brief moment to investigate the issue."
-    
-    partial_msg = ""
-    for chunk in resp:
-        partial_msg = partial_msg + chunk.text
-        yield(partial_msg)
+
+        partial_msg = ""
+        for chunk in resp:
+            partial_msg = partial_msg + chunk.text
+            yield {"role": "assistant", "content": partial_msg}
+
+    except Exception as e:
+        error_msg = f"Error in multimodal_chat: {str(e)}\n{traceback.format_exc()}"
+        logger.error(error_msg)
+        return {"role": "assistant", "content": f"An error occurred: {str(e)}"}
 
 
 vision_config = gm.GenerationConfig(
@@ -92,11 +124,18 @@ vision_config = gm.GenerationConfig(
     candidate_count=1
 )
 
-llm_vision = gm.GenerativeModel(
-    model_name=USER_CONF.get_model_id('gemini-vision'),
-    generation_config=vision_config,
-    # safety_settings = safety_settings
-)
+
+vision_model = USER_CONF.get_model_id('gemini-vision')
+
+try:
+    llm_vision = gm.GenerativeModel(
+        model_name=vision_model,
+        generation_config=vision_config,
+        # safety_settings = safety_settings
+    )
+except Exception as e:
+    logger.warning(f"Failed to initialize vision model: {e}")
+    llm_vision = None
 
 
 def vision_analyze(file_path: str, req_description=None):

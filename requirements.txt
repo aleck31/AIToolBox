@@ -2,5 +2,5 @@ boto3
 gradio
 gradio_pdf
 google-generativeai
-selectolax
-pdf2image
+# selectolax
+# pdf2image

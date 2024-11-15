@@ -3,7 +3,7 @@
 import random
 import requests
 from requests.exceptions import HTTPError
-from selectolax.parser import HTMLParser
+# from selectolax.parser import HTMLParser
 from common.logger import logger
 # from gne import GeneralNewsExtractor
 
@@ -20,36 +20,36 @@ UserAgents = [
 
 session = requests.Session()
 
-def fetch_web_text(url):
-    """
-    Fetch content from a given URL, return plain text.
-    """
-    rd = random.Random()
-    headers = {
-        "User-Agent": UserAgents[rd.randint(0, len(UserAgents)-1)],
-        'Accept': 'text / html, application / xhtml + xml, application / xml'
-    }
+# def fetch_web_text(url):
+#     """
+#     Fetch content from a given URL, return plain text.
+#     """
+#     rd = random.Random()
+#     headers = {
+#         "User-Agent": UserAgents[rd.randint(0, len(UserAgents)-1)],
+#         'Accept': 'text / html, application / xhtml + xml, application / xml'
+#     }
 
-    remove_tags = ['head', 'style', 'script', 'nav', 'header',
-                   'ul', 'link', 'img', 'xmp', 'iframe', 'noembed', 'noframes']
+#     remove_tags = ['head', 'style', 'script', 'nav', 'header',
+#                    'ul', 'link', 'img', 'xmp', 'iframe', 'noembed', 'noframes']
 
-    try:
-        # Send a GET request to fetch the website content
-        resp = session.get(url, headers=headers)
+#     try:
+#         # Send a GET request to fetch the website content
+#         resp = session.get(url, headers=headers)
 
-        parser = HTMLParser(resp.text)
-        parser.strip_tags(remove_tags)
-        # for node in parser.css('div[class]'):
-        #     if node.css_matches('qr_code'):
-        #         node.decompose()
-        text = parser.text(deep=True, separator=" ", strip=True)
+#         parser = HTMLParser(resp.text)
+#         parser.strip_tags(remove_tags)
+#         # for node in parser.css('div[class]'):
+#         #     if node.css_matches('qr_code'):
+#         #         node.decompose()
+#         text = parser.text(deep=True, separator=" ", strip=True)
 
-        return text
+#         return text
 
-    except requests.exceptions.RequestException as ex:
-        # Handle request exceptions
-        logger.error(ex)
-        return None
+#     except requests.exceptions.RequestException as ex:
+#         # Handle request exceptions
+#         logger.error(ex)
+#         return None
 
 
 def convert_url_text(url):

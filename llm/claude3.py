@@ -29,7 +29,7 @@ chat_memory = ChatHistory()
 
 def clear_memory():
     chat_memory.clear()
-    return [('/reset', 'Conversation history forgotten.')]
+    return {"role": "assistant", "content": "Conversation history forgotten."}
 
 
 def multimodal_chat(message: dict, history: list, style: str):
@@ -62,7 +62,7 @@ def multimodal_chat(message: dict, history: list, style: str):
         """
 
     if history:
-        last_bot_msg = {"text": history[-1][1]}
+        last_bot_msg = {"text": history[-1]["content"]}
         chat_memory.add_bot_msg(last_bot_msg)
     else:
         chat_memory.clear()
@@ -84,7 +84,7 @@ def multimodal_chat(message: dict, history: list, style: str):
         if "contentBlockDelta" in chunk:
             partial_msg = partial_msg + \
                 chunk["contentBlockDelta"]["delta"]["text"]
-            yield partial_msg
+            yield {"role": "assistant", "content": partial_msg}
 
 
 def vision_analyze(file_path: str, req_description=None):

@@ -3,7 +3,7 @@
 """Helper utilities for processing media files such as image and pdf"""
 import base64
 from io import BytesIO
-from pdf2image import convert_from_path
+# from pdf2image import convert_from_path
 
 
 def pil_to_base64(image):
@@ -21,13 +21,13 @@ def path_to_base64(file_path):
         return encoded_string
 
 
-def pdf_to_imgs(file_path):
-    """ Convert PDF file into Pillow images, return a list of PIL.JpegImageFile """
-    # Set maximum page size to avoid exceeding the message api limit: image_count <= 20
-    max_pages = 20
-    try:
-        img_list = convert_from_path(
-            file_path, dpi=300, thread_count=4, fmt='jpeg', last_page=max_pages)
-        return img_list
-    except:
-        raise
+# def pdf_to_imgs(file_path):
+#     """ Convert PDF file into Pillow images, return a list of PIL.JpegImageFile """
+#     # Set maximum page size to avoid exceeding the message api limit: image_count <= 20
+#     max_pages = 20
+#     try:
+#         img_list = convert_from_path(
+#             file_path, dpi=300, thread_count=4, fmt='jpeg', last_page=max_pages)
+#         return img_list
+#     except:
+#         raise
