@@ -1,12 +1,10 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 import os
-import traceback
-from PIL import Image
 import google.generativeai as gm
-from common import USER_CONF, get_secret
+from common import get_secret
 from common.logger import logger
-from utils import file
+from common.llm_config import get_module_config
 
 
 # gemini/getting-started guide:
@@ -21,139 +19,35 @@ except Exception as e:
         logger.warning("No Gemini API key found in Secrets Manager or environment variables")
         raise ValueError("Gemini API key not found")
 
-gm.configure(api_key=gemini_api_key)
 
-
-default_config = gm.GenerationConfig(
-    max_output_tokens=8192,
-    temperature=0.9,
-    top_p=0.999,
-    top_k=200,
-    candidate_count=1    
-)
+def get_generation_config(module_name: str):
+    """Get Gemini generation config from module configuration"""
+    gm.configure(api_key=gemini_api_key)
+    config = get_module_config(module_name)
+    if config and 'parameters' in config:
+        params = config['parameters']
+        return gm.GenerationConfig(
+            max_output_tokens=int(params.get('max_tokens', 8192)),
+            temperature=float(params.get('temperature', 0.9)),
+            top_p=float(params.get('top_p', 0.999)),
+            top_k=int(params.get('top_k', 200)),
+            candidate_count=1
+        )
+    
+    # Default configuration if no module config found
+    return gm.GenerationConfig(
+        max_output_tokens=8192,
+        temperature=0.9,
+        top_p=0.999,
+        top_k=200,
+        candidate_count=1
+    )
 
 # Set customize safety settings
 # See https://ai.google.dev/gemini-api/docs/safety-settings
 safety_settings={
     'HATE': 'BLOCK_NONE',
     'HARASSMENT': 'BLOCK_NONE',
-    'SEXUAL' : 'BLOCK_NONE',
-    'DANGEROUS' : 'BLOCK_NONE'
+    'SEXUAL': 'BLOCK_NONE',
+    'DANGEROUS': 'BLOCK_NONE'
 }
-
-
-chat_model = USER_CONF.get_model_id('gemini-chat')
-logger.debug(f"Start chat using model: {chat_model}")
-
-# Initialize global conversation variable
-conversation = None
-
-try:
-    llm_chat = gm.GenerativeModel(
-        # model_name="gemini-1.5-flash",
-        model_name=chat_model,
-        generation_config=default_config,
-        system_instruction=[
-            "You are a friendly chatbot.",
-            "You are talkative and provides lots of specific details from its context.",
-            "If you are unsure or don't have enough information to provide a confident answer, just say 'I do not know' or 'I am not sure.'"
-        ]
-        # safety_settings = safety_settings
-    )
-    
-except Exception as e:
-    logger.warning(f"Failed to initialize chat model: {e}")
-
-conversation = llm_chat.start_chat(history=[])
-
-def clear_memory():
-    global conversation
-    if conversation:
-        conversation = llm_chat.start_chat(history=[])
-    return {"role": "assistant", "content": "Conversation history forgotten."}
-
-
-def multimodal_chat(message: dict, history: list):
-    '''
-    Args:
-    - message (dict):
-    {
-        "text": "user's text message", 
-        "files": ["file_path1", "file_path2", ...]
-    }
-    '''
-    try:
-        # Add debug logging
-        logger.debug(f"Received message: {message}")
-        # logger.debug(f"History: {history}")
-
-        # Handle string message from gr.ChatInterface
-        if isinstance(message, str):
-            contents = [message]
-        else:
-            contents = [message.get('text')]
-            if message.get('files'):
-                logger.debug(f"Processing files: {message.get('files')}")
-                for file_path in message.get('files'):
-                    file_ref = gm.upload_file(path=file_path)
-                    contents.append(file_ref)
-        
-        logger.debug(f"Final contents to send: {contents}")
-
-        if not history:
-            clear_memory()
-
-        resp = conversation.send_message(contents, stream=True)
-
-        partial_msg = ""
-        for chunk in resp:
-            partial_msg = partial_msg + chunk.text
-            yield {"role": "assistant", "content": partial_msg}
-
-    except Exception as e:
-        error_msg = f"Error in multimodal_chat: {str(e)}\n{traceback.format_exc()}"
-        logger.error(error_msg)
-        return {"role": "assistant", "content": f"An error occurred: {str(e)}"}
-
-
-vision_config = gm.GenerationConfig(
-    max_output_tokens=4096,
-    temperature=0.9,
-    top_p=0.999,
-    top_k=200,
-    candidate_count=1
-)
-
-
-vision_model = USER_CONF.get_model_id('gemini-vision')
-
-try:
-    llm_vision = gm.GenerativeModel(
-        model_name=vision_model,
-        generation_config=vision_config,
-        # safety_settings = safety_settings
-    )
-except Exception as e:
-    logger.warning(f"Failed to initialize vision model: {e}")
-    llm_vision = None
-
-
-def vision_analyze(file_path: str, req_description=None):
-
-    # Define prompt templete
-    req_description = req_description or "Describe the media or document in detail."
-    text_prompt = f"Analyze or describe the multimodal content according to the requirement:{req_description}"
-
-    file_ref = gm.upload_file(path=file_path)    
-    # print(llm.count_tokens([file_ref, msg_content]))
-    
-    try:
-        resp = llm_vision.generate_content(
-            contents = [file_ref, text_prompt],
-            generation_config=vision_config
-        )
-    except Exception as ex:
-        logger.error(ex)
-        return "Unfortunately, an issue occurred, no content was generated by the model."
-
-    return resp.text

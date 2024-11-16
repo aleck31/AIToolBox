@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT-0
 from utils import format_resp, format_msg
 from common import USER_CONF, translate_text
+from common.llm_config import get_module_config
 # from utils.web import convert_url_text
 from llm import bedrock_generate
 
@@ -43,11 +44,17 @@ def text_translate(text, source_lang, target_lang):
         """
     message_tran = format_msg({"text": prompt_tran}, 'user')
 
+    # Get module config for model selection
+    config = get_module_config('text')
+    model_id = config.get('default_model') if config else None
+    if not model_id:
+        model_id = USER_CONF.get_model_id('translate')
+
     # Get the llm reply
     resp = bedrock_generate(
         messages=[message_tran],
         system=[{'text':system_tran}],
-        model_id=USER_CONF.get_model_id('translate'),
+        model_id=model_id,
         params=inference_params,        
         additional_params=additional_model_fields
     )
@@ -90,11 +97,17 @@ def text_rewrite(text, style):
         """
     message_rewrite = format_msg({"text": prompt_rewrite}, 'user')
 
+    # Get module config for model selection
+    config = get_module_config('text')
+    model_id = config.get('default_model') if config else None
+    if not model_id:
+        model_id = USER_CONF.get_model_id('rewrite')
+
     # Get the llm reply
     resp = bedrock_generate(
         messages=[message_rewrite],
         system=[{'text':system_rewrite}],
-        model_id=USER_CONF.get_model_id('rewrite'),
+        model_id=model_id,
         params=inference_params,        
         additional_params=additional_model_fields
     )
@@ -127,11 +140,17 @@ def text_summary(text: str, lang: str):
         """
     message_sum = format_msg({"text": prompt_sum}, 'user')
 
+    # Get module config for model selection
+    config = get_module_config('text')
+    model_id = config.get('default_model') if config else None
+    if not model_id:
+        model_id = USER_CONF.get_model_id('summary')
+
     # Get the llm reply
     resp = bedrock_generate(
         messages=[message_sum],
         system=[{'text':system_sum}],
-        model_id=USER_CONF.get_model_id('summary'),
+        model_id=model_id,
         params=inference_params,        
         additional_params=additional_model_fields
     )

@@ -5,7 +5,7 @@ from common import AppConf
 from modules import coding
 
 
-with gr.Blocks() as tab_code:
+with gr.Blocks() as tab_coding:
     description = gr.Markdown("Let's build ... (Powered by Bedrock)")
     with gr.Row():
         # 输入需求

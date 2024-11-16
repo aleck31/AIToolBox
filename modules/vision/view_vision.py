@@ -2,32 +2,23 @@
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
 from gradio_pdf import PDF
-from llm import claude3, gemini
+from . import vision_analyze_claude, vision_analyze_gemini
 
 
 def handle_file(file_path, prompt, model):
+    if not file_path:
+        yield "Please upload an image or document first."
+        return
+
     match model:
         case 'Claude3':
-            resp = claude3.vision_analyze(file_path, prompt)
+            for chunk in vision_analyze_claude(file_path, prompt):
+                yield chunk
         case 'Gemini':
-            resp = gemini.vision_analyze(file_path, prompt)
+            for chunk in vision_analyze_gemini(file_path, prompt):
+                yield chunk
         case _:
-            pass
-    return resp
-
-# tab_vision_deprecated = gr.Interface(
-#     analyze_img,
-#     inputs=[
-#         gr.Image(label='Image', type='filepath', sources=['upload', 'webcam'], show_download_button=False, scale=2),
-#         gr.Textbox(label="What do you want me to do?", lines=2, scale=4),
-#         gr.Radio(label="Model", choices=['Claude3', 'Gemini'], value='Claude3')
-#     ],
-#     outputs=gr.Textbox(label='Output', lines=15, scale=4),
-#     # live=True,
-#     description="I can see 乛◡乛 ",
-#     submit_btn= gr.Button("▶️ Go"),
-#     clear_btn=gr.Button("🗑️ Clear")
-# )
+            yield "Invalid model selected"
 
 
 with gr.Blocks() as tab_vision:
