@@ -8,17 +8,16 @@ from botocore.exceptions import ClientError
 
 
 DEFAULT_REGION = "ap-southeast-1"
-CONFIG_TAB = 'aibox-db'
+
 
 session = Session(region_name=DEFAULT_REGION)
 ddb = session.resource('dynamodb')
-app_table = ddb.Table(CONFIG_TAB)
+user_table = ddb.Table('aibox-user')
+app_table = ddb.Table('aibox-user')
 
 
 def verify_user(username: str, password: str):
     '''Verify username and password for login'''
-    ddb = session.resource('dynamodb')
-    app_table = ddb.Table(CONFIG_TAB)
 
     # Query DynamoDB table for user
     try:
