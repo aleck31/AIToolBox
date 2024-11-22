@@ -5,15 +5,15 @@ import json
 from utils import bedrock
 from common.logger import logger
 from botocore.exceptions import ClientError
+from common.config import BEDROCK_REGION
 
 
 # os.environ["BEDROCK_ASSUME_ROLE"] = "<YOUR_ROLE_ARN>"  # E.g. "arn:aws:..."
-# os.environ["AWS_DEFAULT_REGION"] = "<REGION_CODE>"  # E.g. "us-west-2"
 # It is recommended to use IAM role authorization
 
 # Create new bedrock client
 bedrock_runtime = bedrock.get_bedrock_client(
-    region=os.environ.get("AWS_DEFAULT_REGION", "us-west-2"),
+    region=BEDROCK_REGION,
     assume_role_arn=os.environ.get("BEDROCK_ASSUME_ROLE")
 )
 
@@ -25,7 +25,7 @@ def test_connection():
     :return: The list of available bedrock foundation models.
     """
     bedrock_client = bedrock.get_bedrock_client(
-        region=os.environ.get("AWS_DEFAULT_REGION", "us-west-2"),
+        region=BEDROCK_REGION,
         assume_role_arn=os.environ.get("BEDROCK_ASSUME_ROLE"),
         runtime=False
     )
@@ -157,4 +157,4 @@ def bedrock_stream(messages, system,  model_id, params, additional_params=None, 
         return streaming_resp
 
     except ClientError as ex:
-        logger.error(f"Invoke model {model_id} faild. {ex.response['Error']['Code']} - {ex.response['Error']['Message']}")        
+        logger.error(f"Invoke model {model_id} faild. {ex.response['Error']['Code']} - {ex.response['Error']['Message']}")

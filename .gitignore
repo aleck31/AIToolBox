@@ -28,3 +28,4 @@ flagged
 *.log
 demo*
 tmp/*
+config.json

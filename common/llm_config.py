@@ -262,11 +262,11 @@ def init_default_llm_models():
         if not models:
             default_models = [
                 {
-                    'name': 'claude3-sonnet',
+                    'name': 'claude3.5-sonnet-v2',
                     'model_id': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
                     'provider': 'Anthropic',
                     'model_type': 'multimodal',
-                    'description': 'Claude 3 Sonnet model for general use'
+                    'description': 'Claude 3.5 Sonnet model for general use'
                 },
                 {
                     'name': 'gemini-pro',
