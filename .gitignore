@@ -26,6 +26,7 @@ venv/
 
 flagged
 *.log
+logs/
 demo*
 tmp/*
 config.json

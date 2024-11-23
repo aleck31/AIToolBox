@@ -5,7 +5,7 @@ from common import AppConf
 from llm import claude3
 
 
-tab_claude = gr.ChatInterface(
+tab_chatbot = gr.ChatInterface(
     fn=claude3.multimodal_chat,
     type='messages',
     multimodal=True,

@@ -75,7 +75,6 @@ def multimodal_chat(message: dict, history: list):
             partial_msg = partial_msg + chunk.text
             yield {"role": "assistant", "content": partial_msg}
 
-    except Exception as e:
-        error_msg = f"Error in multimodal_chat: {str(e)}"
-        logger.error(error_msg)
-        return {"role": "assistant", "content": f"An error occurred: {str(e)}"}
+    except Exception as ex:
+        logger.error(f"multimodal_chat: {str(ex)}")
+        return {"role": "assistant", "content": f"An error occurred: {str(ex)}"}

@@ -11,7 +11,7 @@ def handle_file(file_path, prompt, model):
         return
 
     match model:
-        case 'Claude3':
+        case 'Claude':
             for chunk in vision_analyze_claude(file_path, prompt):
                 yield chunk
         case 'Gemini':
@@ -42,15 +42,21 @@ with gr.Blocks() as tab_vision:
                     label="What do you want me to do?", lines=3, scale=6)
                 input_model = gr.Radio(
                     label="Model:", interactive=True, scale=1, min_width=120,
-                    choices=['Claude3', 'Gemini'], value='Claude3')
+                    choices=['Claude', 'Gemini'], value='Claude')
             with gr.Row():
                 # btn_clear = gr.ClearButton([input_img, input_pdf, input_desc, output], value='🗑️ Clear')
                 btn_clear = gr.Button("🗑️ Clear")
                 btn_summit = gr.Button("▶️ Go", variant='primary')
 
         with gr.Column(scale=6, min_width=450):
-            with gr.Accordion('Output:', open=True):
-                output = gr.Markdown(label="Output", show_label=True, line_breaks=True)
+            # with gr.Accordion('Output:', open=True):
+            #     output = gr.Markdown(label="Output", show_label=True, line_breaks=True)
+            gr.Markdown('Output')
+            output = gr.Code(
+                label='markdown',
+                language='markdown',
+                wrap_lines=True
+            )                
 
         btn_clear.click(None, None, [input_img, input_pdf, output])
         btn_summit.click(
