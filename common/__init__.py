@@ -1,49 +1,16 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 import ast
-import hashlib
 from .logger import logger
 from boto3 import Session
 from botocore.exceptions import ClientError
-
-
-DEFAULT_REGION = "ap-southeast-1"
+from .config import DATABASE_CONFIG, DEFAULT_REGION
 
 
 session = Session(region_name=DEFAULT_REGION)
 ddb = session.resource('dynamodb')
-user_table = ddb.Table('aibox-user')
-app_table = ddb.Table('aibox-user')
-
-
-def verify_user(username: str, password: str):
-    '''Verify username and password for login'''
-
-    # Query DynamoDB table for user
-    try:
-        # resp = user_table.get_item(Key={'userId' : '1001'})
-        resp = app_table.get_item(Key={'user': username})
-    except ClientError as ex:
-        logger.error(ex)
-        return False
-
-    # Check if user exists
-    if 'Item' in resp:
-        # Get stored user item
-        user = resp['Item']
-
-        # Verify  password
-        encrypted_password = hashlib.sha256(
-            password.encode("utf-8")).hexdigest()
-        if encrypted_password == user.get('password'):
-            logger.info(f"User [{username}] logged in successfully.")
-            return True
-        else:
-            logger.error(f"User [{username}] failed to log in.")
-            return False
-    else:
-        logger.warning(f"User [{username}] does not exist.")
-        return False
+user_table = ddb.Table(DATABASE_CONFIG['user_table'])
+setting_table = ddb.Table(DATABASE_CONFIG['setting_table'])
 
 
 # secret_name = "aitoolkit-login"
@@ -169,7 +136,7 @@ class AppConf:
 def get_model_list(username: str):
     '''Get the user's model list from database.'''
     try:
-        resp = app_table.get_item(Key={'user': username})
+        resp = user_table.get_item(Key={'user': username})
 
         # If data is found, return the 'models' field data
         if 'Item' in resp:
@@ -180,14 +147,14 @@ def get_model_list(username: str):
         return model_list
 
     except Exception as ex:
-        logger.error(f"Error getting model list for user {username}: {ex}")
+        logger.error(f"Failed getting model list for user {username}: {ex}")
         return None
 
 
 def get_model_id(username: str, model_name: str):
     '''Get the model ID specified by the user from database'''
     try:
-        resp = app_table.get_item(Key={'user': username})
+        resp = user_table.get_item(Key={'user': username})
 
         # If data is found, return the 'models' field data
         if 'Item' in resp:
@@ -225,7 +192,7 @@ class UserConf(object):
 
     def set_model_list(self, model_list: list):
         try:
-            app_table.update_item(
+            user_table.update_item(
                 Key={
                     'user': self.username
                 },
