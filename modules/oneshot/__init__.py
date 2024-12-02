@@ -1,11 +1,11 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
-from common import USER_CONF
 from utils import format_msg
-from llm import bedrock_stream
+from llm.claude import bedrock_stream
 from common.logger import logger
-from common.llm_config import get_module_config
+from common.llm_config import get_default_model
 from .prompts import system_prompt
+
 
 inference_params = {
     "maxTokens": 4096,
@@ -47,17 +47,8 @@ def gen_with_think(input_data):
         # Format the user message
         formatted_msg = format_msg(message, 'user')
 
-        # Get module configuration
-        module_config = get_module_config('oneshot')
-        if not module_config:
-            logger.error("Failed to get oneshot module configuration")
-            return "Error: Could not load module configuration"
-
         # Get model ID from module configuration
-        model_id = module_config.get('default_model')
-        if not model_id:
-            logger.error("No default model configured for oneshot module")
-            return "Error: No default model configured"
+        model_id = get_default_model('oneshot')
 
         # Get streaming response from Claude
         stream_resp = bedrock_stream(

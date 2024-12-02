@@ -1,43 +1,47 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 import google.generativeai as gm
-from common import USER_CONF
 from common.logger import logger
-from common.llm_config import get_module_config
+from common.llm_config import get_default_model, get_system_prompt
 from llm.gemini import get_generation_config
 
-# Get chatbot configuration
-chat_config = get_module_config('chatbot-gemini')
-chat_model = chat_config.get('default_model') if chat_config else None
-if not chat_model:
-    chat_model = USER_CONF.get_model_id('gemini-chat')
 
 # Initialize conversation
 conversation = None
 
-try:
-    llm_chat = gm.GenerativeModel(
-        model_name=chat_model,
-        generation_config=get_generation_config('chatbot-gemini'),
-        system_instruction=(
-            chat_config.get('system_prompt', '').split('\n')
-            if chat_config and chat_config.get('system_prompt')
-            else [
-                "You are a friendly chatbot.",
-                "You are talkative and provides lots of specific details from its context.",
-                "If you are unsure or don't have enough information to provide a confident answer, just say 'I do not know' or 'I am not sure.'"
-            ]
-        )
-    )
-    conversation = llm_chat.start_chat(history=[])
-except Exception as e:
-    logger.warning(f"Failed to initialize chat model: {e}")
+def convert_history_to_gemini_format(history):
+    """Convert gradio chat history to Gemini format"""
+    if not history:
+        return []
+    
+    gemini_history = []
+    for msg in history:
+        if msg["role"] == "user":
+            gemini_history.append({"role": "user", "parts": [{"text": msg["content"]}]})
+        elif msg["role"] == "assistant":
+            gemini_history.append({"role": "model", "parts": [{"text": msg["content"]}]})
+    return gemini_history
 
-def clear_memory():
-    global conversation
-    if conversation:
-        conversation = llm_chat.start_chat(history=[])
-    return {"role": "assistant", "content": "Conversation history forgotten."}
+def initialize_model(history):
+    """Initialize or reinitialize the chat model with latest configuration"""
+    try:
+        model_id = get_default_model('chatbot-gemini')
+        chat_model = gm.GenerativeModel(
+            model_name=model_id,
+            generation_config=get_generation_config('chatbot-gemini'),
+            system_instruction=get_system_prompt('chatbot-gemini') or [
+                    "You are a friendly chatbot.",
+                    "You are talkative and provides lots of specific details from its context.",
+                    "If you are unsure or don't have enough information to provide a confident answer, just say 'I do not know' or 'I am not sure."
+                ]
+        )
+        gemini_history = convert_history_to_gemini_format(history)
+        return chat_model.start_chat(history=gemini_history)
+        
+    except Exception as e:
+        logger.warning(f"Failed to initialize chat model: {e}")
+        return None
+
 
 def multimodal_chat(message: dict, history: list):
     '''
@@ -48,6 +52,7 @@ def multimodal_chat(message: dict, history: list):
         "files": ["file_path1", "file_path2", ...]
     }
     '''
+    global conversation
     try:
         # Add debug logging
         logger.debug(f"Received message: {message}")
@@ -65,8 +70,8 @@ def multimodal_chat(message: dict, history: list):
         
         logger.debug(f"Final contents to send: {contents}")
 
-        if not history:
-            clear_memory()
+        # Initialize chat conversation with history
+        conversation = initialize_model(history)
 
         resp = conversation.send_message(contents, stream=True)
 

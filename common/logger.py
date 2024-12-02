@@ -1,10 +1,11 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
+import os
 import logging
 from logging.handlers import RotatingFileHandler
-import os
 from datetime import datetime
 from pytz import timezone
+from .config import LOG_LEVEL
 
 
 # Get the root directory of the application
@@ -41,7 +42,7 @@ def setup_logger(log_level=logging.INFO):
     # Create another handler to output to the console
     # This will show WARNING, ERROR, and CRITICAL level logs
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.WARNING)  # Shows WARNING and above in console
+    console_handler.setLevel(logging.ERROR)  # Shows ERROR and above in console
 
     # Create a custom formatter with UTC+8 timezone
     class TzFormatter(logging.Formatter):
@@ -63,5 +64,8 @@ def setup_logger(log_level=logging.INFO):
     return logger
 
 
+# Get log level from config and convert to logging level
+log_level = getattr(logging, LOG_LEVEL.upper(), logging.INFO)
+
 # Create logger instance
-logger = setup_logger()
+logger = setup_logger(log_level=log_level)

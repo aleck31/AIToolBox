@@ -1,6 +1,6 @@
 import requests
 
-# To add a tool to be used by Claude in main_demo.py,
+# To add a tool to be used by LLM,
 # create your tool in python as shown below and then create
 # a new string variable describing the tool spec. Copy the XML formatting
 # that is shown in the below example.

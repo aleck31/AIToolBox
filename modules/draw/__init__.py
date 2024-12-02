@@ -6,10 +6,10 @@ import json
 import base64
 import random
 from PIL import Image
-from llm import bedrock_runtime, bedrock_generate
-from common import USER_CONF, translate_text
-from common.logger import logger
 from botocore.exceptions import ClientError
+from common.logger import logger
+from common.llm_config import get_default_model
+from llm.claude import bedrock_runtime, bedrock_generate
 
 
 inference_params = {
@@ -91,11 +91,14 @@ def prompt_optimizer(prompt):
         'content': [{"text": prompt}]
     }
 
+    # Get model ID from module config
+    model_id = get_default_model('draw')
+
     # Get the llm reply
     resp = bedrock_generate(
         messages=[msg_prompt],
         system=[{'text': sys_prompt}],
-        model_id=USER_CONF.get_model_id('rewrite'),
+        model_id=model_id,
         params=inference_params
     )
 
@@ -111,7 +114,8 @@ def text_image(prompt: str, negative: str, style, step: int, seed, is_random):
 
     :return: image and random seed
     """
-    model_id = USER_CONF.get_model_id('image')
+    # Get model ID from module config
+    model_id = get_default_model('draw')
 
     # change seed from Double to Int
     seed = random_seed() if is_random else int(seed)

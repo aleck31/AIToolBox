@@ -2,8 +2,11 @@ from fastapi import APIRouter, Request, Depends, HTTPException, Form
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from common.auth import cognito_auth
-from common import USER_CONF
 from common.chat_memory import chat_memory
+from common.logger import logger
+import json
+from datetime import datetime
+
 
 # Create router
 router = APIRouter()
@@ -11,12 +14,49 @@ router = APIRouter()
 # Setup templates
 templates = Jinja2Templates(directory="modules/login")
 
-# Dependency to get the current user
+
+def log_unauth_access(request: Request, details: str = None):
+    """Log unauthorized access attempts with detailed information"""
+    # Get client IP - check for proxy headers first
+    client_ip = request.headers.get('x-forwarded-for') or request.headers.get('x-real-ip') or request.client.host
+    
+    # Build security log entry
+    security_log = {
+        'client_ip': client_ip,
+        'method': request.method,
+        'request_url': str(request.url),
+        'user_agent': request.headers.get('user-agent'),
+        'details': details,
+    }
+    
+    # Log as JSON for better parsing
+    logger.warning(f"SECURITY_ALERT: Unauthorized access - {json.dumps(security_log, indent=2)}")
+
+
+# Dependency to get the current user or raises exception
 def get_user(request: Request):
+    """Get current user from session"""
+    # Log full session data at DEBUG level
+    logger.debug(f"Full request session data: {dict(request.session)}")
+    
     user = request.session.get('user')
-    if user:
-        return user.get('username')
-    return None
+    
+    if not user:
+        # Log unauthorized access attempt
+        log_unauth_access(
+            request=request,
+            details='Attempted to access protected route without valid session'
+        )
+        raise HTTPException(status_code=401, detail="Not authenticated")
+        
+    username = user.get('username')
+    logger.debug(f"Username extracted from session: {username}")
+    # Log access token for debugging
+    access_token = user.get('access_token')
+    logger.debug(f"Access token verified: {bool(access_token)}")
+    
+    return username
+
 
 @router.get('/login')
 async def login_page(request: Request, error: str = None):
@@ -36,11 +76,19 @@ async def auth(request: Request, username: str = Form(...), password: str = Form
             'username': username,
             'access_token': auth_result['tokens']['AccessToken']
         }
-        # Set user in USER_CONF
-        USER_CONF.set_user(username)
-        return RedirectResponse(url='/main', status_code=303)
+        logger.debug(f"Authentication successful. Session data: {dict(request.session)}")
+        
+        # Create response with redirect
+        response = RedirectResponse(url='/main', status_code=303)
+        return response
     
-    # If authentication fails, redirect back to login with error
+    # Log failed authentication attempt
+    log_unauth_access(
+        request=request,
+        details=f'Failed authentication attempt for user: {username}'
+    )
+    
+    # Redirect back to login with error
     return RedirectResponse(
         url=f'/login?error=Invalid username or password',
         status_code=303
@@ -53,11 +101,14 @@ async def logout(request: Request):
         user = request.session.get('user')
         if user and user.get('access_token'):
             cognito_auth.logout(user['access_token'])
+        logger.debug(f"Session data before clear: {dict(request.session)}")
         request.session.clear()
-        if USER_CONF.username:
-            USER_CONF.set_user(None)
+        logger.debug("Session cleared during logout")
         chat_memory.clear()
-        return RedirectResponse(url='/login')
+        
+        # Create response with redirect
+        response = RedirectResponse(url='/login')
+        return response
     except Exception as e:
-        print(f"Logout error: {str(e)}")
+        logger.error(f"Logout error: {str(e)}")
         raise HTTPException(status_code=500, detail="Logout failed")

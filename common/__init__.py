@@ -9,11 +9,9 @@ from .config import DATABASE_CONFIG, DEFAULT_REGION
 
 session = Session(region_name=DEFAULT_REGION)
 ddb = session.resource('dynamodb')
-user_table = ddb.Table(DATABASE_CONFIG['user_table'])
 setting_table = ddb.Table(DATABASE_CONFIG['setting_table'])
 
 
-# secret_name = "aitoolkit-login"
 def get_secret(secret_name):
     '''Get user dict from Secrets Manager'''
     # Create a Secrets Manager client
@@ -72,8 +70,6 @@ class AppConf:
     """
 
     # Constants
-    STYLES = ["正常", "幽默", "极简", "理性", "可爱"]
-    LANGS = ["en_US", "zh_CN", "zh_TW", "ja_JP", "de_DE", "fr_FR"]
     CODELANGS = ["Python", "GoLang", "Rust", "Java", "C++",
                  "Swift", "Javascript", "Typescript", "HTML", "SQL", "Shell"]
     # The list of style presets for Stable Diffusion
@@ -84,46 +80,6 @@ class AppConf:
         "线稿(line-art)", "等距插画(isometric)", "霓虹朋克(neon-punk)", "复合建模(modeling-compound)",  
         "奇幻艺术(fantasy-art)", "像素艺术(pixel-art)", "折纸艺术(origami)", "瓷砖纹理(tile-texture)"
     ]
-    # initialize model list with default values.
-    # https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html#model-ids-arns
-    MODEL_LIST = [
-        {
-            "model_id": "anthropic.claude-3-sonnet-20240229-v1:0",
-            "name": "claude3"
-        },
-        {
-            "model_id": "gemini-1.5-flash",
-            "name": "gemini-chat"
-        },
-        {
-            "model_id": "gemini-1.5-pro",
-            "name": "gemini-vision"
-        },
-        {
-            "model_id": "anthropic.claude-3-haiku-20240307-v1:0",
-            "name": "translate"
-        },
-        {
-            "model_id": "anthropic.claude-3-sonnet-20240229-v1:0",
-            "name": "rewrite"
-        },
-        {
-            "model_id": "anthropic.claude-3-sonnet-20240229-v1:0",
-            "name": "summary"
-        },
-        {
-            "model_id": "anthropic.claude-3-sonnet-20240229-v1:0",
-            "name": "vision"
-        },
-        {
-            "model_id": "anthropic.claude-3-sonnet-20240229-v1:0",
-            "name": "code"
-        },
-        {
-            "model_id": "stability.stable-diffusion-xl-v1",
-            "name": "image"
-        }
-    ]
 
     def update(self, key, value):
         # Update the value of a variable.
@@ -133,81 +89,15 @@ class AppConf:
             raise AttributeError(f"Invalid configuration variable: {key}")
 
 
-def get_model_list(username: str):
-    '''Get the user's model list from database.'''
+def get_model_id(model_name: str):
+    '''Get model ID from settings table'''
     try:
-        resp = user_table.get_item(Key={'user': username})
-
-        # If data is found, return the 'models' field data
+        resp = setting_table.get_item(Key={'setting': 'models'})
         if 'Item' in resp:
-            model_list = resp['Item'].get('models')
-        else:
-            model_list = None
-
-        return model_list
-
-    except Exception as ex:
-        logger.error(f"Failed getting model list for user {username}: {ex}")
-        return None
-
-
-def get_model_id(username: str, model_name: str):
-    '''Get the model ID specified by the user from database'''
-    try:
-        resp = user_table.get_item(Key={'user': username})
-
-        # If data is found, return the 'models' field data
-        if 'Item' in resp:
-            model_list = resp['Item'].get('models', [])
+            model_list = resp['Item'].get('value', [])
             for model in model_list:
-                # If matching model name is found
                 if model['name'] == model_name:
-                    # Return model ID
                     return model['model_id']
-
     except Exception as ex:
-        logger.error(str(ex))
-        return None
-
-
-class UserConf(object):
-    """
-    A class to store and manage user configuration.
-    """
-
-    def __init__(self, username):
-        self.username = username
-        if not get_model_list(self.username):
-            self.model_list = AppConf.MODEL_LIST
-            self.set_model_list(self.model_list)
-        else:
-            self.model_list = get_model_list(self.username)
-
-    def set_user(self, new_username):
-        self.username = new_username
-        self.model_list = get_model_list(self.username)
-
-    def get_model_id(self, model_name):
-        return get_model_id(self.username, model_name)
-
-    def set_model_list(self, model_list: list):
-        try:
-            user_table.update_item(
-                Key={
-                    'user': self.username
-                },
-                UpdateExpression='SET models = :model_list',
-                ExpressionAttributeValues={
-                    ':model_list': model_list
-                },
-                ReturnValues='UPDATED_NEW'
-            )
-            # update self.model_list
-            self.model_list = get_model_list(self.username)
-        except Exception as ex:
-            logger.error(str(ex))
-            return False
-
-
-# Default user configuration without login
-USER_CONF = UserConf('demo')
+        logger.error(f"Failed to get model ID for {model_name}: {str(ex)}")
+    return None

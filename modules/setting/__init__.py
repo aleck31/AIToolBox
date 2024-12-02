@@ -1,48 +1,57 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
-from common import USER_CONF
+import json
+from decimal import Decimal
+from common.logger import logger
 from common.llm_config import (
     get_llm_models, add_llm_model, delete_llm_model,
     get_module_config, update_module_config
 )
 
-def format_config_text(config):
-    """Format module config as display text"""
+
+def decimal_to_float(obj):
+    """Convert Decimal objects to float for JSON serialization"""
+    if isinstance(obj, Decimal):
+        return float(obj)
+    elif isinstance(obj, dict):
+        return {k: decimal_to_float(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [decimal_to_float(x) for x in obj]
+    return obj
+
+
+def format_config_json(config):
+    """Format module config as JSON text"""
     if not config:
         return ""
     
-    lines = []
+    # Create a clean config dict without internal fields
+    display_config = {}
     
-    # Add default model
-    lines.append(f"Default Model: {config.get('default_model', 'Not set')}")
-    
-    # Add system prompt if present
+    # Add core fields
+    if 'default_model' in config:
+        display_config['default_model'] = config['default_model']
     if 'system_prompt' in config:
-        lines.append(f"System Prompt: {config['system_prompt']}")
-    
-    # Add parameters section
+        display_config['system_prompt'] = config['system_prompt']
     if 'parameters' in config:
-        lines.append("Parameters:")
-        for key, value in config['parameters'].items():
-            lines.append(f"  {key}: {value}")
-    
-    # Add sub modules section
+        display_config['parameters'] = config['parameters']
     if 'sub_modules' in config:
-        lines.append("Sub Modules:")
-        for name, sub_config in config['sub_modules'].items():
-            lines.append(f"  {name}:")
-            if 'system_prompt' in sub_config:
-                lines.append(f"    System Prompt: {sub_config['system_prompt']}")
-            if 'parameters' in sub_config:
-                lines.append("    Parameters:")
-                for key, value in sub_config['parameters'].items():
-                    lines.append(f"      {key}: {value}")
-    
-    # Add description
-    lines.append(f"Description: {config.get('description', 'n/a')}")
+        display_config['sub_modules'] = config['sub_modules']
+    if 'description' in config:
+        display_config['description'] = config['description']
+        
+    # Convert Decimal to float before JSON serialization
+    display_config = decimal_to_float(display_config)
 
-    return "\n".join(lines)
+    if 'parameters' in display_config:
+        params = display_config['parameters'].copy()
+    if 'max_tokens' in params:
+        display_config['parameters']['max_tokens'] = int(params.pop('max_tokens'))
+        
+    # Convert to formatted JSON string
+    return json.dumps(display_config, indent=2)
+
 
 def add_model(name, model_id, provider, model_type, description):
     """Add a new LLM model"""
@@ -52,7 +61,10 @@ def add_model(name, model_id, provider, model_type, description):
         
         # Add new model with type
         add_llm_model(name, model_id, provider, model_type, description)
-        gr.Info(f"Added new model: {name}")
+        gr.Info(
+            f"Added new model: {name}",
+            duration=3
+        )
         
         # Return empty values for inputs and updated models list for display
         models = get_llm_models()
@@ -64,13 +76,17 @@ def add_model(name, model_id, provider, model_type, description):
         gr.Error(str(e))
         return name, model_id, provider, model_type, description, None
 
+
 def delete_model(name):
     """Delete an LLM model"""
     try:
         if not name:
             raise ValueError("Model name is required")
         delete_llm_model(name)
-        gr.Info(f"Deleted model: {name}")
+        gr.Info(
+            f"Deleted model: {name}",
+            duration=3
+        )
         
         # Return empty value for input and updated models list for display
         models = get_llm_models()
@@ -82,73 +98,34 @@ def delete_model(name):
         gr.Error(str(e))
         return name, None
 
-def update_module_settings(module_name, config_text):
-    """Update module settings from config text"""
+
+def update_module_configs(module_name, config_json):
+    """Update module settings from JSON config text"""
     try:
-        # Parse config text into dictionary
-        config = {}
-        current_section = None
-        current_sub_module = None
+        # Parse JSON config text
+        config = json.loads(config_json)
         
-        for line in config_text.split('\n'):
-            line = line.strip()
-            if not line:
-                continue
-                
-            if line.startswith('Name:'):
-                config['name'] = line.split(':', 1)[1].strip()
-            elif line.startswith('Default Model:'):
-                config['default_model'] = line.split(':', 1)[1].strip()
-            elif line.startswith('System Prompt:'):
-                if current_sub_module:
-                    if 'sub_modules' not in config:
-                        config['sub_modules'] = {}
-                    if current_sub_module not in config['sub_modules']:
-                        config['sub_modules'][current_sub_module] = {}
-                    config['sub_modules'][current_sub_module]['system_prompt'] = line.split(':', 1)[1].strip()
-                else:
-                    config['system_prompt'] = line.split(':', 1)[1].strip()
-            elif line == 'Parameters:':
-                current_section = 'parameters'
-                if current_sub_module:
-                    if 'sub_modules' not in config:
-                        config['sub_modules'] = {}
-                    if current_sub_module not in config['sub_modules']:
-                        config['sub_modules'][current_sub_module] = {}
-                    config['sub_modules'][current_sub_module]['parameters'] = {}
-                else:
-                    config['parameters'] = {}
-            elif line == 'Sub Modules:':
-                current_section = 'sub_modules'
-                config['sub_modules'] = {}
-            elif line.endswith(':'):
-                if current_section == 'sub_modules':
-                    current_sub_module = line[:-1].strip()
-                    if current_sub_module not in config['sub_modules']:
-                        config['sub_modules'][current_sub_module] = {}
-            elif current_section == 'parameters':
-                if ':' in line:
-                    key, value = line.strip().split(':', 1)
-                    key = key.strip()
-                    value = value.strip()
-                    try:
-                        # Try to convert value to number if possible
-                        value = float(value) if '.' in value else int(value)
-                    except ValueError:
-                        pass
-                    
-                    if current_sub_module:
-                        config['sub_modules'][current_sub_module]['parameters'][key] = value
-                    else:
-                        config['parameters'][key] = value
+        # Get current config to preserve internal fields
+        current_config = get_module_config(module_name)
+        if not current_config:
+            raise ValueError(f"Failed to get current config for module: {module_name}")
+            
+        # Update with new values while preserving internal fields
+        current_config.update(config)
         
         # Update module config
-        update_module_config(module_name, config)
-        gr.Info(f"Updated {module_name} module settings")
+        update_module_config(module_name, current_config)
+        gr.Info(
+            f"Updated {module_name} module settings",
+            duration=3
+        )
         
         # Return updated configuration text
-        return format_config_text(get_module_config(module_name))
+        return format_config_json(get_module_config(module_name))
         
+    except json.JSONDecodeError as e:
+        gr.Error(f"Invalid JSON format: {str(e)}")
+        raise
     except Exception as e:
         gr.Error(f"Failed to update module settings: {str(e)}")
         raise

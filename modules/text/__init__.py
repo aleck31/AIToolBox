@@ -1,10 +1,43 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 from utils import format_resp, format_msg
-from common import USER_CONF, translate_text
-from common.llm_config import get_module_config
-# from utils.web import convert_url_text
-from llm import bedrock_generate
+from common import translate_text
+from common.llm_config import get_default_model
+from llm.claude import bedrock_generate
+
+
+LANGS = ["en_US", "zh_CN", "zh_TW", "ja_JP", "de_DE", "fr_FR"]
+STYLES = {
+    "正常": {
+        'description': '清晰自然的表达',
+        'prompt': 'Write in a clear, straightforward manner using standard language and natural flow',
+        "options": {}
+    },
+    "学术": {
+        'description': '学术风格，使用规范的学术用语, 严谨的论证结构, 客观中立的语气',
+        'prompt': 'Write in a formal academic style with precise terminology and logical structure. Use objective, analytical language and maintain a scholarly tone. Include clear argumentation and evidence-based statements. Avoid colloquialisms and maintain professional distance.',
+    },
+    "新闻": {
+        'description': '新闻报道风格, 简洁明了, 重点突出, 遵循 5W1H 原则',
+        'prompt': 'Write in a journalistic style following the 5W1H principle (Who, What, When, Where, Why, How). Present information objectively and concisely, with clear attribution and factual presentation. Use inverted pyramid structure, starting with the most important information.',
+    },
+    "文学": {
+        'description': '文学创作风格, 富有感情色彩, 善用修辞手法, 具有艺术性',
+        'prompt': 'Write with literary flair, employing rich imagery, metaphors, and elegant prose. Use varied sentence structures, descriptive language, and poetic devices. Create a sophisticated narrative flow with attention to rhythm and emotional resonance.',
+    },
+    "口语": {
+        'description': '口语化风格, 通俗易懂, 生动活泼, 接近日常表达',
+        'prompt': 'Write in a conversational tone that mirrors natural speech patterns. Use everyday expressions, contractions, and informal language while maintaining clarity. Include conversational fillers and casual transitions that people use in daily conversations.',
+    },    
+    "幽默": {
+        'description': '幽默风格, 俏皮的比喻',
+        'prompt': 'Write with wit and humor, using clever wordplay, amusing metaphors, and light-hearted tone. Include appropriate jokes or humorous observations where suitable. Keep the tone playful but not overly silly.',
+    },
+    "可爱": {
+        'description': '可爱风格, 语气活泼, 使用带有萌感的词汇或emoji',
+        'prompt': 'Write in an adorable and endearing style, using cheerful expressions, gentle language, and occasional emoticons. Add warmth and sweetness to the tone, making it feel friendly and approachable. Use diminutives and positive expressions where appropriate.',
+    } 
+}
 
 
 inference_params = {
@@ -25,83 +58,78 @@ additional_model_fields = {
 }
 
 
-def text_translate(text, source_lang, target_lang):
+def text_proofread(text, options=None):
     if text == '':
         return "Tell me something first."
 
-    # Define prompts for text translate
-    system_tran = """
-       	You are a highly skilled translator with expertise in many languages. 
-        Your task is to identify the language of the text I provide and accurately translate it into the specified target language while preserving the meaning, tone, and nuance of the original text. 
-        Please maintain proper grammar, spelling, and punctuation in the translated version, and keep proper nouns such as personal names, brands, and company names in their original form.
+    options = options or {}
+    target_lang = options.get('target_lang', 'en_US')
+
+    # Define prompts for proofreading
+    system_proofread = f"""
+        You are a professional proofreader with expertise in grammar, spelling, and language mechanics across multiple languages.
+        Your task is to thoroughly check the text for any errors in spelling, grammar, punctuation, and sentence structure.
+        Provide the corrected version while maintaining the original meaning and style.
+        Ensure the output is in {target_lang} language.
         Output only with the succinct context and nothing else.
         """
-    prompt_tran = f"""
-        Translate the text within <original_text></original_text> tags to {target_lang} language:
-        <original_text>
+    prompt_proofread = f"""
+        Proofread and correct the text within <text></text> tags:
+        <text>
         {text}
-        </original_text>
+        </text>
         """
-    message_tran = format_msg({"text": prompt_tran}, 'user')
+    message_proofread = format_msg({"text": prompt_proofread}, 'user')
 
-    # Get module config for model selection
-    config = get_module_config('text')
-    model_id = config.get('default_model') if config else None
-    if not model_id:
-        model_id = USER_CONF.get_model_id('translate')
+    # Get model ID from module config
+    model_id = get_default_model('text')
 
-    # Get the llm reply
     resp = bedrock_generate(
-        messages=[message_tran],
-        system=[{'text':system_tran}],
+        messages=[message_proofread],
+        system=[{'text':system_proofread}],
         model_id=model_id,
-        params=inference_params,        
+        params=inference_params,
         additional_params=additional_model_fields
     )
 
-    translated_text = resp.get('content')[0].get('text')
+    proofread_text = resp.get('content')[0].get('text')
+    return format_resp(proofread_text)
 
-    return format_resp(translated_text)
 
-
-def text_rewrite(text, style):
+def text_rewrite(text, options=None):
     if text == '':
         return "Tell me something first."
 
-    Source_lang_code = translate_text(text, 'en').get('source_lang_code')
+    options = options or {}
+    style_key = options.get('style', '正常')
+    target_lang = options.get('target_lang', 'en_US')
+    # Source_lang_code = translate_text(text, target_lang).get('source_lang_code')
 
-    match style:
-        case "极简":
-            style = "concise and clear"
-        case "理性":
-            style = "rational and rigorous"
-        case "幽默":
-            style = "great humor"
-        case "可爱":
-            style = "cute and lovely"
-        case _:
-            style = "general"
+    # Get style prompt from STYLES dictionary
+    style_info = STYLES.get(style_key)
+    style_prompt = style_info['prompt']
 
     # Define prompts for text rewrite
     system_rewrite = f"""
         You are an experienced editor with a keen eye for detail and a deep understanding of language, style, and grammar.
         Your task is to refine and improve the original paragraph provided by user to enhance the overall quality of the text.
-        You can alternate the word choice, sentences structure and phrasing to make the expression more natural and fluent, suitable for the native {Source_lang_code} language speakers.
+        You can alternate the word choice, sentences structure and phrasing to make the expression more natural and fluent, 
+        suitable for the native {target_lang} language speakers.
         Output only with the succinct context and nothing else.
         """
     prompt_rewrite = f"""
-        Rewrite the text within <original_paragraph> </original_paragraph> tags in a {style} manner:
+        Rewrite the text within <original_paragraph> </original_paragraph> tags following this style instruction:
+        {style_prompt}
+        Ensuring the output is in {target_lang} language:
+
         <original_paragraph>
         {text}
         </original_paragraph>
         """
     message_rewrite = format_msg({"text": prompt_rewrite}, 'user')
 
-    # Get module config for model selection
-    config = get_module_config('text')
-    model_id = config.get('default_model') if config else None
-    if not model_id:
-        model_id = USER_CONF.get_model_id('rewrite')
+    # Get model ID from module config
+    model_id = get_default_model('text')
 
     # Get the llm reply
     resp = bedrock_generate(
@@ -117,44 +145,77 @@ def text_rewrite(text, style):
     return format_resp(polished_text)
 
 
-def text_summary(text: str, lang: str):
+def text_reduce(text, options=None):
     if text == '':
         return "Tell me something first."
 
-    # Define prompts for text summary
-    system_sum = """
-        You are a highly capable text summarization assistant. Your task is to summarize the given text comprehensively and faithfully.
-        Here are some guidelines for your summary:
-        1. Analyze the original text thoroughly, start with providing a one-sentence overview;
-        2. Then break it down by section, identifying key points, evidence and conclusions;
-        3. Aim for around 20% of the original text length, adjusting as needed based on the complexity and density of information;
-        4. Use your own words where possible, but retain important verbatim quotes or terms that are critical to the meaning;
-        5. Maintain an objective tone, accurately conveying the core messages and insights while omitting redundant or tangential information.
+    options = options or {}
+    target_lang = options.get('target_lang', 'en_US')
+
+    # Define prompts for text reduction
+    system_reduce = f"""
+        You are an expert in concise writing and text simplification.
+        Your task is to simplify the text by removing redundant information and simplifying sentence structure
+        while preserving the core message and key points. Focus on clarity and brevity.
+        Ensure the output is in {target_lang} language.
         Output only with the succinct context and nothing else.
         """
-    prompt_sum = f"""
-        Provide a comprehensive summary for the text within <original_text> </original_text> tags according to the guidelines in the {lang} language:
-        <original_text>
+    prompt_reduce = f"""
+        Simplify and reduce the text within <text></text> tags while maintaining the core message:
+        <text>
         {text}
-        </original_text>
+        </text>
         """
-    message_sum = format_msg({"text": prompt_sum}, 'user')
+    message_reduce = format_msg({"text": prompt_reduce}, 'user')
 
-    # Get module config for model selection
-    config = get_module_config('text')
-    model_id = config.get('default_model') if config else None
-    if not model_id:
-        model_id = USER_CONF.get_model_id('summary')
+    # Get model ID from module config
+    model_id = get_default_model('text')
 
-    # Get the llm reply
     resp = bedrock_generate(
-        messages=[message_sum],
-        system=[{'text':system_sum}],
+        messages=[message_reduce],
+        system=[{'text':system_reduce}],
         model_id=model_id,
-        params=inference_params,        
+        params=inference_params,
         additional_params=additional_model_fields
     )
 
-    summarized_text = resp.get('content')[0].get('text')
+    reduced_text = resp.get('content')[0].get('text')
+    return format_resp(reduced_text)
 
-    return format_resp(summarized_text)
+
+def text_expand(text, options=None):
+    if text == '':
+        return "Tell me something first."
+
+    options = options or {}
+    target_lang = options.get('target_lang', 'en_US')
+
+    # Define prompts for text expansion
+    system_expand = f"""
+        You are an expert content developer skilled in expanding and enriching text.
+        Your task is to enhance the original text by adding relevant details, examples, and background information
+        while maintaining coherence and natural flow. Keep the additions relevant and valuable to the context.
+        Ensure the output is in {target_lang} language.
+        Output only with the succinct context and nothing else.
+        """
+    prompt_expand = f"""
+        Expand the text within <text></text> tags by adding relevant details and background information:
+        <text>
+        {text}
+        </text>
+        """
+    message_expand = format_msg({"text": prompt_expand}, 'user')
+
+    # Get model ID from module config
+    model_id = get_default_model('text')
+
+    resp = bedrock_generate(
+        messages=[message_expand],
+        system=[{'text':system_expand}],
+        model_id=model_id,
+        params=inference_params,
+        additional_params=additional_model_fields
+    )
+
+    expanded_text = resp.get('content')[0].get('text')
+    return format_resp(expanded_text)

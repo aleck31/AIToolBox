@@ -14,7 +14,7 @@ tab_gemini = gr.ChatInterface(
         file_count='multiple',
         placeholder="Type a message or upload image(s)",
         scale=13,
-        min_width=60
+        min_width=90
     ),
     stop_btn='🟥'
 )

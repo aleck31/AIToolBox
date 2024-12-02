@@ -2,5 +2,7 @@ boto3
 gradio
 gradio_pdf
 google-generativeai
+itsdangerous
+gunicorn
 # selectolax
 # pdf2image

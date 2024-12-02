@@ -1,8 +1,8 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
-from common import USER_CONF
 from utils import format_msg
-from llm import bedrock_generate, bedrock_stream
+from common.llm_config import get_module_config
+from llm.claude import bedrock_generate, bedrock_stream
 
 
 # model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
@@ -39,11 +39,15 @@ def gen_code(requirement, program_language):
     """
     message_arch = format_msg({"text": prompt_arch}, 'user')
 
+    # Get module config for model selection
+    config = get_module_config('coding')
+    model_id = config.get('default_model') if config else None
+
     # Get the llm reply
     resp_arch = bedrock_generate(
         messages=[message_arch],
         system=[{'text': system_arch}],
-        model_id=USER_CONF.get_model_id('rewrite'),
+        model_id=model_id,
         params=inference_params,
         additional_params=additional_model_fields
     )
@@ -73,7 +77,7 @@ def gen_code(requirement, program_language):
     stream_resp = bedrock_stream(
         messages=[message_coder],
         system=[{'text': system_coder}],
-        model_id=USER_CONF.get_model_id('code'),
+        model_id=model_id,
         params=inference_params,
         additional_params=additional_model_fields
     )
@@ -126,11 +130,15 @@ def format_text(text, target_format):
 
     message_code = format_msg({"text": prompt_format}, 'user')
 
+    # Get module config for model selection
+    config = get_module_config('coding')
+    model_id = config.get('default_model') if config else None
+
     # Get the llm reply
     resp = bedrock_generate(
         messages=[message_code],
         system=[{'text': system_format}],
-        model_id=USER_CONF.get_model_id('code'),
+        model_id=model_id,
         params=inference_params,
         additional_params=additional_model_fields
     )

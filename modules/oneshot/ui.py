@@ -4,7 +4,7 @@ import gradio as gr
 from . import gen_with_think
 
 def format_retry_input(current_input, previous_output):
-    """Format the retry input combining original request and previous response"""
+    """Format the retry input maintaining conversation context"""
     if isinstance(current_input, dict):
         text = current_input.get("text", "")
         files = current_input.get("files", [])
@@ -13,12 +13,19 @@ def format_retry_input(current_input, previous_output):
         files = []
     
     retry_text = f"""
-    Based on my request: {text}
+    Previous conversation:
+    User: {text}
+    Assistant: {previous_output}
 
-    And your previous response:
-    {previous_output}
+    Please continue our conversation, taking into account the context above. 
+    Feel free to:
+    - Ask clarifying questions if needed
+    - Build upon previous ideas
+    - Suggest related topics or alternatives
+    - Provide more detailed explanations
+    - Challenge assumptions or explore different perspectives
 
-    Try to provide a different or improved response, exploring new perspectives or approaches.
+    User: {text}
     """
 
     return {"text": retry_text, "files": files}
@@ -42,37 +49,39 @@ with gr.Blocks(theme=gr.themes.Soft()) as tab_oneshot:
                     placeholder="Type a message or upload image(s)",
                     scale=13,
                     min_width=60,
-                    lines=8
+                    lines=8,
+                    submit_btn="✨ Go",
+                    container=False
                 )
             with gr.Accordion(label='Response', open=True):
                 output = gr.Markdown(
+                    header_links=True,
                     show_label=False,
                     line_breaks=True,
                     value=""
                 )
 
-        with gr.Column(scale=2):    
-            submit_btn = gr.Button("✨ Go", variant="primary")
-            retry_btn = gr.Button("🔄 Try more", variant="secondary")  # Added retry button
-            # Create ClearButton with both input and output components
+        with gr.Column(scale=2, min_width=200):    
+            retry_btn = gr.Button("🤔 Ask further", variant="secondary")  # Updated label
             clear_btn = gr.ClearButton(
                 value="🗑️ Clear",
-                components=[input_box, output]  # Now output is defined before being used here
+                components=[input_box, output]
             )
 
     examples = gr.Examples(
         examples=['写一首关于梦想的打油诗'],
-        inputs=input_box
+        inputs=[input_box]
     )
 
-    submit_btn.click(
+    # Connect the submit event directly to the input box
+    input_box.submit(
         fn=gen_with_think,
         inputs=input_box,
         outputs=output,
         api_name="oneshot"
     )
 
-    # For retry button with previous response
+    # Enhanced retry functionality for better conversation flow
     retry_btn.click(
         fn=handle_retry_generation,
         inputs=[input_box, output],

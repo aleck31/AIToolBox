@@ -8,10 +8,11 @@
         body {
             display: flex;
             justify-content: center;
-            align-items: center;
-            min-height: 100vh;
+            align-items: flex-start;
+            min-height: 76vh;
             margin: 0;
             background-color: #f5f5f5;
+            padding-top: 20vh;
         }
         .login-container {
             width: 90%;
@@ -19,7 +20,14 @@
             padding: 20px;
             background: white;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        .banner {
+            margin: -20px -20px 20px -20px;
+            height: 60px;
+            background-color: #f0f0f0;
+            border-radius: 8px 8px 0 0;
+            border-bottom: 1px solid #eee;
         }
         .login-form {
             margin-top: 1rem;
@@ -28,6 +36,7 @@
             text-align: center;
             color: #333;
             margin-bottom: 1.5rem;
+            font-size: 1.2em;
         }
         .error-message {
             color: #dc3545;
@@ -37,11 +46,30 @@
         .login-button {
             margin-top: 1rem !important;
         }
+        .pure-form label {
+            padding: 0.5rem 0;
+            margin-top: 0.5rem;
+        }
+        .forgot-password {
+            display: block;
+            text-align: right;
+            margin: 0.5rem 0;
+            font-size: 0.9em;
+            color: #666;
+            text-decoration: none;
+        }
+        .forgot-password:hover {
+            text-decoration: underline;
+        }
         @media (prefers-color-scheme: dark) {
             body { background-color: #1a1a1a; }
             .login-container { 
                 background: #2d2d2d;
                 color: #fff;
+            }
+            .banner {
+                background-color: #3d3d3d;
+                border-bottom-color: #4d4d4d;
             }
             .title { color: #fff; }
             .pure-form input { 
@@ -52,11 +80,15 @@
             .pure-form input::placeholder {
                 color: #888;
             }
+            .forgot-password {
+                color: #aaa;
+            }
         }
     </style>
 </head>
 <body>
     <div class="login-container">
+        <div class="banner"></div>
         <h1 class="title">Login</h1>
         <form class="pure-form pure-form-stacked login-form" action="/auth" method="POST">
             <fieldset>
@@ -67,7 +99,9 @@
                 <label for="password">Password</label>
                 <input type="password" id="password" name="password" required 
                        placeholder="Enter password" autocomplete="current-password" class="pure-input-1">
-
+                
+                <a href="#" class="forgot-password">Forgot your password?</a>
+   
                 <button type="submit" class="pure-button pure-button-primary pure-input-1 login-button">Login</button>
             </fieldset>
             {% if error %}

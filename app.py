@@ -1,50 +1,50 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
-import os
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from modules.login import router as login_router, get_user
 import gradio as gr
-from common.llm_config import init_default_llm_models
-from modules.chatbot.ui import tab_chatbot
-from modules.chatbot_gemini.ui import tab_gemini
-from modules.text.ui import tab_text
-from modules.vision.ui import tab_vision
-from modules.coding import view_code
-from modules.oneshot.ui import tab_oneshot
-from modules.draw import view_draw
-from modules.setting.ui import tab_setting
+from common.llm_config import init_default_models
+from common.config import get_config_value
+from modules.main_ui import create_main_interface
+from common.logger import logger
 
 
 def initialize_app():
     """Initialize app configurations"""
     # Initialize default LLM models if none exist
-    init_default_llm_models()
+    init_default_models()
 
-css = """ 
-    footer {visibility: hidden}
-    .app.svelte-182fdeq.svelte-182fdeq {padding: var(--size-4) var(--size-3)}
-    """
+# Get secret key from config or use default
+DEFAULT_SECRET_KEY = "aibox-default-secret-key-do-not-use-in-production"
+secret_key = get_config_value('SECRET_KEY', ['session', 'secret_key']) or DEFAULT_SECRET_KEY
 
+# Create FastAPI app
 app = FastAPI()
 
 # Add session middleware
 app.add_middleware(
     SessionMiddleware,
-    secret_key=os.environ.get('SECRET_KEY') or "a_very_secret_key",
-    session_cookie="session"
-)
+    secret_key=secret_key,
+    session_cookie="session",
+    max_age=7200,  # 2 hours
+    same_site="lax",  # Prevents CSRF while allowing normal navigation
+    https_only=False,  # Set to True in production with HTTPS
+    path="/",  # Make cookie available for all paths    
+    )
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
 
 # Include login routes
@@ -53,33 +53,29 @@ app.include_router(login_router)
 @app.get('/')
 def public(request: Request):
     """Root route handler"""
-    user = get_user(request)
-    if user:
+    logger.debug("Accessing root path")
+    try:
+        get_user(request)
+        logger.debug("User found, redirecting to main")
         return RedirectResponse(url='/main')
-    else:
+    except HTTPException:
+        logger.debug("No user found, redirecting to login")
         return RedirectResponse(url='/login')
 
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
 
-# Create main interface with authentication
-_main_ui = gr.TabbedInterface(
-    [
-        tab_chatbot, tab_gemini, tab_text, tab_vision, tab_oneshot,
-        view_code.tab_coding, view_draw.tab_draw, tab_setting
-    ],
-    tab_names=[
-        "Claude 🤖", "Gemini 👾", "Text 📝", "Vision 👀", "OneShot 🎯",
-        "Coding 💻", "Draw 🎨", "Setting ⚙️"
-    ],
-    title="AI Box - GenAI懒人工具箱",
-    theme="Base",
-    css=css
-).queue()
+# Create main interface
+main_ui = create_main_interface()
 
-# Mount main interface with auth
-app = gr.mount_gradio_app(app, _main_ui, path="/main", auth_dependency=get_user)
+# Mount Gradio app with auth_dependency
+app = gr.mount_gradio_app(
+    app, 
+    main_ui, 
+    path="/main",
+    auth_dependency=get_user
+)
 
 if __name__ == "__main__":
     # Initialize app configurations
