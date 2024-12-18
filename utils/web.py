@@ -4,7 +4,7 @@ import random
 import requests
 from requests.exceptions import HTTPError
 # from selectolax.parser import HTMLParser
-from common.logger import logger
+from core.logger import logger
 # from gne import GeneralNewsExtractor
 
 

@@ -1,9 +1,9 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 from utils import format_resp, format_msg
-from common.llm_config import get_default_model
-from llm.claude import bedrock_stream
-from common.logger import logger
+from core.integration.module_config import module_config
+from llm.claude_deprecated import bedrock_stream
+from core.logger import logger
 
 
 inference_params = {
@@ -77,7 +77,7 @@ def text_summary(text: str, target_lang: str):
 
     try:
         # Get default model id for Summary module
-        model_id = get_default_model('summary')
+        model_id = module_config.get_default_model('summary')
 
         # Get streaming response
         stream_resp = bedrock_stream(

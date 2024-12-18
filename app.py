@@ -5,44 +5,53 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-from modules.login import router as login_router, get_user
 import gradio as gr
-from common.llm_config import init_default_models
-from common.config import get_config_value
+
+from core.config import app_config  # Fixed import path
+from llm.model_manager import model_manager
+from core.auth import get_current_user
+from modules.login import router as login_router, get_user
 from modules.main_ui import create_main_interface
-from common.logger import logger
+from core.logger import logger
 
-
-def initialize_app():
-    """Initialize app configurations"""
-    # Initialize default LLM models if none exist
-    init_default_models()
-
-# Get secret key from config or use default
-DEFAULT_SECRET_KEY = "aibox-default-secret-key-do-not-use-in-production"
-secret_key = get_config_value('SECRET_KEY', ['session', 'secret_key']) or DEFAULT_SECRET_KEY
+# Get configurations from app_config
+server_config = app_config.server_config
+security_config = app_config.security_config
+cors_config = app_config.cors_config
 
 # Create FastAPI app
 app = FastAPI()
 
+@app.on_event("startup")
+async def startup_event():
+    """Initialize app on startup"""
+    try:
+        logger.info("Initializing application...")
+        # Initialize default LLM models if none exist
+        model_manager.init_default_models()
+        logger.info("Application initialization complete")
+    except Exception as e:
+        logger.error(f"Failed to initialize application: {str(e)}")
+        raise
+
 # Add session middleware
 app.add_middleware(
     SessionMiddleware,
-    secret_key=secret_key,
+    secret_key=security_config['secret_key'],
     session_cookie="session",
-    max_age=7200,  # 2 hours
+    max_age=security_config['token_expiration'],
     same_site="lax",  # Prevents CSRF while allowing normal navigation
-    https_only=False,  # Set to True in production with HTTPS
+    https_only=security_config['ssl_enabled'],  # Enable for production with HTTPS
     path="/",  # Make cookie available for all paths    
-    )
+)
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_config['allow_origins'],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_methods=cors_config['allow_methods'],
+    allow_headers=cors_config['allow_headers'],
     expose_headers=["*"],
     max_age=3600,
 )
@@ -64,6 +73,7 @@ def public(request: Request):
 
 @app.get("/health")
 async def health_check():
+    """Health check endpoint"""
     return {"status": "healthy"}
 
 # Create main interface
@@ -78,10 +88,10 @@ app = gr.mount_gradio_app(
 )
 
 if __name__ == "__main__":
-    # Initialize app configurations
-    initialize_app()
+    # Start server with configuration from app_config
     uvicorn.run(
         app,
-        host='127.0.0.1', 
-        port=8886
+        host=server_config['host'],
+        port=server_config['port'],
+        debug=server_config['debug']
     )

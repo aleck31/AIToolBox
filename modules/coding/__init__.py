@@ -1,8 +1,8 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 from utils import format_msg
-from common.llm_config import get_module_config
-from llm.claude import bedrock_generate, bedrock_stream
+from core.integration.module_config import module_config
+from llm.claude_deprecated import bedrock_generate, bedrock_stream
 
 
 # model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
@@ -39,9 +39,8 @@ def gen_code(requirement, program_language):
     """
     message_arch = format_msg({"text": prompt_arch}, 'user')
 
-    # Get module config for model selection
-    config = get_module_config('coding')
-    model_id = config.get('default_model') if config else None
+    # Get model ID from module config
+    model_id = module_config.get_default_model('coding')
 
     # Get the llm reply
     resp_arch = bedrock_generate(
@@ -130,9 +129,8 @@ def format_text(text, target_format):
 
     message_code = format_msg({"text": prompt_format}, 'user')
 
-    # Get module config for model selection
-    config = get_module_config('coding')
-    model_id = config.get('default_model') if config else None
+    # Get model ID from module config
+    model_id = module_config.get_default_model('coding')
 
     # Get the llm reply
     resp = bedrock_generate(

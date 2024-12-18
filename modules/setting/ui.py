@@ -1,9 +1,12 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
-from common.llm_config import get_llm_models, get_module_config, VALID_MODEL_TYPES
+from fastapi import HTTPException
+from llm.model_manager import model_manager, VALID_MODEL_TYPES
+from core.integration.module_config import module_config
 from . import update_module_configs, delete_model, add_model, format_config_json
-from common.logger import logger
+from core.logger import logger
+from modules.login import get_user
 
 
 MODULE_LIST = ['chatbot', 'chatbot-gemini', 'text', 'summary', 'vision', 'coding', 'oneshot', 'draw']
@@ -11,7 +14,7 @@ MODULE_LIST = ['chatbot', 'chatbot-gemini', 'text', 'summary', 'vision', 'coding
 def refresh_configs():
     """Refresh module configurations"""
     # Get module configs
-    module_configs = [format_config_json(get_module_config(m)) for m in MODULE_LIST]
+    module_configs = [format_config_json(module_config.get_module_config(m)) for m in MODULE_LIST]
     
     # Return all data
     return module_configs
@@ -22,30 +25,37 @@ def refresh_models():
     # Get models data
     models_data = [[m['name'], m['model_id'], m.get('provider', ''), 
                    m.get('model_type', 'text'), m.get('description', '')] 
-                  for m in get_llm_models()]
+                  for m in model_manager.get_models()]
     
     return models_data
 
 
-def get_current_user(): # to-be-fixed
-    """Get current loged in user"""
+def get_current_user():
+    """Get current logged in user"""
     try:
-        # Get username from Gradio request 
+        # Get request from Gradio context
         request = gr.Request().request
         logger.debug(f"Gradio request is: {request}")
 
-        username = request.session.get('user')
-        logger.debug(f"Current User data from Gradio request session: {username}")
-    except Exception:
-        # Return empty username if not found
-        username = 'n/a'
-        
-    return username
+        if not request:
+            return "Not authenticated"
+
+        # Use the get_user function from login module
+        try:
+            username = get_user(request)
+            logger.debug(f"Current username from session: {username}")
+            return username
+        except HTTPException:
+            return "Not authenticated"
+            
+    except Exception as e:
+        logger.error(f"Error getting current user: {str(e)}")
+        return "Error getting user"
 
 
 def get_model_choices():
     """Get list of available models for dropdown"""
-    models = get_llm_models()
+    models = model_manager.get_models()
     # Return list of tuples (label, value) where label is model name and value is model_id
     return [(m['name'], m['model_id']) for m in models]
 
@@ -54,7 +64,7 @@ def update_default_model(module_name, model_id, config_text):
     """Update default model for a module"""
     try:
         # Get current config
-        config = get_module_config(module_name)
+        config = module_config.get_module_config(module_name)
         if not config:
             raise ValueError(f"Failed to get config for module: {module_name}")
         

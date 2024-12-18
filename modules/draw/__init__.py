@@ -7,9 +7,9 @@ import base64
 import random
 from PIL import Image
 from botocore.exceptions import ClientError
-from common.logger import logger
-from common.llm_config import get_default_model
-from llm.claude import bedrock_runtime, bedrock_generate
+from core.logger import logger
+from core.integration.module_config import module_config
+from llm.claude_deprecated import bedrock_runtime, bedrock_generate
 
 
 inference_params = {
@@ -92,7 +92,7 @@ def prompt_optimizer(prompt):
     }
 
     # Get model ID from module config
-    model_id = get_default_model('draw')
+    model_id = module_config.get_default_model('draw')
 
     # Get the llm reply
     resp = bedrock_generate(
@@ -115,7 +115,7 @@ def text_image(prompt: str, negative: str, style, step: int, seed, is_random):
     :return: image and random seed
     """
     # Get model ID from module config
-    model_id = get_default_model('draw')
+    model_id = module_config.get_default_model('draw')
 
     # change seed from Double to Int
     seed = random_seed() if is_random else int(seed)

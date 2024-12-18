@@ -4,9 +4,8 @@ import os
 import json
 from botocore.exceptions import ClientError
 from utils import bedrock
-from common.logger import logger
-from common.config import BEDROCK_REGION
-from common.llm_config import get_module_config
+from core.logger import logger
+from core.config import env_config
 
 
 # os.environ["BEDROCK_ASSUME_ROLE"] = "<YOUR_ROLE_ARN>"  # E.g. "arn:aws:..."
@@ -14,7 +13,7 @@ from common.llm_config import get_module_config
 
 # Create new bedrock client
 bedrock_runtime = bedrock.get_bedrock_client(
-    region=BEDROCK_REGION,
+    region_name=env_config.bedrock_config['default_region'],
     assume_role_arn=os.environ.get("BEDROCK_ASSUME_ROLE")
 )
 
@@ -25,7 +24,7 @@ def test_connection():
     :return: The list of available bedrock foundation models.
     """
     bedrock_client = bedrock.get_bedrock_client(
-        region=BEDROCK_REGION,
+        region_name=env_config.bedrock_config['default_region'],
         assume_role_arn=os.environ.get("BEDROCK_ASSUME_ROLE"),
         runtime=False
     )

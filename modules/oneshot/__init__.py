@@ -1,9 +1,10 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 from utils import format_msg
-from llm.claude import bedrock_stream
-from common.logger import logger
-from common.llm_config import get_default_model
+from llm.claude_deprecated import bedrock_stream
+from core.logger import logger
+
+from core.integration.module_config import module_config
 from .prompts import system_prompt
 
 
@@ -48,7 +49,7 @@ def gen_with_think(input_data):
         formatted_msg = format_msg(message, 'user')
 
         # Get model ID from module configuration
-        model_id = get_default_model('oneshot')
+        model_id = module_config.get_default_model('oneshot')
 
         # Get streaming response from Claude
         stream_resp = bedrock_stream(

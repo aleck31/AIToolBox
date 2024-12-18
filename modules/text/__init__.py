@@ -1,9 +1,9 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 from utils import format_resp, format_msg
-from common import translate_text
-from common.llm_config import get_default_model
-from llm.claude import bedrock_generate
+from utils.aws import translate_text
+from core.integration.module_config import module_config
+from llm.claude_deprecated import bedrock_generate
 
 
 LANGS = ["en_US", "zh_CN", "zh_TW", "ja_JP", "de_DE", "fr_FR"]
@@ -82,7 +82,7 @@ def text_proofread(text, options=None):
     message_proofread = format_msg({"text": prompt_proofread}, 'user')
 
     # Get model ID from module config
-    model_id = get_default_model('text')
+    model_id = module_config.get_default_model('text')
 
     resp = bedrock_generate(
         messages=[message_proofread],
@@ -129,7 +129,7 @@ def text_rewrite(text, options=None):
     message_rewrite = format_msg({"text": prompt_rewrite}, 'user')
 
     # Get model ID from module config
-    model_id = get_default_model('text')
+    model_id = module_config.get_default_model('text')
 
     # Get the llm reply
     resp = bedrock_generate(
@@ -169,7 +169,7 @@ def text_reduce(text, options=None):
     message_reduce = format_msg({"text": prompt_reduce}, 'user')
 
     # Get model ID from module config
-    model_id = get_default_model('text')
+    model_id = module_config.get_default_model('text')
 
     resp = bedrock_generate(
         messages=[message_reduce],
@@ -207,7 +207,7 @@ def text_expand(text, options=None):
     message_expand = format_msg({"text": prompt_expand}, 'user')
 
     # Get model ID from module config
-    model_id = get_default_model('text')
+    model_id = module_config.get_default_model('text')
 
     resp = bedrock_generate(
         messages=[message_expand],

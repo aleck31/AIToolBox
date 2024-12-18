@@ -1,8 +1,12 @@
-boto3
+fastapi
 gradio
 gradio_pdf
+boto3
 google-generativeai
+
+# Utilities
+uvicorn[standard]
+python-dotenv
 itsdangerous
-gunicorn
 # selectolax
 # pdf2image

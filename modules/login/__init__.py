@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Request, Depends, HTTPException, Form
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
-from common.auth import cognito_auth
-from common.chat_memory import chat_memory
-from common.logger import logger
+from core.auth import cognito_auth
+from core.logger import logger
 import json
 from datetime import datetime
 
@@ -37,7 +36,7 @@ def log_unauth_access(request: Request, details: str = None):
 def get_user(request: Request):
     """Get current user from session"""
     # Log full session data at DEBUG level
-    logger.debug(f"Full request session data: {dict(request.session)}")
+    # logger.debug(f"Full request session data: {dict(request.session)}")
     
     user = request.session.get('user')
     
@@ -104,7 +103,6 @@ async def logout(request: Request):
         logger.debug(f"Session data before clear: {dict(request.session)}")
         request.session.clear()
         logger.debug("Session cleared during logout")
-        chat_memory.clear()
         
         # Create response with redirect
         response = RedirectResponse(url='/login')
