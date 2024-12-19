@@ -1,5 +1,5 @@
 import gradio as gr
-from typing import List, Dict, Optional, AsyncGenerator, Any
+from typing import List, Dict, Optional, AsyncGenerator, Any, Union
 from core.logger import logger
 from core.integration.chat_service import ChatService
 from core.session.dynamodb_manager import DynamoDBSessionManager
@@ -57,7 +57,7 @@ class ChatHandlers:
     @classmethod
     async def handle_chat(
         cls,
-        message: str,
+        message: Union[str, Dict],
         history: List[Dict[str, str]],
         style: str,
         request: gr.Request
@@ -65,7 +65,7 @@ class ChatHandlers:
         """Handle chat messages with streaming support
         
         Args:
-            message: User's message text
+            message: User's message (can be string or dict with text and files)
             history: Chat history list (managed by Gradio)
             style: Selected chat style
             request: Gradio request object containing session data
@@ -77,12 +77,26 @@ class ChatHandlers:
             # Initialize services if needed
             cls.initialize()
             
-            if not message:
-                yield {
-                    "role": "assistant",
-                    "content": "Please provide a message."
+            # Handle Gradio chatbox format
+            if isinstance(message, dict):
+                if not message.get("text"):
+                    yield {
+                        "role": "assistant",
+                        "content": "Please provide a message."
+                    }
+                    return
+                content = {
+                    "text": message["text"],
+                    "files": message.get("files", [])
                 }
-                return
+            else:
+                if not message:
+                    yield {
+                        "role": "assistant",
+                        "content": "Please provide a message."
+                    }
+                    return
+                content = {"text": message}
                 
             # Get user info from FastAPI session
             user_info = request.session.get('user', {})
@@ -107,7 +121,7 @@ class ChatHandlers:
             async for chunk in cls.chat_service.send_message(
                 session_id=session.session_id,
                 user_id=user_id,
-                content={"text": message}
+                content=content
             ):
                 yield {
                     "role": "assistant",

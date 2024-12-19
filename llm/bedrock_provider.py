@@ -61,6 +61,35 @@ class BedrockProvider(BaseLLMProvider):
         }
         return {k: v for k, v in params.items() if v is not None}
 
+    def _get_file_type_and_format(self, file_path: str) -> tuple:
+        """Determine file type and format from file path"""
+        ext = file_path.lower().split('.')[-1]
+        
+        # Image formats - normalize to Bedrock supported formats
+        if ext in ['jpg', 'jpeg']:
+            return 'image', 'jpeg'
+        elif ext in ['png', 'gif', 'webp']:
+            return 'image', ext
+        
+        # Document formats    
+        if ext in ['pdf', 'csv', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'md']:
+            return 'document', ext
+            
+        # Video formats
+        if ext in ['mkv', 'mov', 'mp4', 'webm', 'flv', 'mpeg', 'mpg', 'wmv', '3gp']:
+            return 'video', ext
+            
+        return None, None
+
+    def _read_file_bytes(self, file_path: str) -> bytes:
+        """Read file bytes from file path"""
+        try:
+            with open(file_path, 'rb') as f:
+                return f.read()
+        except Exception as e:
+            logger.error(f"Error reading file {file_path}: {str(e)}")
+            raise ModelError(f"Failed to read file {file_path}: {str(e)}")
+
     def prepare_messages(
         self,
         messages: List[Message]
@@ -75,15 +104,31 @@ class BedrockProvider(BaseLLMProvider):
                     "content": [{"text": message.content}]
                 })
             else:
-                # Handle multimodal content
+                # Handle Gradio chatbox format with text and files
                 content = []
+                
+                # Handle text content
                 if "text" in message.content:
-                    content.append({"text": message.content["text"]})
-                if "image" in message.content:
-                    content.append({
-                        "type": "image",
-                        "source": message.content["image"]
-                    })
+                    # If text is a dict with 'text' key (Gradio format), extract just the text
+                    text = message.content["text"]["text"] if isinstance(message.content["text"], dict) else message.content["text"]
+                    content.append({"text": text})
+                
+                # Handle files if present
+                if "files" in message.content and isinstance(message.content["files"], list):
+                    for file_path in message.content["files"]:
+                        file_type, format = self._get_file_type_and_format(file_path)
+                        if file_type:
+                            # Read file bytes
+                            file_bytes = self._read_file_bytes(file_path)
+                            content.append({
+                                file_type: {
+                                    "format": format,
+                                    "source": {
+                                        # "bytes": base64.b64encode(file_bytes).decode('utf-8')
+                                        "bytes": file_bytes
+                                    }
+                                }
+                            })
                 
                 formatted_messages.append({
                     "role": message.role,
@@ -165,7 +210,7 @@ class BedrockProvider(BaseLLMProvider):
             )
             
             # Process the streaming response
-            async for event in response['stream']:
+            for event in response['stream']:
                 try:
                     if 'contentBlockDelta' in event:
                         # Extract text from content block delta
