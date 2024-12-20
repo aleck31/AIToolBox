@@ -9,9 +9,8 @@ import gradio as gr
 
 from core.config import app_config  # Fixed import path
 from llm.model_manager import model_manager
-from core.auth import get_current_user
-from modules.login import router as login_router, get_user
-from modules.main_ui import create_main_interface
+from common.login import router as login_router, get_user
+from common.main_ui import create_main_interface
 from core.logger import logger
 
 # Get configurations from app_config

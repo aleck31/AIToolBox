@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT-0
 from utils import format_resp, format_msg
 from utils.aws import translate_text
-from core.integration.module_config import module_config
+from core.module_config import module_config
 from llm.claude_deprecated import bedrock_generate
 
 

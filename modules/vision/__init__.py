@@ -1,24 +1,24 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
-from core.integration.module_config import module_config
-from core.integration.service_factory import ServiceFactory
+from core.module_config import module_config
+from core.integration.gen_service import GenService
 from core.logger import logger
 from utils import format_msg
 
+#TobeFix: This module needs to be refactored, and the handler function should be reorganized into handler.py
 
 def vision_analyze_gemini(file_path: str, user_requirement=None):
     """Vision analysis using Gemini model"""
     try:
         # Get vision service from factory
-        vision_service = ServiceFactory.get_service('vision')
-        llm_vision = vision_service.get_model('gemini')
+        llm_vision = module_config.get_default_model('vision')
     except Exception as e:
         logger.warning(f"Failed to initialize vision model: {e}")
         yield "Failed to initialize vision model. Please try again later."
         return
 
-    # Get system prompt from configuration
-    system_prompt = module_config.get_system_prompt('vision') or "Analyze or describe the multimodal content according to the requirement:"
+    # At this stage, the system prompt is hard-coded; it will be retrieved from the database later.
+    system_prompt = "Analyze or describe the multimodal content according to the requirement:"
 
     # Define prompt template
     user_requirement = user_requirement or "Describe the media or document in detail."
@@ -26,7 +26,7 @@ def vision_analyze_gemini(file_path: str, user_requirement=None):
 
     try:
         # Use the service to analyze the image
-        for chunk in vision_service.analyze_image(
+        for chunk in GenService.analyze_image(
             file_path=file_path,
             prompt=text_prompt,
             stream=True
@@ -45,7 +45,7 @@ def vision_analyze_claude(file_path: str, user_requirement=None):
         vision_service = ServiceFactory.get_service('vision')
         
         # Get system prompt from configuration
-        system_prompt = module_config.get_system_prompt('vision') or '''
+        system_prompt = '''
             Analyze or describe the multimodal content according to the user's requirement.
             Respond using the language consistent with the user or the language specified in the <requirement> </requirement> tags.
             '''

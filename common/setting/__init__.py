@@ -4,7 +4,8 @@ import gradio as gr
 import json
 from decimal import Decimal
 from core.logger import logger
-from core.integration.module_config import module_config
+from core.module_config import module_config
+from llm.model_manager import model_manager, LLMModel
 
 
 def decimal_to_float(obj):
@@ -29,8 +30,6 @@ def format_config_json(config):
     # Add core fields
     if 'default_model' in config:
         display_config['default_model'] = config['default_model']
-    if 'system_prompt' in config:
-        display_config['system_prompt'] = config['system_prompt']
     if 'parameters' in config:
         display_config['parameters'] = config['parameters']
     if 'sub_modules' in config:
@@ -43,57 +42,66 @@ def format_config_json(config):
 
     if 'parameters' in display_config:
         params = display_config['parameters'].copy()
-    if 'max_tokens' in params:
-        display_config['parameters']['max_tokens'] = int(params.pop('max_tokens'))
+        if 'max_tokens' in params:
+            display_config['parameters']['max_tokens'] = int(params.pop('max_tokens'))
         
     # Convert to formatted JSON string
     return json.dumps(display_config, indent=2)
 
 
-def add_model(name, model_id, provider, model_type, description):
+def add_model(name, model_id, api_provider, type, description):
     """Add a new LLM model"""
     try:
         if not name or not model_id:
             raise ValueError("Model name and ID are required")
         
-        # Add new model with type
-        module_config.add_llm_model(name, model_id, provider, model_type, description)
+        # Create new LLMModel instance
+        model = LLMModel(
+            name=name,
+            model_id=model_id,
+            api_provider=api_provider,
+            type=type,
+            description=description
+        )
+        
+        # Add model using ModelManager
+        model_manager.add_model(model)
         gr.Info(
             f"Added new model: {name}",
             duration=3
         )
         
         # Return empty values for inputs and updated models list for display
-        models = module_config.get_llm_models()
-        models_data = [[m['name'], m['model_id'], m.get('provider', ''), 
-                       m.get('model_type', 'text'), m.get('description', '')] 
+        models = model_manager.get_models()
+        models_data = [[m.name, m.model_id, m.api_provider, m.type, m.description] 
                       for m in models]
         return "", "", "", "", "", models_data
     except Exception as e:
         gr.Error(str(e))
-        return name, model_id, provider, model_type, description, None
+        return name, model_id, api_provider, type, description, None
 
 
-def delete_model(name):
+def delete_model(model_id):
     """Delete an LLM model"""
     try:
-        if not name:
-            raise ValueError("Model name is required")
-        module_config.delete_llm_model(name)
+        if not model_id:
+            raise ValueError("Model ID is required")
+        
+        # Delete model using ModelManager
+        model_manager.delete_model(model_id)
         gr.Info(
-            f"Deleted model: {name}",
+            f"Deleted model: {model_id}",
             duration=3
         )
         
         # Return empty value for input and updated models list for display
-        models = module_config.get_llm_models()
-        models_data = [[m['name'], m['model_id'], m.get('provider', ''), 
-                       m.get('model_type', 'text'), m.get('description', '')] 
+        models = model_manager.get_models()
+        models_data = [[m.name, m.model_id, m.api_provider, m.type, m.description] 
                       for m in models]
         return "", models_data
     except Exception as e:
         gr.Error(str(e))
-        return name, None
+        return model_id, None
 
 
 def update_module_configs(module_name, config_json):

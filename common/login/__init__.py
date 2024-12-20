@@ -11,7 +11,7 @@ from datetime import datetime
 router = APIRouter()
 
 # Setup templates
-templates = Jinja2Templates(directory="modules/login")
+templates = Jinja2Templates(directory="common/login")
 
 
 def log_unauth_access(request: Request, details: str = None):

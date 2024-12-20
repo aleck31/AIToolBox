@@ -1,9 +1,10 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 from utils import format_msg
-from core.integration.module_config import module_config
+from core.module_config import module_config
 from llm.claude_deprecated import bedrock_generate, bedrock_stream
 
+#TobeFix: This module needs to be refactored, and the handler function should be reorganized into handler.py
 
 # model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
 

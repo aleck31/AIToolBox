@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
 from fastapi import HTTPException
-from llm.model_manager import model_manager, VALID_MODEL_TYPES
-from core.integration.module_config import module_config
+from llm.model_manager import model_manager, VALID_MODEL_TYPES, LLMModel
+from core.module_config import module_config
 from . import update_module_configs, delete_model, add_model, format_config_json
 from core.logger import logger
-from modules.login import get_user
+from common.login import get_user
 
 
 MODULE_LIST = ['chatbot', 'chatbot-gemini', 'text', 'summary', 'vision', 'coding', 'oneshot', 'draw']
@@ -22,16 +22,15 @@ def refresh_configs():
 
 def refresh_models():
     """Refresh models list"""
-    # Get models data
-    models_data = [[m['name'], m['model_id'], m.get('provider', ''), 
-                   m.get('model_type', 'text'), m.get('description', '')] 
-                  for m in model_manager.get_models()]
-    
+    # Get models and convert to list format for display
+    models = model_manager.get_models()
+    models_data = [[m.name, m.model_id, m.api_provider, m.type, m.description] 
+                  for m in models]
     return models_data
 
 
-def get_current_user():
-    """Get current logged in user"""
+def get_display_username():
+    """Get current logged in username for display in settings UI"""
     try:
         # Get request from Gradio context
         request = gr.Request().request
@@ -57,7 +56,7 @@ def get_model_choices():
     """Get list of available models for dropdown"""
     models = model_manager.get_models()
     # Return list of tuples (label, value) where label is model name and value is model_id
-    return [(m['name'], m['model_id']) for m in models]
+    return [(f"{m.name}, {m.api_provider}", m.model_id) for m in models]
 
 
 def update_default_model(module_name, model_id, config_text):
@@ -314,7 +313,7 @@ with gr.Blocks() as tab_setting:
 
         # Refresh button handler
         btn_refresh_all.click(
-            fn=lambda: [get_current_user()] + refresh_configs(),
+            fn=lambda: [get_display_username()] + refresh_configs(),
             inputs=[],
             outputs=[user_name, chatbot_config, chatbot_g_config, text_config, summary_config, vision_config, coding_config, oneshot_config, draw_config]
         )
@@ -328,7 +327,7 @@ with gr.Blocks() as tab_setting:
         with gr.Row():
             with gr.Column(scale=12):
                 models_list = gr.Dataframe(
-                    headers=["Name", "Model ID", "Provider", "Type", "Description"],
+                    headers=["Name", "Model ID", "API Provider", "Type", "Description"],
                     datatype=["str", "str", "str", "str", "str"],
                     label="Available Models",
                     interactive=False,
@@ -339,9 +338,9 @@ with gr.Blocks() as tab_setting:
             with gr.Column(scale=4):
                 # Add New Model
                 with gr.Group():
-                    new_model_name = gr.Textbox(label="Model Name", placeholder="e.g., my-claude3")
+                    new_model_name = gr.Textbox(label="Model Name", placeholder="e.g., Claude 3 Sonnet")
                     new_model_id = gr.Textbox(label="Model ID", placeholder="e.g., anthropic.claude-3-sonnet-20240229-v1:0")
-                    new_model_provider = gr.Textbox(label="Provider", placeholder="e.g., Anthropic")
+                    new_model_provider = gr.Textbox(label="API Provider", placeholder="e.g., Bedrock")
                     new_model_type = gr.Dropdown(
                         label="Model Type",
                         choices=VALID_MODEL_TYPES,
@@ -381,7 +380,7 @@ with gr.Blocks() as tab_setting:
 
     # Initial load
     tab_setting.load(
-        fn=lambda: [get_current_user()] + refresh_configs() + [refresh_models()],
+        fn=lambda: [get_display_username()] + refresh_configs() + [refresh_models()],
         inputs=[],
         outputs=[user_name, chatbot_config, chatbot_g_config, text_config, summary_config, vision_config, coding_config, oneshot_config, draw_config, models_list]
     )

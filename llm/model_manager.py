@@ -3,13 +3,89 @@ LLM model management and configuration
 """
 from typing import Dict, List, Optional
 from decimal import Decimal
+from dataclasses import dataclass
 from botocore.exceptions import ClientError
 from core.config import env_config
 from core.logger import logger
 from utils.aws import get_aws_resource
+from . import LLMConfig
 
 
 VALID_MODEL_TYPES = ['text', 'multimodal', 'image', 'embedding']
+
+
+@dataclass
+class LLMModel:
+    """Represents an LLM model configuration"""
+    name: str
+    model_id: str
+    api_provider: str
+    type: str
+    vendor: str = ""      # Optional
+    description: str = "" # Optional
+
+    def __post_init__(self):
+        """Validate model attributes after initialization"""
+        if not self.name:
+            raise ValueError("Model name is required")
+        if not self.model_id:
+            raise ValueError("Model ID is required")
+        if not self.api_provider:
+            raise ValueError("API provider is required")
+        if self.type not in VALID_MODEL_TYPES:
+            raise ValueError(f"Invalid model type. Must be one of: {', '.join(VALID_MODEL_TYPES)}")
+
+    def to_dict(self) -> Dict:
+        """Convert to dictionary for storage"""
+        return {
+            'name': self.name,
+            'model_id': self.model_id,
+            'api_provider': self.api_provider,
+            'type': self.type,
+            'vendor': self.vendor,
+            'description': self.description
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'LLMModel':
+        """Create from dictionary"""
+        return cls(
+            name=data['name'],
+            model_id=data['model_id'],
+            api_provider=data['api_provider'],
+            type=data.get('type', 'text'),
+            vendor=data.get('vendor', ''),
+            description=data.get('description', '')
+        )
+
+
+# Default model configurations
+DEFAULT_MODELS = [
+    LLMModel(
+        name='claude3.5-sonnet-v2',
+        model_id='anthropic.claude-3-5-sonnet-20241022-v2:0',
+        api_provider='Bedrock',
+        type='multimodal',
+        description='Claude 3.5 Sonnet model for general use',
+        vendor='Anthropic'
+    ),
+    LLMModel(
+        name='gemini-pro',
+        model_id='gemini-1.5-pro',
+        api_provider='Gemini',
+        type='multimodal',
+        description='Gemini Pro model for text and vision',
+        vendor='Google'
+    ),
+    LLMModel(
+        name='stable-diffusion',
+        model_id='stability.stable-image-ultra-v1:0',
+        api_provider='Bedrock',
+        type='image',
+        description='Stable Diffusion Ultra for image generation',
+        vendor='Stability AI'
+    )    
+]
 
 
 class ModelManager:
@@ -60,7 +136,23 @@ class ModelManager:
             return float(obj)
         return obj
 
-    def get_models(self) -> List[Dict]:
+    def get_model_by_id(self, model_id: str) -> Optional[LLMModel]:
+        """Get a specific LLM model by its ID
+        
+        Args:
+            model_id: The ID of the model to retrieve
+            
+        Returns:
+            LLMModel if found, None otherwise
+        """
+        try:
+            models = self.get_models()
+            return next((model for model in models if model.model_id == model_id), None)
+        except Exception as e:
+            logger.error(f"Error getting model by ID {model_id}: {str(e)}")
+            return None
+
+    def get_models(self) -> List[LLMModel]:
         """Get all configured LLM models"""
         try:
             response = self.table.get_item(
@@ -70,84 +162,46 @@ class ModelManager:
                 }
             )
             if 'Item' in response:
-                return self._convert_decimal_to_float(response['Item'].get('models', []))
+                models_data = self._convert_decimal_to_float(response['Item'].get('models', []))
+                return [LLMModel.from_dict(model_data) for model_data in models_data]
             return []
         except ClientError as e:
             logger.error(f"Error getting LLM models: {str(e)}")
             return []
 
-    def add_model(self, name: str, model_id: str, provider: str = None, 
-                 model_type: str = 'text', description: str = None) -> bool:
-        """
-        Add a new LLM model to the configuration
-        
-        Args:
-            name: Display name for the model
-            model_id: Unique identifier for the model
-            provider: Model provider (e.g., 'Anthropic', 'Google')
-            model_type: Type of model ('text', 'multimodal', 'image')
-            description: Optional description of the model
-            
-        Returns:
-            bool: True if successful, False otherwise
-            
-        Raises:
-            ValueError: If required fields are missing or invalid
-        """
+    def add_model(self, model: LLMModel) -> bool:
+        """Add a new LLM model to the configuration"""
         try:
-            if not name or not model_id:
-                raise ValueError("Model name and ID are required")
-            
-            if model_type not in VALID_MODEL_TYPES:  # Fixed: Using module-level constant
-                raise ValueError(f"Invalid model type. Must be one of: {', '.join(VALID_MODEL_TYPES)}")
-            
             # Get current models
             models = self.get_models()
             
             # Check if model with same name or model_id exists
-            for model in models:
-                if model['name'] == name:
-                    raise ValueError(f"Model with name '{name}' already exists")
-                if model['model_id'] == model_id:
-                    raise ValueError(f"Model with ID '{model_id}' already exists")
+            for existing in models:
+                if existing.name == model.name:
+                    raise ValueError(f"Model with name '{model.name}' already exists")
+                if existing.model_id == model.model_id:
+                    raise ValueError(f"Model with ID '{model.model_id}' already exists")
             
-            # Add new model
-            new_model = {
-                'name': name,
-                'model_id': model_id,
-                'model_type': model_type,
-                'provider': provider,
-                'description': description
-            }
-            models.append(new_model)
+            # Convert models to dict format for storage
+            models_data = [m.to_dict() for m in models]
+            models_data.append(model.to_dict())
             
             # Update table
             self.table.put_item(
                 Item={
                     'setting_name': 'llm_models',
                     'type': 'global',
-                    'models': models
+                    'models': models_data
                 }
             )
-            logger.info(f"Added new LLM model: {name} ({model_id})")
+            logger.info(f"Added new LLM model: {model.name} ({model.model_id})")
             return True
         except Exception as e:
             logger.error(f"Error adding LLM model: {str(e)}")
             raise
 
     def delete_model(self, model_id: str) -> bool:
-        """
-        Delete an LLM model by model_id
-        
-        Args:
-            model_id: The unique identifier of the model to delete
-            
-        Returns:
-            bool: True if successful, False otherwise
-            
-        Raises:
-            ValueError: If model_id is not found
-        """
+        """Delete an LLM model by model_id"""
         try:
             if not model_id:
                 raise ValueError("Model ID is required")
@@ -157,17 +211,20 @@ class ModelManager:
             
             # Find and remove model with matching model_id
             original_length = len(models)
-            models = [m for m in models if m['model_id'] != model_id]
+            filtered_models = [m for m in models if m.model_id != model_id]
             
-            if len(models) == original_length:
+            if len(filtered_models) == original_length:
                 raise ValueError(f"Model with ID '{model_id}' not found")
+            
+            # Convert models to dict format for storage
+            models_data = [m.to_dict() for m in filtered_models]
             
             # Update table
             self.table.put_item(
                 Item={
                     'setting_name': 'llm_models',
                     'type': 'global',
-                    'models': models
+                    'models': models_data
                 }
             )
             logger.info(f"Deleted LLM model with ID: {model_id}")
@@ -176,47 +233,26 @@ class ModelManager:
             logger.error(f"Error deleting LLM model: {str(e)}")
             raise
 
-    def init_default_models(self) -> Optional[List[Dict]]:
+    def init_default_models(self) -> Optional[List[LLMModel]]:
         """Initialize default LLM models if none exist"""
         try:
             models = self.get_models()
             if not models:
-                default_models = [
-                    {
-                        'name': 'claude3.5-sonnet-v2',
-                        'model_id': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-                        'provider': 'Anthropic',
-                        'model_type': 'multimodal',
-                        'description': 'Claude 3.5 Sonnet model for general use'
-                    },
-                    {
-                        'name': 'gemini-pro',
-                        'model_id': 'gemini-1.5-pro',
-                        'provider': 'Google',
-                        'model_type': 'multimodal',
-                        'description': 'Gemini Pro model for text and vision'
-                    },
-                    {
-                        'name': 'stable-diffusion',
-                        'model_id': 'stability.stable-image-ultra-v1:0',
-                        'provider': 'Stability',
-                        'model_type': 'image',
-                        'description': 'Stable Diffusion Ultra for image generation'
-                    }
-                ]
+                models_data = [model.to_dict() for model in DEFAULT_MODELS]
                 self.table.put_item(
                     Item={
                         'setting_name': 'llm_models',
                         'type': 'global',
-                        'models': default_models
+                        'models': models_data
                     }
                 )
                 logger.info("Initialized default LLM models")
-                return default_models
+                return DEFAULT_MODELS
             return models
         except Exception as e:
             logger.error(f"Error initializing default LLM models: {str(e)}")
             return None
+
 
 # Create a singleton instance
 model_manager = ModelManager()

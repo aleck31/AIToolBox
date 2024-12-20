@@ -4,26 +4,23 @@ from botocore.exceptions import ClientError
 from core.logger import logger
 from core.config import env_config
 from utils.aws import get_aws_client
-from . import (
-    BaseLLMProvider,
-    LLMConfig,
-    Message,
-    LLMResponse,
-    ModelProvider,
-    ConfigurationError,
-    AuthenticationError,
-    RateLimitError,
-    ModelError
-)
+from botocore import exceptions as boto_exceptions
+from . import LLMAPIProvider, LLMConfig, Message, LLMResponse
 
 
-class BedrockProvider(BaseLLMProvider):
+class BedrockProvider(LLMAPIProvider):
     """Amazon Bedrock LLM provider implementation"""
     
     def _validate_config(self) -> None:
         """Validate Bedrock-specific configuration"""
         if not self.config.model_id:
-            raise ConfigurationError("Model ID must be specified for Bedrock")
+            raise boto_exceptions.ParamValidationError(
+                report="Model ID must be specified for Bedrock"
+            )
+        if self.config.api_provider.upper() != 'BEDROCK':
+            raise boto_exceptions.ParamValidationError(
+                report=f"Invalid API provider: {self.config.api_provider}"
+            )
 
     def _initialize_client(self) -> None:
         """Initialize Bedrock client"""
@@ -31,11 +28,21 @@ class BedrockProvider(BaseLLMProvider):
             # Get region from env_config
             region = env_config.bedrock_config['default_region']
             if not region:
-                raise ConfigurationError("AWS region must be configured for Bedrock")
+                raise boto_exceptions.ParamValidationError(
+                    report="AWS region must be configured for Bedrock"
+                )
                 
             self.client = get_aws_client('bedrock-runtime', region_name=region)
         except Exception as e:
-            raise ConfigurationError(f"Failed to initialize Bedrock client: {str(e)}")
+            raise boto_exceptions.ClientError(
+                error_response={
+                    'Error': {
+                        'Code': 'InitializationError',
+                        'Message': f"Failed to initialize Bedrock client: {str(e)}"
+                    }
+                },
+                operation_name='initialize_client'
+            )
 
     def _handle_bedrock_error(self, error: ClientError) -> None:
         """Handle Bedrock-specific errors"""
@@ -43,13 +50,7 @@ class BedrockProvider(BaseLLMProvider):
         error_message = error.response['Error']['Message']
         
         if error_code in ['ThrottlingException', 'TooManyRequestsException']:
-            raise RateLimitError(f"Rate limit exceeded: {error_message}")
-        elif error_code in ['UnauthorizedException', 'AccessDeniedException']:
-            raise AuthenticationError(f"Authentication failed: {error_message}")
-        elif error_code == 'ValidationException':
-            raise ConfigurationError(f"Invalid configuration: {error_message}")
-        else:
-            raise ModelError(f"Bedrock error: {error_code} - {error_message}")
+            raise error  # Already a boto ClientError with proper error code
 
     def _prepare_inference_params(self, **kwargs) -> Dict:
         """Prepare model-specific inference parameters"""
@@ -88,7 +89,15 @@ class BedrockProvider(BaseLLMProvider):
                 return f.read()
         except Exception as e:
             logger.error(f"Error reading file {file_path}: {str(e)}")
-            raise ModelError(f"Failed to read file {file_path}: {str(e)}")
+            raise boto_exceptions.ClientError(
+                error_response={
+                    'Error': {
+                        'Code': 'FileReadError',
+                        'Message': f"Failed to read file {file_path}: {str(e)}"
+                    }
+                },
+                operation_name='read_file'
+            )
 
     def prepare_messages(
         self,
@@ -148,38 +157,48 @@ class BedrockProvider(BaseLLMProvider):
             formatted_messages = self.prepare_messages(messages)
             inference_params = self._prepare_inference_params(**kwargs)
             
-            system = [{"text": system_prompt}] if system_prompt else None
+            # Ensure system prompt is in correct format for Bedrock
+            system = [{"text": system_prompt}] if system_prompt else [{"text": ""}]
             
             # Handle additional parameters
             additional_params = {}
             if 'top_k' in kwargs:
                 additional_params['topK'] = kwargs['top_k']
             
-            response = self.client.invoke_model(
+            response = self.client.converse(
                 modelId=self.config.model_id,
-                body=json.dumps({
-                    "messages": formatted_messages,
-                    "system": system,
-                    "inferenceConfig": inference_params,
-                    **({"additionalModelRequestFields": additional_params} if additional_params else {})
-                })
+                messages=formatted_messages,
+                system=system,
+                inferenceConfig=inference_params,
+                **({"additionalModelRequestFields": additional_params} if additional_params else {})
             )
-            
+
             response_body = json.loads(response.get('body').read())
-            
+
+            response_metadata={
+                'usage': response.get('usage'),
+                'metrics': response.get('metrics'),
+                'stop_reason': response.get('stopReason'),
+                'performance_config': response.get('performanceConfig')
+            }
+
             return LLMResponse(
                 content=response_body.get('content', ''),
-                usage=response_body.get('usage', {}),
-                metadata={
-                    'model_id': self.config.model_id,
-                    'finish_reason': response_body.get('finish_reason')
-                }
+                metadata=response_metadata
             )
             
         except ClientError as e:
             self._handle_bedrock_error(e)
         except Exception as e:
-            raise ModelError(f"Unexpected error during generation: {str(e)}")
+            raise boto_exceptions.ClientError(
+                error_response={
+                    'Error': {
+                        'Code': 'UnexpectedError',
+                        'Message': f"Unexpected error during generation: {str(e)}"
+                    }
+                },
+                operation_name='generate'
+            )
 
     async def generate_stream(
         self,
@@ -192,8 +211,8 @@ class BedrockProvider(BaseLLMProvider):
             formatted_messages = self.prepare_messages(messages)
             inference_params = self._prepare_inference_params(**kwargs)
             
-            # Prepare system messages if provided
-            system = [{"text": system_prompt}] if system_prompt else None
+            # Ensure system prompt is in correct format for Bedrock
+            system = [{"text": system_prompt}] if system_prompt else [{"text": ""}]
             
             # Handle additional parameters
             additional_params = {}
@@ -209,29 +228,42 @@ class BedrockProvider(BaseLLMProvider):
                 **({"additionalModelRequestFields": additional_params} if additional_params else {})
             )
             
+            # Track response metadata
+            response_metadata = {
+                'stop_reason': None,
+                'usage': None,
+                'metrics': None,
+                'performance_config': None
+            }
+            
             # Process the streaming response
             for event in response['stream']:
                 try:
-                    if 'contentBlockDelta' in event:
+                    if 'messageStart' in event:
+                        # Capture role from message start
+                        response_metadata['role'] = event['messageStart'].get('role')
+                        
+                    elif 'contentBlockDelta' in event:
                         # Extract text from content block delta
                         delta = event['contentBlockDelta'].get('delta', {})
                         if 'text' in delta:
                             yield delta['text']
+                            
                     elif 'messageStop' in event:
-                        # Log any stop reason for debugging
-                        stop_reason = event['messageStop'].get('stopReason')
-                        if stop_reason:
-                            logger.debug(f"Stream stopped: {stop_reason}")
-                    elif 'internalServerException' in event:
-                        raise ModelError(f"Internal server error: {event['internalServerException']['message']}")
-                    elif 'modelStreamErrorException' in event:
-                        raise ModelError(f"Model stream error: {event['modelStreamErrorException']['message']}")
-                    elif 'validationException' in event:
-                        raise ConfigurationError(f"Validation error: {event['validationException']['message']}")
-                    elif 'throttlingException' in event:
-                        raise RateLimitError(f"Throttling error: {event['throttlingException']['message']}")
-                    elif 'serviceUnavailableException' in event:
-                        raise ModelError(f"Service unavailable: {event['serviceUnavailableException']['message']}")
+                        # Capture stop reason and additional fields
+                        response_metadata['stop_reason'] = event['messageStop'].get('stopReason')
+                        logger.debug(f"Stream stopped: {response_metadata['stop_reason']}")
+                        
+                    elif 'metadata' in event:
+                        # Capture complete metadata
+                        metadata = event['metadata']
+                        response_metadata.update({
+                            'usage': metadata.get('usage'),
+                            'metrics': metadata.get('metrics'),
+                            'performance_config': metadata.get('performanceConfig')
+                        })
+                        # Make metadata available to ChatService
+                        yield {'metadata': response_metadata}
                         
                 except Exception as e:
                     logger.error(f"Error processing stream event: {str(e)}")
@@ -241,4 +273,12 @@ class BedrockProvider(BaseLLMProvider):
             self._handle_bedrock_error(e)
         except Exception as e:
             logger.error(f"Streaming error: {str(e)}")
-            raise ModelError(f"Unexpected error during streaming: {str(e)}")
+            raise boto_exceptions.ClientError(
+                error_response={
+                    'Error': {
+                        'Code': 'UnexpectedError',
+                        'Message': f"Unexpected error during streaming: {str(e)}"
+                    }
+                },
+                operation_name='generate_stream'
+            )

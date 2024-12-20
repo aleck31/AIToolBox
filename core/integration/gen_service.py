@@ -2,36 +2,38 @@ from fastapi import HTTPException
 from datetime import datetime
 from typing import Dict, List, Optional, AsyncIterator
 from core.logger import logger
-from core.session import Session, SessionMetadata, SessionStore
+from core.session.models import Session, SessionError
+from core.session import SessionManager
 from llm.bedrock_provider import BedrockProvider
 from llm.gemini_provider import GeminiProvider
-from llm.openai_provider import OpenAIProvider
 from llm.model_manager import model_manager
 from llm import LLMConfig, Message, LLMAPIProvider
 
 
-class ChatService:
-    """Main service for handling chat interactions"""
+# TobeFix: Implement GenService functions according to module requirements
+#  GenService will be used by multiple modules, including text, vison, summary, coding, oneshot
+class GenService:
+    """General content generation service"""
     
     def __init__(
         self,
-        model_config: LLMConfig
+        llm_config: LLMConfig
     ):
-        """Initialize chat service with model configuration
+        """Initialize text service with model configuration
         
         Args:
-            model_config: LLM configuration containing model ID and parameters
+            llm_config: LLM configuration containing model ID and parameters
         """
-        self.session_store = SessionStore()
+        self.session_manager = SessionManager()
         self._llm_providers: Dict[str, LLMAPIProvider] = {}
         self._active_sessions: Dict[str, Dict[str, str]] = {}
         
         # Validate model exists and config matches
-        model = model_manager.get_model_by_id(model_config.model_id)
+        model = model_manager.get_model_by_id(llm_config.model_id)
         if not model:
-            raise ValueError(f"Model not found: {model_config.model_id}")
+            raise ValueError(f"Model not found: {llm_config.model_id}")
         
-        self.default_model_config = model_config
+        self.default_llm_config = llm_config
 
     def _get_llm_provider(self, model_id: str) -> LLMAPIProvider:
         """Get or create LLM API provider for given model
@@ -58,10 +60,10 @@ class ChatService:
         config = LLMConfig(
             api_provider=model.api_provider,
             model_id=model_id,
-            max_tokens=self.default_model_config.max_tokens,
-            temperature=self.default_model_config.temperature,
-            top_p=self.default_model_config.top_p,
-            stop_sequences=self.default_model_config.stop_sequences
+            max_tokens=self.default_llm_config.max_tokens,
+            temperature=self.default_llm_config.temperature,
+            top_p=self.default_llm_config.top_p,
+            stop_sequences=self.default_llm_config.stop_sequences
         )
         
         # Create and cache provider
@@ -69,18 +71,16 @@ class ChatService:
             provider = BedrockProvider(config)
         elif config.api_provider.upper() == 'GEMINI':
             provider = GeminiProvider(config)
-        elif config.api_provider.upper() == 'OPENAI':
-            provider = OpenAIProvider(config)      # 先占位，晚点再实现具体功能     
         else:
             raise ValueError(f"Unsupported API provider: {config.api_provider}")
             
         self._llm_providers[model_id] = provider
         return provider
 
-    async def get_chat_session(
+    async def get_gen_session(
         self,
         user_id: str,
-        module_name: str = 'chatbot',
+        module_name: str = 'text',
         session_name: Optional[str] = None
     ) -> Session:
         """Get existing active session or create new one"""
@@ -91,19 +91,19 @@ class ChatService:
                 session_id = user_sessions[module_name]
                 try:
                     # Verify session is still valid
-                    session = await self.session_store.get_session(session_id, user_id)
+                    session = await self.session_manager.get_session(session_id, user_id)
                     return session
-                except HTTPException:
+                except SessionError:
                     # Session expired or invalid, remove from tracking
                     if user_id in self._active_sessions:
                         self._active_sessions[user_id].pop(module_name, None)
 
-            # Create and cache session
+            # Create new session
             # model_id = module_config.get_default_model(module_name)
             session_name = session_name or f"{module_name.title()} Session"
             
             # Create session through session manager with standardized format
-            session = await self.session_store.create_session(
+            session = await self.session_manager.create_session(
                 user_id=user_id,
                 module_name=module_name,
                 session_name=session_name
@@ -118,21 +118,54 @@ class ChatService:
             logger.info(f"Created new chat session {session.session_id} for user {user_id}")
             return session
 
-        except HTTPException as e:
+        except SessionError as e:
             logger.error(f"Error in get_chat_session: {str(e)}")
-            raise e
+            raise HTTPException(
+                status_code=500,
+                detail=str(e)
+            )
 
-    async def send_message(
+    async def get_gen_session_by_id(
         self,
-        session_id,
-        user_id,
+        session_id: str,
+        user_id: str
+    ) -> Session:
+        """Get an existing chat session"""
+        try:
+            session = await self.session_manager.get_session(
+                session_id=session_id,
+                user_id=user_id
+            )
+            return session
+            
+        except SessionError as e:
+            logger.error(f"Failed to get chat session: {str(e)}")
+            raise HTTPException(
+                status_code=404 if "not found" in str(e) else 500,
+                detail=str(e)
+            )
+
+    async def generate_content():
+        pass
+
+    async def generate_stream(
+        self,
+        session_id: str,
+        user_id: str,
         content: Dict[str, str]
     ) -> AsyncIterator[str]:
         """Send a message in a chat session and stream the response"""
+        session = None
         try:
-            # get session
-            session = await self.session_store.get_session(session_id, user_id)
-
+            # Get session
+            session = await self.get_gen_session_by_id(session_id, user_id)
+            
+            # Create message
+            user_message = Message(
+                role="user",
+                content=content
+            )
+            
             # Get model ID from session
             model_id = session.metadata.model_id
             llm = self._get_llm_provider(model_id)
@@ -144,23 +177,15 @@ class ChatService:
                 "timestamp": datetime.now().isoformat()
             })
             
-            # Convert session history to messages
-            messages = []
-            for interaction in session.history:
-                messages.append(Message(
-                    role=interaction["role"],
-                    content=interaction["content"]
-                ))
-            
             # Stream response
             full_response = ""
             stream_metadata = None
             
             try:
-                # Get the stream from LLM with full conversation history
+                # Get the stream from LLM
                 async for chunk in llm.generate_stream(
-                    messages=messages,
-                    system_prompt=session.context['system_prompt']
+                    messages=[user_message],
+                    system_prompt=session.metadata.system_prompt
                 ):
                     # Handle metadata events from the stream
                     if isinstance(chunk, dict) and chunk.get('type') == 'metadata':
@@ -190,7 +215,7 @@ class ChatService:
                 session.add_interaction(interaction_data)
                 
                 # Single update to DynamoDB after streaming
-                await self.session_store.update_session(session, user_id)
+                await self.session_manager.update_session(session, user_id)
                     
             except Exception as e:
                 logger.error(f"LLM error in session {session_id}: {str(e)}")
@@ -199,45 +224,7 @@ class ChatService:
         except Exception as e:
             logger.error(f"Error in send_message: {str(e)}")
             yield "I apologize, but I encountered an error. Please try again."
-
-    async def list_chat_sessions(
-        self,
-        user_id: str,
-        tags: Optional[List[str]] = None,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
-    ) -> List[Session]:
-        """List chat sessions for a user"""
-        try:
-            return await self.session_store.list_sessions(
-                user_id=user_id,
-                module_name='chatbot',
-                tags=tags,
-                start_date=start_date,
-                end_date=end_date
-            )
-        except HTTPException as e:
-            logger.error(f"Failed to list chat sessions: {str(e)}")
-            raise e
-
-    async def delete_chat_session(
-        self,
-        session_id: str,
-        user_id: str
-    ) -> bool:
-        """Delete a chat session"""
-        try:
-            # Remove from active sessions if present
-            user_sessions = self._active_sessions.get(user_id, {})
-            for module_name, active_session_id in list(user_sessions.items()):
-                if active_session_id == session_id:
-                    user_sessions.pop(module_name)
-                    break
             
-            return await self.session_store.delete_session(
-                session_id=session_id,
-                user_id=user_id
-            )
-        except HTTPException as e:
-            logger.error(f"Failed to delete chat session: {str(e)}")
-            raise e
+
+    async def analyze_image():
+        pass

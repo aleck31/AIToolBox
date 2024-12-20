@@ -4,9 +4,10 @@ from utils import format_msg
 from llm.claude_deprecated import bedrock_stream
 from core.logger import logger
 
-from core.integration.module_config import module_config
+from core.module_config import module_config
 from .prompts import system_prompt
 
+#TobeFix: This module needs to be refactored, and the handler function should be reorganized into handler.py
 
 inference_params = {
     "maxTokens": 4096,

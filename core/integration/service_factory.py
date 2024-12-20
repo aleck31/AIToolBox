@@ -1,56 +1,22 @@
-import ast
 from typing import Optional
-from llm import LLMConfig, ModelProvider
-from ..session.dynamodb_manager import DynamoDBSessionManager
-from ..session.session_manager import AuthSessionManager
+from llm import LLMConfig
+from llm.model_manager import model_manager
+from ..session import SessionManager
 from .chat_service import ChatService
 from core.config import env_config
 from core.logger import logger
-from utils.aws import get_aws_client
+from utils.aws import get_secret
 
-
-def get_secret(secret_name):
-    '''Get user dict from Secrets Manager'''
-    try:
-        # Get Secrets Manager client using centralized AWS configuration
-        client = get_aws_client('secretsmanager')
-        
-        response = client.get_secret_value(
-            SecretId=secret_name
-        )
-        
-        # Decrypts secret using the associated KMS key.
-        secret = ast.literal_eval(response['SecretString'])
-        return secret
-        
-    except Exception as ex:
-        logger.error(f"Error getting secret {secret_name}: {str(ex)}")
-        raise
-
-
+'''
 class ServiceFactory:
     """Factory for creating and configuring services"""
     
     @staticmethod
-    def create_session_manager(
-        table_name: str = "aibox-sessions",
-        session_ttl: int = 7200,
-        region: str = env_config.default_region,
-        with_auth: bool = True
-    ) -> AuthSessionManager:
+    def create_session_manager() -> SessionManager:
         """Create and configure session manager"""
         try:
-            # Create base DynamoDB manager
-            base_manager = DynamoDBSessionManager(
-                table_name=table_name,
-                session_ttl=session_ttl,
-                region_name=region
-            )
-            
-            # Wrap with auth manager if requested
-            if with_auth:
-                return AuthSessionManager(base_manager=base_manager)
-            return base_manager
+            # Create SessionManager which internally creates DynamoDBStorage
+            return SessionManager()
             
         except Exception as e:
             logger.error(f"Failed to create session manager: {str(e)}")
@@ -58,53 +24,64 @@ class ServiceFactory:
 
     @staticmethod
     def create_default_llm_config(
-        provider: ModelProvider = ModelProvider.BEDROCK,
         model_id: Optional[str] = None,
         region: Optional[str] = None
     ) -> LLMConfig:
         """Create default LLM configuration"""
-        if provider == ModelProvider.BEDROCK:
-            # Default to Claude if no model specified
-            model_id = model_id or "anthropic.claude-v2"
-            region = region or env_config.bedrock_config['default_region']
-            
-            return LLMConfig(
-                provider=provider,
-                model_id=model_id,
-                region=region,
-                max_tokens=4096,
-                temperature=0.9,
-                top_p=0.99
-            )
-            
-        elif provider == ModelProvider.GEMINI:
-            # Default to Gemini Pro if no model specified
-            model_id = model_id or "gemini-pro"
-            gemini_secret_key=env_config.gemini_config['secret_id']
-            api_key = get_secret(gemini_secret_key).get('api_key')
-            
-            return LLMConfig(
-                provider=provider,
-                model_id=model_id,
-                api_key=api_key,
-                max_tokens=8192,
-                temperature=0.9,
-                top_p=0.99
-            )
-        else:
-            raise ValueError(f"Unsupported provider: {provider}")
+        try:
+            # Initialize default models if none exist
+            models = model_manager.get_models()
+            if not models:
+                model_manager.init_default_models()
+                models = model_manager.get_models()
+
+            # Get model configuration
+            if model_id:
+                # Find specific model
+                model = next((m for m in models if m.model_id == model_id), None)
+                if not model:
+                    raise ValueError(f"Model not found: {model_id}")
+            else:
+                # Use first available model as default
+                model = models[0]
+                model_id = model.model_id
+
+            # Create provider-specific configuration
+            if model.api_provider.upper() == 'BEDROCK':
+                region = region or env_config.bedrock_config['default_region']
+                return LLMConfig(
+                    api_provider=model.api_provider,
+                    model_id=model_id,
+                    max_tokens=4096,
+                    temperature=0.9,
+                    top_p=0.99
+                )
+            elif model.api_provider.upper() == 'GEMINI':
+
+                return LLMConfig(
+                    api_provider=model.api_provider,
+                    model_id=model_id,
+                    max_tokens=8192,
+                    temperature=0.9,
+                    top_p=0.99
+                )
+            else:
+                raise ValueError(f"Unsupported API provider: {model.api_provider}")
+
+        except Exception as e:
+            logger.error(f"Failed to create default LLM config: {str(e)}")
+            raise
 
     @staticmethod
     def create_chat_service(
-        session_manager: Optional[AuthSessionManager] = None,
-        llm_config: Optional[LLMConfig] = None,
-        with_auth: bool = True
+        session_manager: Optional[SessionManager] = None,
+        llm_config: Optional[LLMConfig] = None
     ) -> ChatService:
         """Create and configure chat service"""
         try:
             # Create session manager if not provided
             if session_manager is None:
-                session_manager = ServiceFactory.create_session_manager(with_auth=with_auth)
+                session_manager = ServiceFactory.create_session_manager()
                 
             # Create default LLM config if not provided
             if llm_config is None:
@@ -120,11 +97,11 @@ class ServiceFactory:
             raise
 
     @classmethod
-    def create_default_services(cls, with_auth: bool = True) -> ChatService:
+    def create_default_services(cls) -> ChatService:
         """Create services with default configuration"""
         try:
             # Create session manager
-            session_manager = cls.create_session_manager(with_auth=with_auth)
+            session_manager = cls.create_session_manager()
             
             # Create default LLM config
             llm_config = cls.create_default_llm_config()
@@ -132,10 +109,10 @@ class ServiceFactory:
             # Create chat service
             return cls.create_chat_service(
                 session_manager=session_manager,
-                llm_config=llm_config,
-                with_auth=with_auth
+                llm_config=llm_config
             )
             
         except Exception as e:
             logger.error(f"Failed to create default services: {str(e)}")
             raise
+'''

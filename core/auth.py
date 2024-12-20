@@ -1,15 +1,12 @@
 """
 Amazon Cognito authentication provider
 """
-from typing import Dict, Optional
 import boto3
 from botocore.exceptions import ClientError
-from fastapi import HTTPException, Security
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from typing import Dict, Optional
 from core.config import env_config
 from core.logger import logger
 
-security = HTTPBearer()
 
 class CognitoAuth:
     """Amazon Cognito authentication provider"""
@@ -210,10 +207,14 @@ class CognitoAuth:
 # Create a singleton instance
 cognito_auth = CognitoAuth()
 
+
 # FastAPI dependency
-def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security)) -> Dict:
+'''
+security = HTTPBearer()
+
+def verify_api_token(credentials: HTTPAuthorizationCredentials = Security(security)) -> Dict:
     """
-    FastAPI dependency for getting the current authenticated user
+    FastAPI dependency for verifying API token and getting the current authenticated user
     
     Args:
         credentials: The HTTP Authorization credentials
@@ -235,3 +236,4 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
         )
     
     return user_info
+'''

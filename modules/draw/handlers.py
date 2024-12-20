@@ -5,10 +5,10 @@ import re
 import json
 import base64
 import random
+from core.logger import logger
+from core.module_config import module_config
 from PIL import Image
 from botocore.exceptions import ClientError
-from core.logger import logger
-from core.integration.module_config import module_config
 from llm.claude_deprecated import bedrock_runtime, bedrock_generate
 
 
@@ -53,7 +53,6 @@ negative_prompts = [
     "poorly rendered",
     "poor background details"
 ]
-
 
 def random_seed():
     # Maximum 4294967295
@@ -105,7 +104,6 @@ def prompt_optimizer(prompt):
     opt_prompt = resp.get('content')[0].get('text')
 
     return opt_prompt
-
 
 def text_image(prompt: str, negative: str, style, step: int, seed, is_random):
     """

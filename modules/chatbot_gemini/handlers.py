@@ -1,43 +1,22 @@
 import gradio as gr
 from typing import List, Dict, Optional, AsyncGenerator, Any, Union
-from fastapi import HTTPException
 from core.logger import logger
+from llm import LLMConfig
 from core.integration.chat_service import ChatService
 from core.module_config import module_config
-from llm import LLMConfig
 from llm.model_manager import model_manager
 
 
-# Chat styles configuration
-CHAT_STYLES = {
-    "正常": {
-        "description": "自然友好的对话风格",
-        'prompt': "Maintain a balanced, approachable tone while providing informative and engaging responses. Be clear and articulate, but avoid being overly formal or casual.",
-        "options": {}
-    },
-    "简洁": {
-        "description": "简明扼要的表达方式",
-        'prompt': "Provide concise and precise responses. Focus on essential information and eliminate unnecessary details. Use clear, direct language and short sentences. Get straight to the point while maintaining clarity and accuracy."
-    },
-    "专业": {
-        "description": "专业正式, 用词严谨, 表意清晰",
-        'prompt': "Communicate with professional expertise and academic rigor. Use industry-standard terminology, provide well-structured explanations, and maintain a formal tone. Support statements with logical reasoning and accurate information. Focus on precision and clarity in technical discussions."
-    },
-    "幽默": {
-        "description": "诙谐有趣的对话风格",
-        'prompt': "Engage with wit and humor while remaining informative. Use clever wordplay, appropriate jokes, and light-hearted analogies to make conversations entertaining. Keep the tone playful but ensure the core message remains clear and helpful."
-    },
-    "可爱": {
-        "description": "活泼可爱的对话方式",
-        'prompt': "Adopt a cheerful and endearing personality. Use gentle, friendly language with occasional emoticons. Express enthusiasm and warmth in responses. Make conversations feel light and pleasant while maintaining helpfulness. Add cute expressions where appropriate without compromising the message quality."
-    }
-}
+SYSTEM_PROMPT = '''
+    You are a friendly chatbot.
+    You are talkative and provides lots of specific details from its context.
+    If you are unsure or don't have enough information to provide a confident answer, just say 'I do not know' or 'I am not sure.'
+'''
 
-
-class ChatHandlers:
-    """Handlers for chat functionality with style support and session management"""
+class GeminiChatHandlers:
+    """Handlers for Gemini chat functionality with session management"""
     
-    # Shared service instances
+    # Shared service instance
     chat_service = None
     
     @classmethod
@@ -45,8 +24,8 @@ class ChatHandlers:
         """Initialize shared services if not already initialized"""
         if cls.chat_service is None:
             # Get model configuration from module config
-            model_id = module_config.get_default_model('chatbot')
-            params = module_config.get_inference_params('chatbot') or {}
+            model_id = module_config.get_default_model('chatbot-gemini')
+            params = module_config.get_inference_params('chatbot-gemini') or {}
             
             # Get model info from model manager
             model = model_manager.get_model_by_id(model_id)
@@ -58,7 +37,7 @@ class ChatHandlers:
                 api_provider=model.api_provider,
                 model_id=model_id,
                 temperature=params.get('temperature', 0.7),
-                max_tokens=int(params.get('max_tokens', 2048)),
+                max_tokens=params.get('max_tokens', 1000),
                 top_p=params.get('top_p', 0.99),
                 top_k=params.get('top_k', 200)
             )
@@ -71,7 +50,6 @@ class ChatHandlers:
         cls,
         message: Union[str, Dict],
         history: List[Dict[str, str]],
-        style: str,
         request: gr.Request
     ) -> AsyncGenerator[Dict[str, str], None]:
         """Handle chat messages with streaming support
@@ -79,7 +57,6 @@ class ChatHandlers:
         Args:
             message: User's message (can be string or dict with text and files)
             history: Chat history list (managed by Gradio)
-            style: Selected chat style
             request: Gradio request object containing session data
             
         Yields:
@@ -125,13 +102,11 @@ class ChatHandlers:
                 # Get or create chat session
                 session = await cls.chat_service.get_chat_session(
                     user_id=user_id,
-                    module_name='chatbot',
-                    session_name="Chatbot Session"
+                    module_name='chatbot-gemini',
+                    session_name="Gemini Chat",
+                    system_prompt=SYSTEM_PROMPT
                 )
-                
-                # Update session with style-specific system prompt
-                session.context['system_prompt'] = CHAT_STYLES[style]["prompt"]
-                
+
                 # Stream chat response
                 partial_msg = ""
                 async for event in cls.chat_service.send_message(
@@ -166,17 +141,11 @@ class ChatHandlers:
                                     "content": partial_msg
                                 }
 
-            except HTTPException as e:
-                logger.error(f"Chat service error: {e.detail}")
-                yield {
-                    "role": "assistant",
-                    "content": f"Error: {e.detail}"
-                }
             except Exception as e:
-                logger.error(f"Unexpected error in chat service: {str(e)}")
+                logger.error(f"Chat service error: {str(e)}")
                 yield {
                     "role": "assistant",
-                    "content": "An unexpected error occurred. Please try again."
+                    "content": "Failed to process your message. Please try again."
                 }
 
         except Exception as e:

@@ -2,6 +2,7 @@
 Centralized AWS configuration and client creation
 """
 import os
+import ast
 from typing import Optional, Dict, Any, Tuple
 import boto3
 from botocore.config import Config
@@ -118,32 +119,28 @@ def get_aws_resource(service_name: str, region_name: Optional[str] = None, assum
 
 def get_secret(secret_name):
     '''Get user dict from Secrets Manager'''
-    # Create a Secrets Manager client
-    client = session.client(
-        service_name='secretsmanager'
-    )
-
     try:
+        # Get Secrets Manager client using centralized AWS configuration
+        client = get_aws_client('secretsmanager')
+        
         response = client.get_secret_value(
             SecretId=secret_name
         )
-    except ClientError as ex:
-        # For a list of exceptions thrown, see
-        # https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
-        raise ex
-
-    # Decrypts secret using the associated KMS key.
-    secret = ast.literal_eval(response['SecretString'])
-
-    return secret
-
+        
+        # Decrypts secret using the associated KMS key.
+        secret = ast.literal_eval(response['SecretString'])
+        return secret
+        
+    except Exception as ex:
+        logger.error(f"Error getting secret {secret_name}: {str(ex)}")
+        raise
 
 def translate_text(text, target_lang_code):
     '''
     Translates input text to the target language. Supported languages: 
     https://docs.aws.amazon.com/translate/latest/dg/what-is-languages.html
     '''
-    client = session.client(
+    client = get_aws_client(
         service_name='translate'
     )
 
@@ -158,7 +155,7 @@ def translate_text(text, target_lang_code):
         translated_text = response['TranslatedText']
         source_lang_code = response['SourceLanguageCode']
 
-    except ClientError as ex:
+    except Exception as ex:
         # Log error and set result & source_lang_code to None if fails
         logger.error(ex)
 

@@ -8,6 +8,34 @@ from botocore.exceptions import ClientError
 from core.config import env_config
 from core.logger import logger
 
+
+class AppConf:
+    """
+    A class to store and manage configuration. [Legacy]
+
+    """
+
+    # Constants
+    CODELANGS = ["Python", "GoLang", "Rust", "Java", "C++",
+                 "Swift", "Javascript", "Typescript", "HTML", "SQL", "Shell"]
+    
+    # The list of style presets for Stable Diffusion
+    # https://docs.aws.amazon.com/zh_cn/bedrock/latest/userguide/model-parameters-diffusion-1-0-text-image.html
+    PICSTYLES = [
+        "增强(enhance)", "照片(photographic)", "模拟胶片(analog-film)", "电影(cinematic)",
+        "数字艺术(digital-art)",  "美式漫画(comic-book)",  "动漫(anime)", "3D模型(3d-model)", "低多边形(low-poly)",
+        "线稿(line-art)", "等距插画(isometric)", "霓虹朋克(neon-punk)", "复合建模(modeling-compound)",  
+        "奇幻艺术(fantasy-art)", "像素艺术(pixel-art)", "折纸艺术(origami)", "瓷砖纹理(tile-texture)"
+    ]
+
+    def update(self, key, value):
+        # Update the value of a variable.
+        if hasattr(self, key):
+            setattr(self, key, value)
+        else:
+            raise AttributeError(f"Invalid configuration variable: {key}")
+
+
 class ModuleConfig:
     def __init__(self):
         session = boto3.Session(region_name=env_config.default_region)
@@ -121,6 +149,7 @@ class ModuleConfig:
             return config['parameters']
         return None
 
+    # At this stage, the system prompt is hard-coded; it will be retrieved from the database later.
     def get_system_prompt(self, module_name: str, sub_module: str = None) -> Optional[str]:
         """Get system prompt from module configuration"""
         config = self.get_module_config(module_name)

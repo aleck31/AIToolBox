@@ -11,10 +11,14 @@ Its user-friendly Gradio-based web interface provides an intuitive experience.
 ## Features
 
 * **Multimodal Chatbot** 🤖
-  - Claude-powered conversational AI
+  - Claude-powered conversational AI with streaming responses
   - Gemini-powered chat interface
   - Support for text, images, and document inputs
   - Context-aware conversations
+  - Supported formats:
+    * Images: jpg/jpeg, png, gif, webp
+    * Documents: pdf, csv, doc, docx, xls, xlsx, txt, md
+    * Video: mp4, webm, mov, etc.
 
 * **Text Processing** 📝
   - Proofreading: Grammar and spelling checks
@@ -47,6 +51,22 @@ Its user-friendly Gradio-based web interface provides an intuitive experience.
 ### Vision Recognition
 ![GenAI Toolbox](/assets/screenshot_vision.png "Vision Recognition")
 
+## Technical Features
+
+* **Session Management**
+  - Modular architecture with clear separation of concerns:
+    * Models: Standardized session data structures
+    * Store: Pluggable storage backends (DynamoDB implementation)
+  - Standardized session format with metadata and context
+  - DynamoDB TTL-based automatic cleanup
+  - Efficient session reuse with AWS Cognito token validation
+
+* **LLM Integration**
+  - Bedrock converse_stream API for real-time responses
+  - Multimodal message support with proper format handling
+  - Efficient file processing and streaming
+  - Automatic format detection and normalization
+
 ## Project Structure
 
 The project follows a clean, layered architecture:
@@ -54,27 +74,29 @@ The project follows a clean, layered architecture:
 ```
 llm-toolbox/
 ├── app.py              # Main application entry point
-├── core/              # Core components
+├── core/               # Core components
 │   ├── auth.py        # Authentication handling (cognito)
-│   ├── config.py      # Configuration settings (env_config & app_config)
+│   ├── config.py      # Configuration settings
 │   ├── logger.py      # Logging configuration
+│   ├── module_config.py    # Module configuration
 │   ├── integration/   # Service integration
 │   │   ├── chat_service.py     # Chat service orchestration
-│   │   ├── module_config.py    # Module configuration
 │   │   └── service_factory.py  # Service creation factory
 │   └── session/       # Session management
-│       ├── init.py               # Base session interfaces
-│       ├── session_manager.py    # Auth session handling
-│       └── dynamodb_manager.py   # DynamoDB-based session storage
+│       ├── models.py         # Data models for Session
+│       └── store.py          # DynamoDB-based session storage
 ├── llm/               # LLM implementations
 │   ├── init.py               # Base LLM interfaces
 │   ├── bedrock_provider.py   # AWS Bedrock integration
 │   ├── gemini_provider.py    # Google Gemini integration
 │   ├── model_manager.py      # Model management
-│   └── tools/         # LLM tools
-│       └── bedrock_tools.py  # Tool implementations for Bedrock Converse
-├── modules/           # Feature modules
+│   └── tools/         # LLM tools implementations
+│       └── bedrock_tools.py  # Bedrock tools
+├── common/            # Common modules
 │   ├── login/            # Authentication UI
+│   ├── setting/          # Module settings
+│   └── main_ui.py        # UI settings
+├── modules/           # Feature modules
 │   ├── chatbot/          # Basic chatbot implementation
 │   ├── chatbot_gemini/   # Gemini-specific chatbot
 │   ├── text/             # Text processing
@@ -82,10 +104,9 @@ llm-toolbox/
 │   ├── vision/           # Image analysis
 │   ├── oneshot/          # Single-shot responses
 │   ├── coding/           # Code-related features
-│   ├── draw/             # Image generation
-│   └── setting/          # Module settings
+│   └── draw/             # Image generation
 └── utils/             # Utility functions
-    ├── aws.py           # the centralized AWS session, client, resource management.
+    ├── aws.py           # AWS resource management
     ├── file.py          # File handling utilities
     ├── voice.py         # Voice processing utilities
     └── web.py           # Web-related utilities

@@ -3,7 +3,6 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Union, AsyncIterator
 from dataclasses import dataclass
-from enum import Enum
 
 
 def moc_chat(name, message, history):
@@ -14,41 +13,39 @@ def moc_chat(name, message, history):
     return greeting
 
 
-class ModelProvider(Enum):
-    BEDROCK = "bedrock"
-    GEMINI = "gemini"
-
 @dataclass
 class LLMConfig:
-    """Configuration for LLM providers"""
-    provider: ModelProvider
+    """Basic configuration for LLM providers"""
+    api_provider: str
     model_id: str
     max_tokens: int = 4096
     temperature: float = 0.9
     top_p: float = 0.99
+    top_k: int = 200
     stop_sequences: Optional[List[str]] = None
+
 
 @dataclass
 class Message:
-    """Represents a chat message"""
+    """Basic message structure"""
     role: str
     content: Union[str, Dict]
-    metadata: Optional[Dict] = None
+    context: Optional[Dict] = None
+
 
 class LLMResponse:
-    """Wrapper for LLM responses"""
+    """LLM response wrapper"""
     def __init__(
         self,
         content: str,
-        usage: Optional[Dict] = None,
         metadata: Optional[Dict] = None
     ):
         self.content = content
-        self.usage = usage or {}
         self.metadata = metadata or {}
 
-class BaseLLMProvider(ABC):
-    """Abstract base class for LLM providers"""
+
+class LLMAPIProvider(ABC):
+    """Base class for LLM providers"""
     
     def __init__(self, config: LLMConfig):
         self.config = config
@@ -72,7 +69,7 @@ class BaseLLMProvider(ABC):
         system_prompt: Optional[str] = None,
         **kwargs
     ) -> LLMResponse:
-        """Generate a response from the LLM"""
+        """Generate a response"""
         pass
     
     @abstractmethod
@@ -82,33 +79,6 @@ class BaseLLMProvider(ABC):
         system_prompt: Optional[str] = None,
         **kwargs
     ) -> AsyncIterator[str]:
-        """Generate a streaming response from the LLM"""
-        pass
-    
-    def prepare_messages(
-        self,
-        messages: List[Message],
-        system_prompt: Optional[str] = None
-    ) -> List[Dict]:
-        """Convert messages to provider-specific format"""
+        """Generate a streaming response"""
         pass
 
-class LLMException(Exception):
-    """Base exception for LLM-related errors"""
-    pass
-
-class ConfigurationError(LLMException):
-    """Raised when there's an issue with LLM configuration"""
-    pass
-
-class AuthenticationError(LLMException):
-    """Raised when there's an authentication issue"""
-    pass
-
-class RateLimitError(LLMException):
-    """Raised when rate limit is exceeded"""
-    pass
-
-class ModelError(LLMException):
-    """Raised when there's an error with the model"""
-    pass

@@ -1,8 +1,8 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
-from core.config import AppConf
-from . import text_image
+from core.module_config import AppConf
+from .handlers import text_image
 
 
 with gr.Blocks() as tab_draw:
