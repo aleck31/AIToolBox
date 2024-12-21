@@ -6,32 +6,7 @@ from core.integration.chat_service import ChatService
 from core.module_config import module_config
 from llm import LLMConfig
 from llm.model_manager import model_manager
-
-
-# Chat styles configuration
-CHAT_STYLES = {
-    "正常": {
-        "description": "自然友好的对话风格",
-        'prompt': "Maintain a balanced, approachable tone while providing informative and engaging responses. Be clear and articulate, but avoid being overly formal or casual.",
-        "options": {}
-    },
-    "简洁": {
-        "description": "简明扼要的表达方式",
-        'prompt': "Provide concise and precise responses. Focus on essential information and eliminate unnecessary details. Use clear, direct language and short sentences. Get straight to the point while maintaining clarity and accuracy."
-    },
-    "专业": {
-        "description": "专业正式, 用词严谨, 表意清晰",
-        'prompt': "Communicate with professional expertise and academic rigor. Use industry-standard terminology, provide well-structured explanations, and maintain a formal tone. Support statements with logical reasoning and accurate information. Focus on precision and clarity in technical discussions."
-    },
-    "幽默": {
-        "description": "诙谐有趣的对话风格",
-        'prompt': "Engage with wit and humor while remaining informative. Use clever wordplay, appropriate jokes, and light-hearted analogies to make conversations entertaining. Keep the tone playful but ensure the core message remains clear and helpful."
-    },
-    "可爱": {
-        "description": "活泼可爱的对话方式",
-        'prompt': "Adopt a cheerful and endearing personality. Use gentle, friendly language with occasional emoticons. Express enthusiasm and warmth in responses. Make conversations feel light and pleasant while maintaining helpfulness. Add cute expressions where appropriate without compromising the message quality."
-    }
-}
+from .prompts import CHAT_STYLES
 
 
 class ChatHandlers:
@@ -129,42 +104,34 @@ class ChatHandlers:
                     session_name="Chatbot Session"
                 )
                 
-                # Update session with style-specific system prompt
-                session.context['system_prompt'] = CHAT_STYLES[style]["prompt"]
+                # Get style-specific configuration
+                style_config = CHAT_STYLES[style]
                 
-                # Stream chat response
-                partial_msg = ""
-                async for event in cls.chat_service.send_message(
+                # Update session with style-specific system prompt
+                session.context['system_prompt'] = style_config["prompt"]
+                
+                # Persist updated context to session store
+                await cls.chat_service.session_store.update_session(session, user_id)
+                
+                # Prepare style-specific inference parameters
+                inference_params = {
+                    k: v for k, v in style_config["options"].items()
+                    if v is not None
+                }
+                
+                # Stream chat response with UI history sync and style parameters
+                async for chunk in cls.chat_service.send_message(
                     session_id=session.session_id,
                     user_id=user_id,
-                    content=content
+                    content=content,
+                    ui_history=history,
+                    inference_params=inference_params
                 ):
-                    # Handle different event types
-                    if isinstance(event, dict):
-                        event_type = event.get('type')
-                        
-                        if event_type == 'messageStart':
-                            # Initialize new message
-                            partial_msg = ""
-                            
-                        elif event_type == 'contentBlockDelta':
-                            # Append new content
-                            if delta := event.get('delta', {}):
-                                if text := delta.get('text', ''):
-                                    partial_msg += text
-                                    # Gradio will optimize to only send the diff
-                                    yield {
-                                        "role": "assistant",
-                                        "content": partial_msg
-                                    }
-                                    
-                        elif event_type == 'messageStop':
-                            # Final yield with complete message
-                            if partial_msg:
-                                yield {
-                                    "role": "assistant",
-                                    "content": partial_msg
-                                }
+                    # Let Gradio handle the diffing - just yield each chunk
+                    yield {
+                        "role": "assistant",
+                        "content": chunk
+                    }
 
             except HTTPException as e:
                 logger.error(f"Chat service error: {e.detail}")

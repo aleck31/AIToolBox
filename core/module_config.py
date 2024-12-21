@@ -171,7 +171,7 @@ class ModuleConfig:
                 'system_prompt': 'You are a helpful AI assistant.',
                 'parameters': {
                     'temperature': Decimal('0.7'),
-                    'max_tokens': 1000
+                    'max_tokens': 2049,
                 }
             },
             'chatbot-gemini': {
@@ -182,7 +182,9 @@ class ModuleConfig:
                 'system_prompt': 'You are a helpful AI assistant.',
                 'parameters': {
                     'temperature': Decimal('0.7'),
-                    'max_tokens': 1000
+                    'max_tokens': 1000,
+                    'top_p': Decimal('0.99'),
+                    'top_k': 200  # Integer for Gemini compatibility                    
                 }
             },
             'coding': {

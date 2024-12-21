@@ -1,9 +1,10 @@
 import gradio as gr
 from .handlers import GeminiChatHandlers
+from .prompts import GEMINI_CHAT_STYLES
 from core.logger import logger
 
 
-def create_chat_interface() -> gr.ChatInterface:
+def create_chat_interface() -> gr.Blocks:
     """Create chat interface with handlers"""
     
     # Create chat interface
@@ -13,13 +14,24 @@ def create_chat_interface() -> gr.ChatInterface:
         type='messages',
         multimodal=True,
         textbox=gr.MultimodalTextbox(
-            file_types=['image', "video", "audio"],
+            file_types=['image', '.pdf', 'audio', 'video'],
             file_count='multiple',
             placeholder="Type a message or upload image(s)",
             scale=13,
             min_width=90
         ),
-        stop_btn='🟥'
+        stop_btn='🟥',
+        additional_inputs_accordion=gr.Accordion(
+            label='Chat Settings', open=False),
+        additional_inputs=[
+            gr.Dropdown(
+                label="Chat Style:", 
+                show_label=False,
+                info="Select conversation style",
+                choices={k: v["name"] for k, v in GEMINI_CHAT_STYLES.items()},
+                value="default"
+            )
+        ]
     )
 
     return chat_interface

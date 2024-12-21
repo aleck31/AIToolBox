@@ -157,19 +157,24 @@ class BedrockProvider(LLMAPIProvider):
             formatted_messages = self.prepare_messages(messages)
             inference_params = self._prepare_inference_params(**kwargs)
             
-            # Ensure system prompt is in correct format for Bedrock
-            system = [{"text": system_prompt}] if system_prompt else [{"text": ""}]
+            # Prepare request parameters
+            request_params = {
+                "modelId": self.config.model_id,
+                "messages": formatted_messages,
+                "inferenceConfig": inference_params
+            }
             
-            # Handle additional parameters
+            # Only include system if prompt is provided and not empty
+            if system_prompt and system_prompt.strip():
+                request_params["system"] = [{"text": system_prompt}]
+            
+            # Add additional parameters if specified
             additional_params = {}
             if 'top_k' in kwargs:
                 additional_params['topK'] = kwargs['top_k']
             
             response = self.client.converse(
-                modelId=self.config.model_id,
-                messages=formatted_messages,
-                system=system,
-                inferenceConfig=inference_params,
+                **request_params,
                 **({"additionalModelRequestFields": additional_params} if additional_params else {})
             )
 
@@ -211,20 +216,25 @@ class BedrockProvider(LLMAPIProvider):
             formatted_messages = self.prepare_messages(messages)
             inference_params = self._prepare_inference_params(**kwargs)
             
-            # Ensure system prompt is in correct format for Bedrock
-            system = [{"text": system_prompt}] if system_prompt else [{"text": ""}]
+            # Prepare request parameters
+            request_params = {
+                "modelId": self.config.model_id,
+                "messages": formatted_messages,
+                "inferenceConfig": inference_params
+            }
             
-            # Handle additional parameters
+            # Only include system if prompt is provided and not empty
+            if system_prompt and system_prompt.strip():
+                request_params["system"] = [{"text": system_prompt}]
+            
+            # Add additional parameters if specified
             additional_params = {}
             if 'top_k' in kwargs:
                 additional_params['topK'] = kwargs['top_k']
             
             # Use converse_stream for streaming response
             response = self.client.converse_stream(
-                modelId=self.config.model_id,
-                messages=formatted_messages,
-                system=system,
-                inferenceConfig=inference_params,
+                **request_params,
                 **({"additionalModelRequestFields": additional_params} if additional_params else {})
             )
             
@@ -247,7 +257,7 @@ class BedrockProvider(LLMAPIProvider):
                         # Extract text from content block delta
                         delta = event['contentBlockDelta'].get('delta', {})
                         if 'text' in delta:
-                            yield delta['text']
+                            yield {'text': delta['text']}
                             
                     elif 'messageStop' in event:
                         # Capture stop reason and additional fields

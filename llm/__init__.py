@@ -51,6 +51,25 @@ class LLMAPIProvider(ABC):
         self.config = config
         self._validate_config()
         self._initialize_client()
+
+    @classmethod
+    def create(cls, config: LLMConfig) -> 'LLMAPIProvider':
+        """Factory method to create appropriate provider instance"""
+        from .bedrock_provider import BedrockProvider
+        from .gemini_provider import GeminiProvider
+        from .openai_provider import OpenAIProvider
+        
+        providers = {
+            'BEDROCK': BedrockProvider,
+            'GEMINI': GeminiProvider, 
+            'OPENAI': OpenAIProvider
+        }
+        
+        provider_class = providers.get(config.api_provider.upper())
+        if not provider_class:
+            raise ValueError(f"Unsupported API provider: {config.api_provider}")
+            
+        return provider_class(config)
     
     @abstractmethod
     def _validate_config(self) -> None:
@@ -81,4 +100,3 @@ class LLMAPIProvider(ABC):
     ) -> AsyncIterator[str]:
         """Generate a streaming response"""
         pass
-

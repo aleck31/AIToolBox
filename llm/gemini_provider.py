@@ -1,3 +1,4 @@
+
 from typing import Dict, List, Optional, AsyncIterator, Union
 import google.generativeai as genai
 from google.generativeai.types import content_types
@@ -28,10 +29,22 @@ class GeminiProvider(LLMAPIProvider):
             gemini_secret_key = env_config.gemini_config['secret_id']
             api_key = get_secret(gemini_secret_key).get('api_key')
             genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel(
-                model_name=self.config.model_id,
-                generation_config=self._get_generation_config()
-            )
+            
+            # Initialize model with default system_instruction
+            model_args = {
+                "model_name": self.config.model_id,
+                "generation_config": self._get_generation_config()
+            }
+            
+            # Set a simple default system instruction
+            DEFAULT_SYSTEM_PROMPT = """
+            You are a helpful AI assistant. 
+            Be direct, accurate, and professional in your responses.
+            Acknowledge your limitations and ask for clarification when needed.
+            """
+            model_args["system_instruction"] = self._format_system_prompt(DEFAULT_SYSTEM_PROMPT)
+            
+            self.model = genai.GenerativeModel(**model_args)
         except Exception as e:
             raise exceptions.FailedPrecondition(f"Failed to initialize Gemini client: {str(e)}")
 
@@ -41,7 +54,7 @@ class GeminiProvider(LLMAPIProvider):
             max_output_tokens=self.config.max_tokens,
             temperature=self.config.temperature,
             top_p=self.config.top_p,
-            top_k=200,  # Gemini-specific parameter
+            top_k=self.config.top_k,
             candidate_count=1
         )
 
@@ -55,44 +68,86 @@ class GeminiProvider(LLMAPIProvider):
             raise exceptions.Unauthenticated(f"Authentication failed: {error}")
         elif "invalid request" in error_message:
             raise exceptions.InvalidArgument(f"Invalid request: {error}")
+        elif "dangerous_content" in error_message:
+            # Handle safety filter triggers by retrying with default settings
+            logger.warning("Safety filter triggered, retrying with default settings")
+            self.model = genai.GenerativeModel(
+                model_name=self.config.model_id,
+                generation_config=self._get_generation_config()
+            )
+            return
         else:
             raise exceptions.Unknown(f"Gemini error: {error}")
+
+    def _format_system_prompt(self, system_prompt: str) -> List[str]:
+        """Format system prompt into list of instructions"""
+        if not system_prompt:
+            return []
+        return [
+            instruction.strip() 
+            for instruction in system_prompt.split('\n') 
+            if instruction.strip()
+        ]
 
     def prepare_messages(
         self,
         messages: List[Message],
         system_prompt: Optional[str] = None
     ) -> List[content_types.ContentType]:
-        """Convert messages to Gemini-specific format"""
+        """Convert messages to Gemini-specific format with system prompt handling"""
+
         formatted_messages = []
         
+        # Create a new model instance with system prompt if needed
         if system_prompt:
-            formatted_messages.append({
-                "role": "user",
-                "parts": [{"text": f"System: {system_prompt}"}]
-            })
+            # Get current safety settings if model exists
+            safety_settings = getattr(self.model, '_safety_settings', None)
+            
+            model_args = {
+                "model_name": self.config.model_id,
+                "generation_config": self._get_generation_config(),
+                "system_instruction": self._format_system_prompt(system_prompt)
+            }
+            
+            # Only set safety settings if they exist
+            if safety_settings:
+                model_args["safety_settings"] = safety_settings
+                
+            self.model = genai.GenerativeModel(**model_args)
         
+        # Format messages
         for message in messages:
-            parts = []
-            
             if isinstance(message.content, str):
-                parts.append({"text": message.content})
-            else:
-                # Handle multimodal content
-                if "text" in message.content:
-                    parts.append({"text": message.content["text"]})
-                if "image" in message.content:
-                    parts.append({
-                        "inline_data": {
-                            "mime_type": "image/jpeg",  # Adjust based on actual image type
-                            "data": message.content["image"]
-                        }
-                    })
+                formatted_messages.append({
+                    "role": message.role,
+                    "content": [{"text": message.content}]
+                })
+            else:         
+                # Handle Gradio chatbox format with text and files    
+                content = []
             
-            formatted_messages.append({
-                "role": "user" if message.role == "user" else "model",
-                "parts": parts
-            })
+                # Handle string content
+                if isinstance(message.content, str):
+                    if message.content.strip():  # Skip empty strings
+                        content.append({"text": message.content})
+                else:
+                    # Handle multimodal content
+                    if "text" in message.content and message.content["text"].strip():
+                        content.append({"text": message.content["text"]})
+                    if "files" in message.content:
+                        # Handle files using genai.upload_file
+                        for file_path in message.content["files"]:
+                            try:
+                                file_ref = genai.upload_file(path=file_path)
+                                content.append(file_ref)
+                            except Exception as e:
+                                logger.error(f"Error uploading file {file_path}: {str(e)}")
+                                continue
+            
+                formatted_messages.append({
+                    "role": message.role,
+                    "parts": content
+                })
         
         return formatted_messages
 
@@ -106,19 +161,24 @@ class GeminiProvider(LLMAPIProvider):
         try:
             formatted_messages = self.prepare_messages(messages, system_prompt)
             
+            # Update model args if new system prompt provided
+            model_args = {
+                "generation_config": self._get_generation_config()
+            }
+            
             # Generate response using generate_content
             response = self.model.generate_content(
-                formatted_messages,
-                generation_config=self._get_generation_config()
+                contents=formatted_messages,
+                **model_args
             )
             
             return LLMResponse(
                 content=response.text,
                 metadata={
                     'usage': {
-                        "input_tokens": response.prompt_token_count,
-                        "output_tokens": response.candidates[0].token_count,
-                        "total_tokens": response.prompt_token_count + response.candidates[0].token_count
+                        "prompt_tokens": response.usage_metadata.prompt_token_count,
+                        "completion_tokens": response.usage_metadata.candidates_token_count,
+                        "total_tokens": response.usage_metadata.total_token_count
                     },
                     'safety_ratings': [
                         {r.category: r.probability}
@@ -140,44 +200,37 @@ class GeminiProvider(LLMAPIProvider):
         try:
             formatted_messages = self.prepare_messages(messages, system_prompt)
             
-            # Yield message start event
-            yield {
-                "type": "messageStart",
-                "message": {
-                    "role": "assistant",
-                    "metadata": {
-                        "model": self.config.model_id,
-                        "usage": {}  # Gemini doesn't provide token usage in stream
-                    }
-                }
+            # Update model args if new system prompt provided
+            model_args = {
+                "generation_config": self._get_generation_config()
             }
             
             # Generate streaming response using generate_content
             response = self.model.generate_content(
-                formatted_messages,
-                generation_config=self._get_generation_config(),
-                stream=True
+                contents=formatted_messages,
+                stream=True,
+                **model_args
             )
-            
-            async for chunk in response:
-                if chunk.text:
+            # Handle synchronous iterator in async context
+            for chunk in response:
+                if hasattr(chunk, 'text'):
+                    yield {'text': chunk.text}
+                
+                # Extract usage metadata if available
+                if hasattr(chunk, 'usage_metadata'):
                     yield {
-                        "type": "contentBlockDelta",
-                        "delta": {
-                            "text": chunk.text
+                        'metadata': {
+                            'model': self.config.model_id,
+                            'usage': {
+                                'prompt_tokens': chunk.usage_metadata.prompt_token_count,
+                                'completion_tokens': chunk.usage_metadata.candidates_token_count,
+                                'total_tokens': chunk.usage_metadata.total_token_count
+                            }
                         }
                     }
-            
-            # Yield message stop event
-            yield {
-                "type": "messageStop",
-                "metadata": {
-                    "model": self.config.model_id,
-                    "usage": {}  # Gemini doesn't provide final token usage in stream
-                }
-            }
                     
         except Exception as e:
+            logger.error(f"Streaming error: {str(e)}")
             self._handle_gemini_error(e)
 
     async def multi_turn_generate_stream(
@@ -190,88 +243,46 @@ class GeminiProvider(LLMAPIProvider):
         try:
             formatted_messages = self.prepare_messages(messages, system_prompt)
             
-            # Yield message start event
-            yield {
-                "type": "messageStart",
-                "message": {
-                    "role": "assistant",
-                    "metadata": {
-                        "model": self.config.model_id,
-                        "usage": {}
-                    }
-                }
-            }
-            
             # Create chat session with history
             chat = self.model.start_chat(history=formatted_messages[:-1])
             
             # Get last message for the actual query
-            last_message = formatted_messages[-1]["parts"]
+            last_message = formatted_messages[-1]["parts"] if formatted_messages else []
+            
+            # Update model args if new system prompt provided
+            model_args = {
+                "generation_config": self._get_generation_config()
+            }
             
             # Stream response
             response = chat.send_message(
-                last_message,
-                generation_config=self._get_generation_config(),
-                stream=True
+                contents=last_message,
+                stream=True,
+                **model_args
             )
             
-            async for chunk in response:
-                if chunk.text:
+            # Handle synchronous iterator in async context
+            for chunk in response:
+                if hasattr(chunk, 'text'):
+                    yield {'text': chunk.text}
+                
+                # Extract usage metadata if available
+                if hasattr(chunk, 'usage_metadata'):
                     yield {
-                        "type": "contentBlockDelta",
-                        "delta": {
-                            "text": chunk.text
+                        'metadata': {
+                            'model': self.config.model_id,
+                            'usage': {
+                                'prompt_tokens': chunk.usage_metadata.prompt_token_count,
+                                'completion_tokens': chunk.usage_metadata.candidates_token_count,
+                                'total_tokens': chunk.usage_metadata.total_token_count
+                            }
                         }
                     }
-            
-            # Yield message stop event
-            yield {
-                "type": "messageStop",
-                "metadata": {
-                    "model": self.config.model_id,
-                    "usage": {}
-                }
-            }
+                
+                # Handle any prompt feedback
+                if hasattr(chunk, 'prompt_feedback'):
+                    logger.debug(f"Prompt feedback: {chunk.prompt_feedback}")
                     
         except Exception as e:
-            self._handle_gemini_error(e)
-
-    async def multi_turn_generate(
-        self,
-        messages: List[Message],
-        system_prompt: Optional[str] = None,
-        **kwargs
-    ) -> LLMResponse:
-        """Generate complete response using multi-turn chat"""
-        try:
-            formatted_messages = self.prepare_messages(messages, system_prompt)
-            
-            # Create chat session with history
-            chat = self.model.start_chat(history=formatted_messages[:-1])
-            
-            # Get last message for the actual query
-            last_message = formatted_messages[-1]["parts"]
-            
-            # Get complete response
-            response = chat.send_message(
-                last_message,
-                generation_config=self._get_generation_config()
-            )
-            
-            return LLMResponse(
-                content=response.text,
-                metadata={
-                    'usage': {
-                        "prompt_tokens": response.prompt_token_count,
-                        "completion_tokens": response.candidates[0].token_count,
-                        "total_tokens": response.prompt_token_count + response.candidates[0].token_count
-                    },
-                    'safety_ratings': [
-                        {r.category: r.probability}
-                        for r in response.safety_ratings
-                    ] if hasattr(response, 'safety_ratings') else None
-                }
-            )
-                
-        except Exception as e:
+            logger.error(f"Streaming error: {str(e)}")
             self._handle_gemini_error(e)

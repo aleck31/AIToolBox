@@ -1,8 +1,6 @@
-import os
 import gradio as gr
-from fastapi import Request
-from typing import Callable, Dict
-from .handlers import ChatHandlers, CHAT_STYLES
+from .handlers import ChatHandlers
+from .prompts import CHAT_STYLES
 from core.logger import logger
 
 
@@ -16,7 +14,7 @@ def create_chat_interface() -> gr.ChatInterface:
         type='messages',
         multimodal=True,
         textbox=gr.MultimodalTextbox(
-            file_types=['image'],
+            file_types=['image','text', '.pdf'],
             placeholder="Type a message or upload image(s)",
             scale=13,
             min_width=90
@@ -26,7 +24,8 @@ def create_chat_interface() -> gr.ChatInterface:
             label='Chat Settings', open=False),
         additional_inputs=[
             gr.Radio(
-                label="Style:", 
+                label="Chat Style:", 
+                show_label=False,
                 choices=list(CHAT_STYLES.keys()),
                 value="正常",
                 info="Select conversation style"
