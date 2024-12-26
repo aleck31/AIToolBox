@@ -1,6 +1,7 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 import uvicorn
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,27 +19,32 @@ server_config = app_config.server_config
 security_config = app_config.security_config
 cors_config = app_config.cors_config
 
-# Create FastAPI app
-app = FastAPI()
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize app on startup"""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for FastAPI app"""
     try:
+        # Startup
         logger.info("Initializing application...")
         # Initialize default LLM models if none exist
         model_manager.init_default_models()
         logger.info("Application initialization complete")
+        yield
     except Exception as e:
         logger.error(f"Failed to initialize application: {str(e)}")
         raise
+    finally:
+        # Shutdown
+        logger.info("Shutting down application...")
+
+# Create FastAPI app
+app = FastAPI(lifespan=lifespan)
 
 # Add session middleware
 app.add_middleware(
     SessionMiddleware,
     secret_key=security_config['secret_key'],
     session_cookie="session",
-    max_age=security_config['token_expiration'],
+    max_age=None,  # Let Cognito handle token expiration
     same_site="lax",  # Prevents CSRF while allowing normal navigation
     https_only=security_config['ssl_enabled'],  # Enable for production with HTTPS
     path="/",  # Make cookie available for all paths    
@@ -92,5 +98,5 @@ if __name__ == "__main__":
         app,
         host=server_config['host'],
         port=server_config['port'],
-        debug=server_config['debug']
+        log_level=server_config['log_level']
     )
