@@ -41,10 +41,12 @@ class SessionStore:
     ) -> Session:
         """Create a new session"""
         try:
+            creation_time = datetime.now()
             session = Session(
                 session_id=str(uuid.uuid4()),
                 session_name=session_name or f"{module_name.title()} Session",
-                created_time=datetime.now(),
+                created_time=creation_time,
+                updated_time=creation_time,  # Initially same as created_time
                 user_id=user_id,
                 metadata=SessionMetadata(
                     module_name=module_name,
@@ -69,8 +71,23 @@ class SessionStore:
                 detail=f"Session creation failed: {str(e)}"
             )
 
-    async def get_session(self, session_id: str, user_id: str) -> Session:
-        """Get session with user validation"""
+    async def get_session(
+        self, 
+        session_id: str, 
+        user_id: Optional[str] = None
+    ) -> Session:
+        """Get session with optional user validation
+        
+        Args:
+            session_id: ID of session to retrieve
+            user_id: Optional user ID for ownership validation
+            
+        Returns:
+            Session object if found and valid
+            
+        Raises:
+            HTTPException: If session not found, expired, or access denied
+        """
         try:
             response = self.table.get_item(Key={'session_id': session_id})
             
@@ -82,16 +99,18 @@ class SessionStore:
                 
             item = response['Item']
             
-            # Validate ownership and TTL
-            if item['user_id'] != user_id:
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Access denied to session {session_id}"
-                )
+            # Always validate TTL first
             if item.get('ttl', 0) < datetime.now().timestamp():
                 raise HTTPException(
                     status_code=404,
                     detail=f"Session {session_id} has expired"
+                )
+                
+            # Validate ownership if user_id provided
+            if user_id and item['user_id'] != user_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Access denied to session {session_id}"
                 )
                 
             return Session.from_dict(item)
@@ -100,10 +119,14 @@ class SessionStore:
             logger.error(f"Failed to get session: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e))
 
-    async def update_session(self, session: Session, user_id: str) -> None:
+    async def update_session(
+            self, 
+            session: Session, 
+            user_id: Optional[str] = None
+        ) -> None:
         """Update session with user validation"""
         try:
-            if session.user_id != user_id:
+            if user_id and session.user_id != user_id:
                 raise HTTPException(
                     status_code=403,
                     detail=f"Access denied to session {session.session_id}"

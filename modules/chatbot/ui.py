@@ -10,12 +10,14 @@ def create_chat_interface() -> gr.ChatInterface:
     # Create chat interface
     chat_interface = gr.ChatInterface(
         description="Let's chat ... (Powered by Bedrock)",
-        fn=ChatHandlers.handle_chat,
+        fn=ChatHandlers.streaming_reply,
         type='messages',
         multimodal=True,
         textbox=gr.MultimodalTextbox(
-            file_types=['image','text', '.pdf'],
+            file_types=['text', 'image','.pdf'],
             placeholder="Type a message or upload image(s)",
+            stop_btn=True,
+            max_plain_text_length=2048,
             scale=13,
             min_width=90
         ),

@@ -1,4 +1,5 @@
 
+from datetime import datetime
 from typing import Dict, List, Optional, AsyncIterator, Union
 import google.generativeai as genai
 from google.generativeai.types import content_types
@@ -117,37 +118,44 @@ class GeminiProvider(LLMAPIProvider):
         
         # Format messages
         for message in messages:
+            # Initialize content/parts list
+            parts = []
+            
+            # Format context if present
+            if message.context:
+                context_text = []
+                for key, value in message.context.items():
+                    # Convert snake_case to spaces and capitalize
+                    readable_key = key.replace('_', ' ').capitalize()
+                    context_text.append(f"{readable_key}: {value}")
+                
+                if context_text:
+                    # Add formatted context as a bracketed prefix
+                    parts.append({"text": f"[{' | '.join(context_text)}]\n"})
+
+            # Handle message content
             if isinstance(message.content, str):
-                formatted_messages.append({
-                    "role": message.role,
-                    "content": [{"text": message.content}]
-                })
-            else:         
-                # Handle Gradio chatbox format with text and files    
-                content = []
-            
-                # Handle string content
-                if isinstance(message.content, str):
-                    if message.content.strip():  # Skip empty strings
-                        content.append({"text": message.content})
-                else:
-                    # Handle multimodal content
-                    if "text" in message.content and message.content["text"].strip():
-                        content.append({"text": message.content["text"]})
-                    if "files" in message.content:
-                        # Handle files using genai.upload_file
-                        for file_path in message.content["files"]:
-                            try:
-                                file_ref = genai.upload_file(path=file_path)
-                                content.append(file_ref)
-                            except Exception as e:
-                                logger.error(f"Error uploading file {file_path}: {str(e)}")
-                                continue
-            
-                formatted_messages.append({
-                    "role": message.role,
-                    "parts": content
-                })
+                if message.content.strip():  # Skip empty strings
+                    parts.append({"text": message.content})
+            else:
+                # Handle multimodal content from Gradio chatbox
+                if "text" in message.content and message.content["text"].strip():
+                    parts.append({"text": message.content["text"]})
+                if "files" in message.content:
+                    # Handle files using genai.upload_file
+                    for file_path in message.content["files"]:
+                        try:
+                            file_ref = genai.upload_file(path=file_path)
+                            parts.append(file_ref)
+                        except Exception as e:
+                            logger.error(f"Error uploading file {file_path}: {str(e)}")
+                            continue
+
+            # Add formatted message with all parts
+            formatted_messages.append({
+                "role": message.role,
+                "parts": parts
+            })
         
         return formatted_messages
 

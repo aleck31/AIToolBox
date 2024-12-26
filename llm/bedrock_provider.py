@@ -1,4 +1,4 @@
-import json
+from datetime import datetime
 from typing import Dict, List, Optional, AsyncIterator
 from botocore.exceptions import ClientError
 from core.logger import logger
@@ -110,7 +110,16 @@ class BedrockProvider(LLMAPIProvider):
         for message in messages:
             content = []
             if message.context:
-                content.append({"text": json.dumps(message.context)})
+                # Format all context key-value pairs in a natural way
+                context_text = []
+                for key, value in message.context.items():
+                    # Convert snake_case to spaces and capitalize
+                    readable_key = key.replace('_', ' ').capitalize()
+                    context_text.append(f"{readable_key}: {value}")
+                
+                if context_text:
+                    # Add formatted context as a bracketed prefix
+                    content.append({"text": f"[{' | '.join(context_text)}]\n"})
 
             if isinstance(message.content, str):
                 content.append({"text": message.content})

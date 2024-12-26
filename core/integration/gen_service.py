@@ -75,6 +75,7 @@ class GenService:
         self._llm_providers[model_id] = provider
         return provider
 
+    # Question: After this modification, has the get_or_create_session method become useless?
     async def get_or_create_session(
         self,
         user_id: str,
@@ -118,43 +119,34 @@ class GenService:
             logger.error(f"Error in get_session: {str(e)}")
             raise e
 
-    async def generate_content(
+    async def generate_stateless(
         self,
-        user_id: Optional[str],
-        module_name: Optional[str],
         content: Dict[str, str],
+        system_prompt: Optional[str] = None,
         option_params: Optional[Dict[str, float]] = None
     ) -> str:
-        """Generate content using the configured LLM with optional session context
+        """Generate content using the configured LLM without session context
         
         Args:
-            prompts: Dictionary containing text and optional system_prompt
-            user_id: Optional user ID for session management
-            module_name: Optional module name for session management
+            content: Dictionary containing text and optional files
+            system_prompt: Optional system prompt for one-off generation
             option_params: Optional parameters for LLM generation
+            
+        Returns:
+            str: Generated content
         """
         try:
             # Get model ID from config
             model_id = self.default_llm_config.model_id
             llm = self._get_llm_provider(model_id)
             
-            # Get or create session if user_id and module_name provided
-            if user_id and module_name:
-                session = await self.get_or_create_session(user_id, module_name)
-                
-            # Get system prompt from session context or content
-            system_prompt = session.context.get('system_prompt', '')
-            
             # Debug input content
-            logger.debug(f"Content received from handler: {content}")
+            logger.debug(f"Content received for stateless generation: {content}")
             
             # Create message with multimodal content support
             messages = [Message(
                 role="user",
-                content=content if isinstance(content, dict) else {"text": str(content)},
-                context={
-                    "current_time": datetime.now().isoformat()
-                }
+                content=content if isinstance(content, dict) else {"text": str(content)}
             )]
 
             # Generate response
@@ -167,27 +159,80 @@ class GenService:
             if not response:
                 raise ValueError("Empty response from LLM")
             
-            # Add interaction to session if available
-            if session:
-                session.add_interaction({
-                    "role": "user",
-                    "content": {"text": content.get('text', '')},
-                    "timestamp": datetime.now().isoformat()
-                })
-                
-                session.add_interaction({
-                    "role": "assistant",
-                    "content": {"text": response.content},
-                    "timestamp": datetime.now().isoformat()
-                })
-                
-                await self.session_store.update_session(session, user_id)
-                
-            # Return content directly for text operations
             return response.content
 
         except Exception as e:
-            logger.error(f"Error in generate: {str(e)}")
+            logger.error(f"Error in generate_stateless: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Generation failed: {str(e)}"
+            )
+
+    async def generate_content(
+        self,
+        session_id: str,
+        content: Dict[str, str],
+        option_params: Optional[Dict[str, float]] = None
+    ) -> str:
+        """Generate content using the configured LLM with session context
+        
+        Args:
+            session_id: Session ID for context management
+            content: Dictionary containing text and optional files
+            option_params: Optional parameters for LLM generation
+            
+        Returns:
+            str: Generated content
+        """
+        try:
+            # Get session without redundant validation
+            session = await self.session_store.get_session(session_id)
+            
+            # Get model ID from session or config
+            model_id = session.metadata.model_id or self.default_llm_config.model_id
+            llm = self._get_llm_provider(model_id)
+            
+            # Debug input content
+            logger.debug(f"Content received for session {session_id}: {content}")
+            
+            # Create message with multimodal content support
+            messages = [Message(
+                role="user",
+                content=content if isinstance(content, dict) else {"text": str(content)},
+                # context={
+                #     "current_time": datetime.now().isoformat()
+                # }
+            )]
+
+            # Generate response
+            response = await llm.generate(
+                messages=messages,
+                system_prompt=session.context.get('system_prompt', ''),
+                **(option_params or {})
+            )
+            
+            if not response:
+                raise ValueError("Empty response from LLM")
+            
+            # Add interactions to session
+            session.add_interaction({
+                "role": "user",
+                "content": content
+            })
+            
+            session.add_interaction({
+                "role": "assistant",
+                "content": response.content,
+                "metadata": response.metadata if hasattr(response, 'metadata') else None
+            })
+            
+            # Update session
+            await self.session_store.update_session(session, session.user_id)
+            
+            return response.content
+
+        except Exception as e:
+            logger.error(f"Error in generate_content: {str(e)}")
             raise HTTPException(
                 status_code=500,
                 detail=f"Generation failed: {str(e)}"
@@ -196,44 +241,43 @@ class GenService:
     async def generate_stream(
         self,
         session_id: str,
-        user_id: str,
-        content: Dict[str, str]
+        content: Dict[str, str],
+        option_params: Optional[Dict[str, float]] = None
     ) -> AsyncIterator[str]:
-        """
-        Generate content with streaming response
+        """Generate content with streaming response and session context
         
         Args:
-            prompts: Dictionary containing text and optional system_prompt
-            user_id: Optional user ID for session management
-            module_name: Optional module name for session management
+            session_id: Session ID for context management
+            content: Dictionary containing text and optional files
             option_params: Optional parameters for LLM generation
+            
+        Yields:
+            str: Generated content chunks in streaming fashion
         """
         try:
             # Get session
-            session = await self.session_store.get_session(session_id, user_id)
+            session = await self.session_store.get_session(session_id)
             
-            # Get model ID from session
-            model_id = session.metadata.model_id
+            # Get model ID from session or config
+            model_id = session.metadata.model_id or self.default_llm_config.model_id
             llm = self._get_llm_provider(model_id)
             
             # Debug input content
-            logger.debug(f"Content received from handler: {content}")
+            logger.debug(f"Content received for session {session_id}: {content}")
             
-            # Add user message to session with proper content structure
+            # Add user message to session
             session.add_interaction({
                 "role": "user",
-                "content": content if isinstance(content, dict) else {"text": str(content)},
-                "timestamp": datetime.now().isoformat()
+                "content": content
             })
             
-            # Debug session interaction
-            logger.debug(f"Session interaction added: {session.interactions[-1]}")
-            
-            # It's not a chat scenario and does not need to refer to historical messages.
-            # Convert session history to messages with multimodal support
+            # Create message for generation
             messages = [Message(
                 role="user",
-                content=content if isinstance(content, dict) else {"text": str(content)}
+                content=content if isinstance(content, dict) else {"text": str(content)},
+                # context={
+                #     "current_time": datetime.now().isoformat()
+                # }
             )]
             
             # Stream response
@@ -243,8 +287,8 @@ class GenService:
             try:
                 async for chunk in llm.generate_stream(
                     messages=messages,
-                    system_prompt=session.context.get('system_prompt'),
-                    **self.default_llm_config.dict()
+                    system_prompt=session.context.get('system_prompt', ''),
+                    **(option_params or {})
                 ):
                     if not isinstance(chunk, dict):
                         logger.warning(f"Unexpected chunk type: {type(chunk)}")
@@ -261,22 +305,17 @@ class GenService:
                 
                 # Add assistant message to session after streaming completes
                 if full_response:
-                    interaction_data = {
+                    session.add_interaction({
                         "role": "assistant",
                         "content": {"text": full_response},
-                        "timestamp": datetime.now().isoformat()
-                    }
-                    
-                    if stream_metadata:
-                        interaction_data["metadata"] = {
-                            "usage": stream_metadata.get('usage', {}),
-                            "metrics": stream_metadata.get('metrics', {}),
-                            "stop_reason": stream_metadata.get('stop_reason'),
-                            "trace": stream_metadata.get('trace', {})
+                        "metadata": {
+                            "usage": stream_metadata.get('usage', {}) if stream_metadata else {},
+                            "metrics": stream_metadata.get('metrics', {}) if stream_metadata else {},
+                            "stop_reason": stream_metadata.get('stop_reason') if stream_metadata else None,
+                            "trace": stream_metadata.get('trace', {}) if stream_metadata else {}
                         }
-                    
-                    session.add_interaction(interaction_data)
-                    await self.session_store.update_session(session, user_id)
+                    })
+                    await self.session_store.update_session(session, session.user_id)
                     
             except Exception as e:
                 logger.error(f"LLM error in session {session_id}: {str(e)}")

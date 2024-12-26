@@ -137,8 +137,7 @@ class TextHandlers:
 
                 # Generate response with session context
                 response = await cls._service.generate_content(
-                    user_id=user_id,
-                    module_name='text',
+                    session_id=session.session_id,
                     content=prompts
                 )
                 

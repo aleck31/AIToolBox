@@ -23,6 +23,7 @@ class Session:
         session_id: str,
         session_name: str,
         created_time: datetime,
+        updated_time: datetime,
         user_id: str,
         metadata: SessionMetadata,
         history: Optional[List[Dict]] = None
@@ -30,12 +31,12 @@ class Session:
         self.session_id = session_id
         self.session_name = session_name
         self.created_time = created_time
+        self.updated_time = updated_time
         self.user_id = user_id
         self.metadata = metadata
         self.history = history or []
         self.context = {
             'start_time': created_time.isoformat(),
-            'last_interaction': created_time.isoformat(),
             'total_interactions': 0,
             'system_prompt': None
         }
@@ -47,6 +48,7 @@ class Session:
             session_id=data['session_id'],
             session_name=data['session_name'],
             created_time=datetime.fromisoformat(data['created_time']),
+            updated_time=datetime.fromisoformat(data['updated_time']),
             user_id=data['user_id'],
             metadata=SessionMetadata(**data['metadata']),
             history=data.get('history', [])
@@ -62,6 +64,7 @@ class Session:
             'session_id': self.session_id,
             'session_name': self.session_name,
             'created_time': self.created_time.isoformat(),
+            'updated_time': self.updated_time.isoformat(),
             'user_id': self.user_id,
             'metadata': self.metadata.to_dict(),
             'history': self.history,
@@ -69,7 +72,10 @@ class Session:
         }
 
     def add_interaction(self, data: Dict[str, Any]) -> None:
-        """Add an interaction to session history"""
+        """
+            Add an interaction to session history,
+            For multimodal content just add as file path
+        """
         # Normalize content format
         if isinstance(data.get('content'), str):
             data['content'] = {'text': data['content']}
@@ -79,11 +85,5 @@ class Session:
             data['timestamp'] = datetime.now().isoformat()
             
         self.history.append(data)
-        self.context['last_interaction'] = datetime.now().isoformat()
+        self.updated_time = datetime.now()  # Store as datetime object
         self.context['total_interactions'] += 1
-
-
-# Very good, there is no need to create custom exceptions, we should use the SDK's exception handling
-class SessionError(Exception):
-    """Unified session error"""
-    pass

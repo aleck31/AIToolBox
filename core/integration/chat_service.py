@@ -66,10 +66,10 @@ class ChatService:
         self._llm_providers[model_id] = provider
         return provider
 
-    async def get_chat_session(
+    async def get_or_create_session(
         self,
         user_id: str,
-        module_name: str = 'chatbot',
+        module_name: str,
         session_name: Optional[str] = None
     ) -> Session:
         """Get existing active session or create new one"""
@@ -88,7 +88,6 @@ class ChatService:
                         self._active_sessions[user_id].pop(module_name, None)
 
             # Create and cache session
-            # model_id = module_config.get_default_model(module_name)
             session_name = session_name or f"{module_name.title()} Session"
             
             # Create session through session manager with standardized format
@@ -96,7 +95,6 @@ class ChatService:
                 user_id=user_id,
                 module_name=module_name,
                 session_name=session_name
-                # initial_context={}
             )
             
             # Track new session
@@ -108,7 +106,7 @@ class ChatService:
             return session
 
         except HTTPException as e:
-            logger.error(f"Error in get_chat_session: {str(e)}")
+            logger.error(f"Error in get_or_create_session: {str(e)}")
             raise e
 
     async def list_chat_sessions(
@@ -199,20 +197,32 @@ class ChatService:
 
     async def send_message(
         self,
-        session_id,
-        user_id,
+        session_id: str,
         content: Dict[str, str],
         ui_history: Optional[List[Dict[str, str]]] = None,
-        inference_params: Optional[Dict[str, float]] = None
+        option_params: Optional[Dict[str, float]] = None
     ) -> AsyncIterator[str]:
-        """Send a message in a chat session and stream the response"""
+        """Send a message in a chat session and stream the response
+        
+        Args:
+            session_id: ID of the chat session
+            content: Message content with text and optional files
+            ui_history: Optional UI chat history for syncing
+            option_params: Optional LLM generation parameters
+            
+        Yields:
+            Generated response chunks for streaming
+        """
         try:
-            # Get session
-            session = await self.session_store.get_session(session_id, user_id)
+            # Get session without redundant validation since it was already validated
+            # when obtained through get_or_create_session
+            session = await self.session_store.get_session(session_id)
             
             # Sync with UI history if provided
             if ui_history is not None:
                 await self.sync_history(session, ui_history)
+
+            logger.debug(f"Content from handler: {content}")
 
             # Get model ID from session
             model_id = session.metadata.model_id
@@ -222,7 +232,7 @@ class ChatService:
             session.add_interaction({
                 "role": "user",
                 "content": content,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().astimezone().isoformat()  # timestamp with tzinfo
             })
             
             # Convert session history to messages
@@ -230,7 +240,9 @@ class ChatService:
             for interaction in session.history:
                 messages.append(Message(
                     role=interaction["role"],
-                    content=interaction["content"]
+                    content=interaction["content"],
+                    # Provides context for when the message was sent
+                    context={"local_time": interaction["timestamp"]}
                 ))
             
             # Stream response
@@ -242,7 +254,7 @@ class ChatService:
                 async for chunk in llm.generate_stream(
                     messages=messages,
                     system_prompt=session.context['system_prompt'],
-                    **(inference_params or {})  # Unpack inference params if provided
+                    **(option_params or {})  # Unpack inference params if provided
                 ):
                     # All chunks should be dictionaries with type indicators
                     if not isinstance(chunk, dict):
@@ -263,10 +275,12 @@ class ChatService:
                 
                 # Add assistant message to session after streaming completes
                 if full_response:  # Only add if we got a response
+                    # Add assistant message with timezone-aware timestamp
+                    current_time = datetime.now().astimezone()
                     interaction_data = {
                         "role": "assistant",
                         "content": {"text": full_response},
-                        "timestamp": datetime.now().isoformat()
+                        "timestamp": current_time.isoformat()
                     }
                     
                     # Add metadata if available from stream
@@ -280,7 +294,7 @@ class ChatService:
                     
                     # Add interaction and update session
                     session.add_interaction(interaction_data)
-                    await self.session_store.update_session(session, user_id)
+                    await self.session_store.update_session(session, session.user_id)
                     
             except Exception as e:
                 logger.error(f"LLM error in session {session_id}: {str(e)}")
