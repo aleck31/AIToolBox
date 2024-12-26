@@ -1,31 +1,33 @@
-from typing import Optional
+from typing import Optional, Dict
 from llm import LLMConfig
 from llm.model_manager import model_manager
-from ..session import SessionManager
+from ..session import SessionStore
 from .chat_service import ChatService
-from core.config import env_config
+from .gen_service import GenService
 from core.logger import logger
-from utils.aws import get_secret
+from core.module_config import module_config
 
-'''
+
 class ServiceFactory:
     """Factory for creating and configuring services"""
     
-    @staticmethod
-    def create_session_manager() -> SessionManager:
-        """Create and configure session manager"""
-        try:
-            # Create SessionManager which internally creates DynamoDBStorage
-            return SessionManager()
-            
-        except Exception as e:
-            logger.error(f"Failed to create session manager: {str(e)}")
-            raise
+    _session_store = None
+    
+    @classmethod
+    def get_session_store(cls) -> SessionStore:
+        """Get or create session store instance"""
+        if cls._session_store is None:
+            try:
+                cls._session_store = SessionStore()
+            except Exception as e:
+                logger.error(f"Failed to create session store: {str(e)}")
+                raise
+        return cls._session_store
 
     @staticmethod
     def create_default_llm_config(
         model_id: Optional[str] = None,
-        region: Optional[str] = None
+        inference_params: Optional[Dict] = None
     ) -> LLMConfig:
         """Create default LLM configuration"""
         try:
@@ -46,73 +48,79 @@ class ServiceFactory:
                 model = models[0]
                 model_id = model.model_id
 
-            # Create provider-specific configuration
-            if model.api_provider.upper() == 'BEDROCK':
-                region = region or env_config.bedrock_config['default_region']
-                return LLMConfig(
-                    api_provider=model.api_provider,
-                    model_id=model_id,
-                    max_tokens=4096,
-                    temperature=0.9,
-                    top_p=0.99
-                )
-            elif model.api_provider.upper() == 'GEMINI':
+            # Set default provider-specific parameters
+            provider_defaults = {
+                'BEDROCK': {
+                    'max_tokens': 2048,
+                    'temperature': 0.9,
+                    'top_p': 0.9,
+                    'top_k': 200
+                },
+                'GEMINI': {
+                    'max_tokens': 1024,
+                    'temperature': 0.7,
+                    'top_p': 0.99,
+                    'top_k': 200
+                }
+            }
 
-                return LLMConfig(
-                    api_provider=model.api_provider,
-                    model_id=model_id,
-                    max_tokens=8192,
-                    temperature=0.9,
-                    top_p=0.99
-                )
-            else:
-                raise ValueError(f"Unsupported API provider: {model.api_provider}")
+            provider = model.api_provider.upper()
+            if provider not in provider_defaults:
+                raise ValueError(f"Unsupported API provider: {provider}")
+
+            # Merge configurations with priority: inference_params > provider_defaults
+            config = {
+                "api_provider": model.api_provider,
+                "model_id": model_id,
+                **provider_defaults[provider],  # Provider defaults
+                **(inference_params or {})      # Override with inference params if provided
+            }
+
+            return LLMConfig(**config)
 
         except Exception as e:
             logger.error(f"Failed to create default LLM config: {str(e)}")
             raise
 
-    @staticmethod
-    def create_chat_service(
-        session_manager: Optional[SessionManager] = None,
-        llm_config: Optional[LLMConfig] = None
-    ) -> ChatService:
-        """Create and configure chat service"""
-        try:
-            # Create session manager if not provided
-            if session_manager is None:
-                session_manager = ServiceFactory.create_session_manager()
-                
-            # Create default LLM config if not provided
-            if llm_config is None:
-                llm_config = ServiceFactory.create_default_llm_config()
-                
-            return ChatService(
-                session_manager=session_manager,
-                default_model_config=llm_config
+    @classmethod
+    def _get_llm_config_by_module(cls, module_name: str) -> LLMConfig:
+        """Create LLM configuration for a module"""
+        # Get model configuration from module config
+        model_id = module_config.get_default_model(module_name)               
+        llm_model = model_manager.get_model_by_id(model_id)
+        if not llm_model:
+            raise ValueError(f"Model not found: {model_id}")
+
+        params = module_config.get_inference_params(module_name) or {}
+        if params:                        
+            # Create LLM config with module parameters
+            return LLMConfig(
+                api_provider=llm_model.api_provider,
+                model_id=model_id,
+                temperature=params.get('temperature', 0.7),
+                max_tokens=int(params.get('max_tokens', 2048)),
+                top_p=params.get('top_p', 0.99),
+                top_k=params.get('top_k', 200)
             )
-            
+        else:
+            return cls.create_default_llm_config(model_id=model_id)
+
+    @classmethod
+    def create_gen_service(cls, module_name: str) -> GenService:
+        """Create and configure general service for modules"""
+        try:
+            llm_config = cls._get_llm_config_by_module(module_name)
+            return GenService(llm_config)
         except Exception as e:
-            logger.error(f"Failed to create chat service: {str(e)}")
+            logger.error(f"Failed to create service for {module_name}: {str(e)}")
             raise
 
     @classmethod
-    def create_default_services(cls) -> ChatService:
-        """Create services with default configuration"""
+    def create_chat_service(cls, module_name: str) -> ChatService:
+        """Create and configure chat service"""
         try:
-            # Create session manager
-            session_manager = cls.create_session_manager()
-            
-            # Create default LLM config
-            llm_config = cls.create_default_llm_config()
-            
-            # Create chat service
-            return cls.create_chat_service(
-                session_manager=session_manager,
-                llm_config=llm_config
-            )
-            
+            llm_config = cls._get_llm_config_by_module(module_name)
+            return ChatService(llm_config)
         except Exception as e:
-            logger.error(f"Failed to create default services: {str(e)}")
+            logger.error(f"Failed to create service for {module_name}: {str(e)}")
             raise
-'''

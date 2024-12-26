@@ -21,7 +21,7 @@ class LLMConfig:
     max_tokens: int = 4096
     temperature: float = 0.9
     top_p: float = 0.99
-    top_k: int = 200
+    top_k: Optional[int] = 200
     stop_sequences: Optional[List[str]] = None
 
 
@@ -33,15 +33,11 @@ class Message:
     context: Optional[Dict] = None
 
 
+@dataclass
 class LLMResponse:
-    """LLM response wrapper"""
-    def __init__(
-        self,
-        content: str,
-        metadata: Optional[Dict] = None
-    ):
-        self.content = content
-        self.metadata = metadata or {}
+    """Basic LLM response structure"""
+    content: str
+    metadata: Optional[Dict] = None
 
 
 class LLMAPIProvider(ABC):

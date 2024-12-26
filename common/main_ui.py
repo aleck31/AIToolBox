@@ -5,7 +5,7 @@ from modules.chatbot.ui import tab_chatbot
 from modules.chatbot_gemini.ui import tab_gemini
 from modules.text.ui import tab_text
 from modules.summary.ui import tab_summary
-# from modules.vision.ui import tab_vision
+from modules.vision.ui import tab_vision
 from modules.coding.ui import tab_coding
 from modules.oneshot.ui import tab_oneshot
 from modules.draw.ui import tab_draw
@@ -30,13 +30,13 @@ def create_main_interface(request: Request = None):
     interface = gr.TabbedInterface(
         [
             tab_chatbot, tab_gemini, tab_text,
-            # tab_summary, tab_vision, tab_oneshot,
+            tab_summary, tab_vision, tab_oneshot,
             tab_coding, tab_draw, 
             tab_setting
         ],
         tab_names=[
             "Claude 🤖", "Gemini 👾", "Text 📝", 
-            # "Summary 📰", "Vision 👀", "OneShot 🎯",
+            "Summary 📰", "Vision 👀", "OneShot 🎯",
             "Coding 💻", "Draw 🎨", 
             "Setting ⚙️"
         ],

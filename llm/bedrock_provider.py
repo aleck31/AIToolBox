@@ -99,30 +99,26 @@ class BedrockProvider(LLMAPIProvider):
                 operation_name='read_file'
             )
 
-    def prepare_messages(
+    def _format_messages(
         self,
         messages: List[Message]
     ) -> List[Dict]:
         """Convert messages to Bedrock-specific format"""
+        logger.debug(f"Unfarmated messages: {messages}")
         formatted_messages = []
-        
+
         for message in messages:
+            content = []
+            if message.context:
+                content.append({"text": json.dumps(message.context)})
+
             if isinstance(message.content, str):
-                formatted_messages.append({
-                    "role": message.role,
-                    "content": [{"text": message.content}]
-                })
-            else:
+                content.append({"text": message.content})
+            elif isinstance(message.content, dict):
                 # Handle Gradio chatbox format with text and files
-                content = []
-                
-                # Handle text content
                 if "text" in message.content:
-                    # If text is a dict with 'text' key (Gradio format), extract just the text
-                    text = message.content["text"]["text"] if isinstance(message.content["text"], dict) else message.content["text"]
-                    content.append({"text": text})
-                
-                # Handle files if present
+                    content.append({"text": message.content["text"].strip()})
+                # Handle multimodal content
                 if "files" in message.content and isinstance(message.content["files"], list):
                     for file_path in message.content["files"]:
                         file_type, format = self._get_file_type_and_format(file_path)
@@ -138,11 +134,13 @@ class BedrockProvider(LLMAPIProvider):
                                     }
                                 }
                             })
-                
-                formatted_messages.append({
-                    "role": message.role,
-                    "content": content
-                })
+            
+            formatted_messages.append({
+                "role": message.role,
+                "content": content
+            })
+
+            logger.debug(f"Farmated messages: {formatted_messages}")        
         
         return formatted_messages
 
@@ -154,8 +152,10 @@ class BedrockProvider(LLMAPIProvider):
     ) -> LLMResponse:
         """Generate a response from Bedrock"""
         try:
-            formatted_messages = self.prepare_messages(messages)
+            formatted_messages = self._format_messages(messages)
             inference_params = self._prepare_inference_params(**kwargs)
+            
+            logger.debug(f"Formatted messages for Bedrock: {formatted_messages}")
             
             # Prepare request parameters
             request_params = {
@@ -173,14 +173,22 @@ class BedrockProvider(LLMAPIProvider):
             if 'top_k' in kwargs:
                 additional_params['topK'] = kwargs['top_k']
             
+            # Log request before API call
+            logger.debug(f"Request params for Bedrock: {request_params}")
+            
             response = self.client.converse(
                 **request_params,
                 **({"additionalModelRequestFields": additional_params} if additional_params else {})
             )
+            
+            # Log raw response
+            logger.debug(f"Raw Bedrock response: {response}")
+            
+            # Extract content from output message
+            output_message = response.get('output', {}).get('message', {})
+            content = output_message.get('content', [{}])[0].get('text', '')
 
-            response_body = json.loads(response.get('body').read())
-
-            response_metadata={
+            response_metadata = {
                 'usage': response.get('usage'),
                 'metrics': response.get('metrics'),
                 'stop_reason': response.get('stopReason'),
@@ -188,7 +196,7 @@ class BedrockProvider(LLMAPIProvider):
             }
 
             return LLMResponse(
-                content=response_body.get('content', ''),
+                content=content,
                 metadata=response_metadata
             )
             
@@ -213,7 +221,7 @@ class BedrockProvider(LLMAPIProvider):
     ) -> AsyncIterator[str]:
         """Generate a streaming response from Bedrock using converse_stream"""
         try:
-            formatted_messages = self.prepare_messages(messages)
+            formatted_messages = self._format_messages(messages)
             inference_params = self._prepare_inference_params(**kwargs)
             
             # Prepare request parameters

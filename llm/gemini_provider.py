@@ -89,7 +89,7 @@ class GeminiProvider(LLMAPIProvider):
             if instruction.strip()
         ]
 
-    def prepare_messages(
+    def _format_messages(
         self,
         messages: List[Message],
         system_prompt: Optional[str] = None
@@ -159,7 +159,7 @@ class GeminiProvider(LLMAPIProvider):
     ) -> LLMResponse:
         """Generate a response from Gemini using generate_content"""
         try:
-            formatted_messages = self.prepare_messages(messages, system_prompt)
+            formatted_messages = self._format_messages(messages, system_prompt)
             
             # Update model args if new system prompt provided
             model_args = {
@@ -171,6 +171,8 @@ class GeminiProvider(LLMAPIProvider):
                 contents=formatted_messages,
                 **model_args
             )
+
+            logger.debug(f"Raw Gemini response: {response}")
             
             return LLMResponse(
                 content=response.text,
@@ -198,7 +200,7 @@ class GeminiProvider(LLMAPIProvider):
     ) -> AsyncIterator[Dict]:
         """Generate a streaming response from Gemini using generate_content with stream=True"""
         try:
-            formatted_messages = self.prepare_messages(messages, system_prompt)
+            formatted_messages = self._format_messages(messages, system_prompt)
             
             # Update model args if new system prompt provided
             model_args = {
@@ -241,7 +243,7 @@ class GeminiProvider(LLMAPIProvider):
     ) -> AsyncIterator[Dict]:
         """Generate streaming response using multi-turn chat"""
         try:
-            formatted_messages = self.prepare_messages(messages, system_prompt)
+            formatted_messages = self._format_messages(messages, system_prompt)
             
             # Create chat session with history
             chat = self.model.start_chat(history=formatted_messages[:-1])

@@ -100,16 +100,30 @@ class CognitoAuth:
             }
 
     def verify_token(self, token: str) -> bool:
-        """Verify an access token with Cognito"""
+        """Verify an access token with Cognito and refresh if expired"""
         # Check if token exists in our stored access tokens
-        if token in self.access_tokens.values():
+        username = None
+        for user, stored_token in self.access_tokens.items():
+            if stored_token == token:
+                username = user
+                break
+
+        if username:
             try:
                 # Let Cognito verify if token is still valid
                 self.client.get_user(AccessToken=token)
                 return True
             except self.client.exceptions.NotAuthorizedException:
-                # Token expired - remove from storage
-                self._remove_token(token)
+                # Token expired - attempt refresh
+                if username in self.refresh_tokens:
+                    try:
+                        new_tokens = self.refresh_access_token(username)
+                        if new_tokens and new_tokens['AccessToken'] == token:
+                            return True
+                    except Exception as e:
+                        logger.error(f"Token refresh failed for user [{username}]: {str(e)}")
+                        self._remove_token(token)
+                        return False
                 return False
             except Exception as e:
                 logger.error(f"Token verification failed: {str(e)}")
@@ -127,14 +141,61 @@ class CognitoAuth:
                 'attributes': {attr['Name']: attr['Value'] for attr in response['UserAttributes']}
             }
             return True
+        except self.client.exceptions.NotAuthorizedException:
+            logger.warning(f"Invalid token provided")
+            return False
         except Exception as e:
             logger.error(f"Token verification failed: {str(e)}")
             return False
+
+    def refresh_access_token(self, username: str) -> Optional[Dict]:
+        """
+        Refresh access token using stored refresh token
+        
+        Args:
+            username: The username to refresh token for
+            
+        Returns:
+            dict: New tokens if refresh successful, None otherwise
+        """
+        refresh_token = self.refresh_tokens.get(username)
+        if not refresh_token:
+            return None
+            
+        try:
+            response = self.client.initiate_auth(
+                ClientId=self.client_id,
+                AuthFlow='REFRESH_TOKEN_AUTH',
+                AuthParameters={
+                    'REFRESH_TOKEN': refresh_token
+                }
+            )
+            
+            if 'AuthenticationResult' in response:
+                # Update stored tokens
+                self.access_tokens[username] = response['AuthenticationResult']['AccessToken']
+                # Note: Refresh token remains the same
+                
+                logger.info(f"Successfully refreshed token for user [{username}]")
+                return response['AuthenticationResult']
+            else:
+                logger.warning(f"Token refresh failed for user [{username}]: No AuthenticationResult")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Token refresh failed for user [{username}]: {str(e)}")
+            return None
 
     def _remove_token(self, token: str) -> None:
         """Remove token and associated data from storage"""
         for username, stored_token in self.access_tokens.items():
             if stored_token == token:
+                # Try to refresh token before removing
+                if username in self.refresh_tokens:
+                    if self.refresh_access_token(username):
+                        return  # Token refreshed successfully, don't remove
+                
+                # If refresh failed or no refresh token, remove all tokens
                 del self.access_tokens[username]
                 if username in self.refresh_tokens:
                     del self.refresh_tokens[username]
@@ -207,33 +268,3 @@ class CognitoAuth:
 # Create a singleton instance
 cognito_auth = CognitoAuth()
 
-
-# FastAPI dependency
-'''
-security = HTTPBearer()
-
-def verify_api_token(credentials: HTTPAuthorizationCredentials = Security(security)) -> Dict:
-    """
-    FastAPI dependency for verifying API token and getting the current authenticated user
-    
-    Args:
-        credentials: The HTTP Authorization credentials
-        
-    Returns:
-        Dict: User information if token is valid
-        
-    Raises:
-        HTTPException: If authentication is invalid
-    """
-    token = credentials.credentials
-    user_info = cognito_auth.get_user_info(token)
-    
-    if not user_info:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    return user_info
-'''

@@ -3,10 +3,15 @@ Configuration management using python-dotenv for environment variables
 """
 import os
 from typing import Any, Dict, Optional
+from pathlib import Path
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv()
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
+
+# Debug: Print loaded environment variables
+print(f"Loaded SERVER_HOST: {os.getenv('SERVER_HOST')}")
 
 
 class ENVConfig:
@@ -53,17 +58,13 @@ class AppConfig:
     """Application-level configuration settings"""
 
     @property
-    def log_level(self) -> str:     #跟 server_config 'debug' 重复了，可否去掉
-        """Get logging level"""
-        return os.getenv('LOG_LEVEL', 'INFO')
-
-    @property
     def server_config(self) -> Dict[str, Any]:
         """Get server configuration"""
         return {
             'host': os.getenv('SERVER_HOST', 'localhost'),
             'port': int(os.getenv('SERVER_PORT', '8080')),
-            'debug': os.getenv('DEBUG', 'False').lower() == 'true'
+            'debug': os.getenv('DEBUG', 'False').lower() == 'true',
+            'log_level': 'debug' if os.getenv('DEBUG') else 'info'
         }
 
     @property
@@ -80,7 +81,7 @@ class AppConfig:
         """Get security configuration"""
         return {
             'secret_key': os.getenv('SECRET_KEY', 'default-secret-key'),
-            'token_expiration': int(os.getenv('TOKEN_EXPIRATION', '3600')),
+            'token_expiration': int(os.getenv('TOKEN_EXPIRATION', '7200')),
             'ssl_enabled': os.getenv('SSL_ENABLED', 'False').lower() == 'true'
         }
 

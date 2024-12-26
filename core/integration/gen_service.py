@@ -2,15 +2,13 @@ from fastapi import HTTPException
 from datetime import datetime
 from typing import Dict, List, Optional, AsyncIterator
 from core.logger import logger
-from core.session.models import Session, SessionError
-from core.session import SessionManager
+from core.session import Session, SessionStore
 from llm.bedrock_provider import BedrockProvider
 from llm.gemini_provider import GeminiProvider
 from llm.model_manager import model_manager
 from llm import LLMConfig, Message, LLMAPIProvider
 
 
-# TobeFix: Implement GenService functions according to module requirements
 #  GenService will be used by multiple modules, including text, vison, summary, coding, oneshot
 class GenService:
     """General content generation service"""
@@ -24,7 +22,7 @@ class GenService:
         Args:
             llm_config: LLM configuration containing model ID and parameters
         """
-        self.session_manager = SessionManager()
+        self.session_store = SessionStore()
         self._llm_providers: Dict[str, LLMAPIProvider] = {}
         self._active_sessions: Dict[str, Dict[str, str]] = {}
         
@@ -77,10 +75,10 @@ class GenService:
         self._llm_providers[model_id] = provider
         return provider
 
-    async def get_gen_session(
+    async def get_or_create_session(
         self,
         user_id: str,
-        module_name: str = 'text',
+        module_name: str,
         session_name: Optional[str] = None
     ) -> Session:
         """Get existing active session or create new one"""
@@ -91,23 +89,21 @@ class GenService:
                 session_id = user_sessions[module_name]
                 try:
                     # Verify session is still valid
-                    session = await self.session_manager.get_session(session_id, user_id)
+                    session = await self.session_store.get_session(session_id, user_id)
                     return session
-                except SessionError:
+                except HTTPException:
                     # Session expired or invalid, remove from tracking
                     if user_id in self._active_sessions:
                         self._active_sessions[user_id].pop(module_name, None)
 
-            # Create new session
-            # model_id = module_config.get_default_model(module_name)
+            # Create and cache session
             session_name = session_name or f"{module_name.title()} Session"
             
-            # Create session through session manager with standardized format
-            session = await self.session_manager.create_session(
+            # Create session through session store
+            session = await self.session_store.create_session(
                 user_id=user_id,
                 module_name=module_name,
                 session_name=session_name
-                # initial_context={}
             )
             
             # Track new session
@@ -115,38 +111,87 @@ class GenService:
                 self._active_sessions[user_id] = {}
             self._active_sessions[user_id][module_name] = session.session_id
             
-            logger.info(f"Created new chat session {session.session_id} for user {user_id}")
+            logger.info(f"Created new session {session.session_id} for user {user_id}")
             return session
 
-        except SessionError as e:
-            logger.error(f"Error in get_chat_session: {str(e)}")
+        except HTTPException as e:
+            logger.error(f"Error in get_session: {str(e)}")
+            raise e
+
+    async def generate_content(
+        self,
+        user_id: Optional[str],
+        module_name: Optional[str],
+        content: Dict[str, str],
+        option_params: Optional[Dict[str, float]] = None
+    ) -> str:
+        """Generate content using the configured LLM with optional session context
+        
+        Args:
+            prompts: Dictionary containing text and optional system_prompt
+            user_id: Optional user ID for session management
+            module_name: Optional module name for session management
+            option_params: Optional parameters for LLM generation
+        """
+        try:
+            # Get model ID from config
+            model_id = self.default_llm_config.model_id
+            llm = self._get_llm_provider(model_id)
+            
+            # Get or create session if user_id and module_name provided
+            if user_id and module_name:
+                session = await self.get_or_create_session(user_id, module_name)
+                
+            # Get system prompt from session context or content
+            system_prompt = session.context.get('system_prompt', '')
+            
+            # Debug input content
+            logger.debug(f"Content received from handler: {content}")
+            
+            # Create message with multimodal content support
+            messages = [Message(
+                role="user",
+                content=content if isinstance(content, dict) else {"text": str(content)},
+                context={
+                    "current_time": datetime.now().isoformat()
+                }
+            )]
+
+            # Generate response
+            response = await llm.generate(
+                messages=messages,
+                system_prompt=system_prompt,
+                **(option_params or {})
+            )
+            
+            if not response:
+                raise ValueError("Empty response from LLM")
+            
+            # Add interaction to session if available
+            if session:
+                session.add_interaction({
+                    "role": "user",
+                    "content": {"text": content.get('text', '')},
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                session.add_interaction({
+                    "role": "assistant",
+                    "content": {"text": response.content},
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                await self.session_store.update_session(session, user_id)
+                
+            # Return content directly for text operations
+            return response.content
+
+        except Exception as e:
+            logger.error(f"Error in generate: {str(e)}")
             raise HTTPException(
                 status_code=500,
-                detail=str(e)
+                detail=f"Generation failed: {str(e)}"
             )
-
-    async def get_gen_session_by_id(
-        self,
-        session_id: str,
-        user_id: str
-    ) -> Session:
-        """Get an existing chat session"""
-        try:
-            session = await self.session_manager.get_session(
-                session_id=session_id,
-                user_id=user_id
-            )
-            return session
-            
-        except SessionError as e:
-            logger.error(f"Failed to get chat session: {str(e)}")
-            raise HTTPException(
-                status_code=404 if "not found" in str(e) else 500,
-                detail=str(e)
-            )
-
-    async def generate_content():
-        pass
 
     async def generate_stream(
         self,
@@ -154,77 +199,89 @@ class GenService:
         user_id: str,
         content: Dict[str, str]
     ) -> AsyncIterator[str]:
-        """Send a message in a chat session and stream the response"""
-        session = None
+        """
+        Generate content with streaming response
+        
+        Args:
+            prompts: Dictionary containing text and optional system_prompt
+            user_id: Optional user ID for session management
+            module_name: Optional module name for session management
+            option_params: Optional parameters for LLM generation
+        """
         try:
             # Get session
-            session = await self.get_gen_session_by_id(session_id, user_id)
-            
-            # Create message
-            user_message = Message(
-                role="user",
-                content=content
-            )
+            session = await self.session_store.get_session(session_id, user_id)
             
             # Get model ID from session
             model_id = session.metadata.model_id
             llm = self._get_llm_provider(model_id)
             
-            # Add user message to session
+            # Debug input content
+            logger.debug(f"Content received from handler: {content}")
+            
+            # Add user message to session with proper content structure
             session.add_interaction({
                 "role": "user",
-                "content": content,
+                "content": content if isinstance(content, dict) else {"text": str(content)},
                 "timestamp": datetime.now().isoformat()
             })
+            
+            # Debug session interaction
+            logger.debug(f"Session interaction added: {session.interactions[-1]}")
+            
+            # It's not a chat scenario and does not need to refer to historical messages.
+            # Convert session history to messages with multimodal support
+            messages = [Message(
+                role="user",
+                content=content if isinstance(content, dict) else {"text": str(content)}
+            )]
             
             # Stream response
             full_response = ""
             stream_metadata = None
             
             try:
-                # Get the stream from LLM
                 async for chunk in llm.generate_stream(
-                    messages=[user_message],
-                    system_prompt=session.metadata.system_prompt
+                    messages=messages,
+                    system_prompt=session.context.get('system_prompt'),
+                    **self.default_llm_config.dict()
                 ):
-                    # Handle metadata events from the stream
-                    if isinstance(chunk, dict) and chunk.get('type') == 'metadata':
-                        stream_metadata = chunk['data']
+                    if not isinstance(chunk, dict):
+                        logger.warning(f"Unexpected chunk type: {type(chunk)}")
                         continue
-                    
-                    # Handle text chunks
-                    full_response += chunk
-                    yield chunk
+                        
+                    if 'metadata' in chunk:
+                        stream_metadata = chunk['metadata']
+                    elif 'text' in chunk:
+                        text = chunk['text']
+                        full_response += text
+                        yield full_response
+                    else:
+                        logger.warning(f"Unknown chunk format: {chunk}")
                 
-                # Add assistant message with metadata from stream
-                interaction_data = {
-                    "role": "assistant",
-                    "content": {"text": full_response},
-                    "timestamp": datetime.now().isoformat()
-                }
-                
-                # Add metadata if available from stream
-                if stream_metadata:
-                    interaction_data["metadata"] = {
-                        "usage": stream_metadata.get('usage', {}),
-                        "metrics": stream_metadata.get('metrics', {}),
-                        "stop_reason": stream_metadata.get('stop_reason'),
-                        "trace": stream_metadata.get('trace', {})
+                # Add assistant message to session after streaming completes
+                if full_response:
+                    interaction_data = {
+                        "role": "assistant",
+                        "content": {"text": full_response},
+                        "timestamp": datetime.now().isoformat()
                     }
-                
-                session.add_interaction(interaction_data)
-                
-                # Single update to DynamoDB after streaming
-                await self.session_manager.update_session(session, user_id)
+                    
+                    if stream_metadata:
+                        interaction_data["metadata"] = {
+                            "usage": stream_metadata.get('usage', {}),
+                            "metrics": stream_metadata.get('metrics', {}),
+                            "stop_reason": stream_metadata.get('stop_reason'),
+                            "trace": stream_metadata.get('trace', {})
+                        }
+                    
+                    session.add_interaction(interaction_data)
+                    await self.session_store.update_session(session, user_id)
                     
             except Exception as e:
                 logger.error(f"LLM error in session {session_id}: {str(e)}")
                 yield "I apologize, but I encountered an error while generating the response."
                 
         except Exception as e:
-            logger.error(f"Error in send_message: {str(e)}")
+            logger.error(f"Error in generate_stream: {str(e)}")
             yield "I apologize, but I encountered an error. Please try again."
-            
-
-    async def analyze_image():
-        pass
