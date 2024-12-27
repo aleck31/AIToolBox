@@ -8,55 +8,7 @@ from botocore.exceptions import ClientError
 from core.config import env_config
 from core.logger import logger
 from utils.aws import get_aws_resource
-from . import LLMConfig
-
-
-VALID_MODEL_TYPES = ['text', 'multimodal', 'image', 'embedding']
-
-
-@dataclass
-class LLMModel:
-    """Represents an LLM model configuration"""
-    name: str
-    model_id: str
-    api_provider: str
-    type: str
-    vendor: str = ""      # Optional
-    description: str = "" # Optional
-
-    def __post_init__(self):
-        """Validate model attributes after initialization"""
-        if not self.name:
-            raise ValueError("Model name is required")
-        if not self.model_id:
-            raise ValueError("Model ID is required")
-        if not self.api_provider:
-            raise ValueError("API provider is required")
-        if self.type not in VALID_MODEL_TYPES:
-            raise ValueError(f"Invalid model type. Must be one of: {', '.join(VALID_MODEL_TYPES)}")
-
-    def to_dict(self) -> Dict:
-        """Convert to dictionary for storage"""
-        return {
-            'name': self.name,
-            'model_id': self.model_id,
-            'api_provider': self.api_provider,
-            'type': self.type,
-            'vendor': self.vendor,
-            'description': self.description
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict) -> 'LLMModel':
-        """Create from dictionary"""
-        return cls(
-            name=data['name'],
-            model_id=data['model_id'],
-            api_provider=data['api_provider'],
-            type=data.get('type', 'text'),
-            vendor=data.get('vendor', ''),
-            description=data.get('description', '')
-        )
+from . import LLMModel
 
 
 # Default model configurations

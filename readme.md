@@ -15,6 +15,7 @@ Its user-friendly Gradio-based web interface provides an intuitive experience.
   - Gemini-powered chat interface
   - Support for text, images, and document inputs
   - Context-aware conversations
+  - Tool use (function calling) integration
   - Supported formats:
     * Images: jpg/jpeg, png, gif, webp
     * Documents: pdf, csv, doc, docx, xls, xlsx, txt, md
@@ -66,6 +67,7 @@ Its user-friendly Gradio-based web interface provides an intuitive experience.
   - Multimodal message support with proper format handling
   - Efficient file processing and streaming
   - Automatic format detection and normalization
+  - Tool use (function calling) support with extensible registry
 
 ## Project Structure
 
@@ -80,18 +82,21 @@ llm-toolbox/
 │   ├── logger.py      # Logging configuration
 │   ├── module_config.py    # Module configuration
 │   ├── integration/   # Service integration
+│   │   ├── service_factory.py  # Service creation factory
 │   │   ├── chat_service.py     # Chat service orchestration
-│   │   └── service_factory.py  # Service creation factory
+│   │   └── gen_service.py      # General generation service
 │   └── session/       # Session management
 │       ├── models.py         # Data models for Session
 │       └── store.py          # DynamoDB-based session storage
 ├── llm/               # LLM implementations
 │   ├── init.py               # Base LLM interfaces
-│   ├── bedrock_provider.py   # AWS Bedrock integration
-│   ├── gemini_provider.py    # Google Gemini integration
 │   ├── model_manager.py      # Model management
+│   ├── api_providers/        # LLM tools implementations
+│   │   ├── base.py             # Base class for LLM providers
+│   │   ├── aws_bedrock.py      # AWS Bedrock integration
+│   │   └── google_gemini.py    # Google Gemini integration
 │   └── tools/         # LLM tools implementations
-│       └── bedrock_tools.py  # Bedrock tools
+│       └── bedrock_tools.py  # Tool registry for Bedrock
 ├── common/            # Common modules
 │   ├── login/            # Authentication UI
 │   ├── setting/          # Module settings

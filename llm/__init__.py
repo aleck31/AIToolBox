@@ -1,21 +1,12 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
-from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Union, AsyncIterator
+from typing import Dict, List, Optional, Union
 from dataclasses import dataclass
-
-
-def moc_chat(name, message, history):
-    history = history or []
-    message = message.lower()
-    salutation = "Good morning" if message else "Good evening"
-    greeting = f"{salutation} {name}. {message} degrees today"
-    return greeting
 
 
 @dataclass
 class LLMConfig:
-    """Basic configuration for LLM providers"""
+    """Model-specific parameters for LLM providers"""
     api_provider: str
     model_id: str
     max_tokens: int = 4096
@@ -37,62 +28,60 @@ class Message:
 class LLMResponse:
     """Basic LLM response structure"""
     content: str
+    tool_calls: Optional[List[Dict]] = None
+    tool_results: Optional[List[Dict]] = None
     metadata: Optional[Dict] = None
 
 
-class LLMAPIProvider(ABC):
-    """Base class for LLM providers"""
-    
-    def __init__(self, config: LLMConfig):
-        self.config = config
-        self._validate_config()
-        self._initialize_client()
+VALID_MODEL_TYPES = ['text', 'multimodal', 'image', 'embedding']
+
+@dataclass
+class LLMModel:
+    """Represents an LLM model configuration"""
+    name: str
+    model_id: str
+    api_provider: str
+    type: str
+    vendor: str = ""      # Optional
+    description: str = "" # Optional
+
+    def __post_init__(self):
+        """Validate model attributes after initialization"""
+        if not self.name:
+            raise ValueError("Model name is required")
+        if not self.model_id:
+            raise ValueError("Model ID is required")
+        if not self.api_provider:
+            raise ValueError("API provider is required")
+        if self.type not in VALID_MODEL_TYPES:
+            raise ValueError(f"Invalid model type. Must be one of: {', '.join(VALID_MODEL_TYPES)}")
+
+    def to_dict(self) -> Dict:
+        """Convert to dictionary for storage"""
+        return {
+            'name': self.name,
+            'model_id': self.model_id,
+            'api_provider': self.api_provider,
+            'type': self.type,
+            'vendor': self.vendor,
+            'description': self.description
+        }
 
     @classmethod
-    def create(cls, config: LLMConfig) -> 'LLMAPIProvider':
-        """Factory method to create appropriate provider instance"""
-        from .bedrock_provider import BedrockProvider
-        from .gemini_provider import GeminiProvider
-        from .openai_provider import OpenAIProvider
-        
-        providers = {
-            'BEDROCK': BedrockProvider,
-            'GEMINI': GeminiProvider, 
-            'OPENAI': OpenAIProvider
-        }
-        
-        provider_class = providers.get(config.api_provider.upper())
-        if not provider_class:
-            raise ValueError(f"Unsupported API provider: {config.api_provider}")
-            
-        return provider_class(config)
-    
-    @abstractmethod
-    def _validate_config(self) -> None:
-        """Validate provider-specific configuration"""
-        pass
-    
-    @abstractmethod
-    def _initialize_client(self) -> None:
-        """Initialize provider-specific client"""
-        pass
-    
-    @abstractmethod
-    async def generate(
-        self,
-        messages: List[Message],
-        system_prompt: Optional[str] = None,
-        **kwargs
-    ) -> LLMResponse:
-        """Generate a response"""
-        pass
-    
-    @abstractmethod
-    async def generate_stream(
-        self,
-        messages: List[Message],
-        system_prompt: Optional[str] = None,
-        **kwargs
-    ) -> AsyncIterator[str]:
-        """Generate a streaming response"""
-        pass
+    def from_dict(cls, data: Dict) -> 'LLMModel':
+        """Create from dictionary"""
+        return cls(
+            name=data['name'],
+            model_id=data['model_id'],
+            api_provider=data['api_provider'],
+            type=data.get('type', 'text'),
+            vendor=data.get('vendor', ''),
+            description=data.get('description', '')
+        )
+
+def moc_chat(name, message, history):
+    history = history or []
+    message = message.lower()
+    salutation = "Good morning" if message else "Good evening"
+    greeting = f"{salutation} {name}. {message} degrees today"
+    return greeting

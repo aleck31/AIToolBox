@@ -3,10 +3,8 @@ from datetime import datetime
 from typing import Dict, List, Optional, AsyncIterator
 from core.logger import logger
 from core.session import Session, SessionStore
-from llm.bedrock_provider import BedrockProvider
-from llm.gemini_provider import GeminiProvider
 from llm.model_manager import model_manager
-from llm import LLMConfig, Message, LLMAPIProvider
+from llm.api_providers.base import LLMConfig, Message, LLMAPIProvider
 
 
 #  GenService will be used by multiple modules, including text, vison, summary, coding, oneshot
@@ -15,16 +13,19 @@ class GenService:
     
     def __init__(
         self,
-        llm_config: LLMConfig
+        llm_config: LLMConfig,
+        enabled_tools: Optional[List[str]] = None
     ):
         """Initialize text service with model configuration
         
         Args:
             llm_config: LLM configuration containing model ID and parameters
+            enabled_tools: Optional list of tool module names to enable
         """
         self.session_store = SessionStore()
         self._llm_providers: Dict[str, LLMAPIProvider] = {}
         self._active_sessions: Dict[str, Dict[str, str]] = {}
+        self.enabled_tools = enabled_tools or []
         
         # Validate model exists and config matches
         model = model_manager.get_model_by_id(llm_config.model_id)
@@ -64,18 +65,11 @@ class GenService:
             stop_sequences=self.default_llm_config.stop_sequences
         )
         
-        # Create and cache provider
-        if config.api_provider.upper() == 'BEDROCK':
-            provider = BedrockProvider(config)
-        elif config.api_provider.upper() == 'GEMINI':
-            provider = GeminiProvider(config)
-        else:
-            raise ValueError(f"Unsupported API provider: {config.api_provider}")
-            
+        # Create provider using factory method with enabled tools
+        provider = LLMAPIProvider.create(config, self.enabled_tools)
         self._llm_providers[model_id] = provider
         return provider
 
-    # Question: After this modification, has the get_or_create_session method become useless?
     async def get_or_create_session(
         self,
         user_id: str,

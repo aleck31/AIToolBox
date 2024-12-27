@@ -61,7 +61,7 @@ class SessionStore:
             }
             self.table.put_item(Item=item)
             
-            logger.info(f"Created session {session.session_id} for user {user_id}")
+            logger.debug(f"Created session {session.session_id} for user {user_id}")
             return session
             
         except Exception as e:

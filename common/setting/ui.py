@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
 from fastapi import HTTPException
-from llm.model_manager import model_manager, VALID_MODEL_TYPES, LLMModel
+from llm import VALID_MODEL_TYPES
+from llm.model_manager import model_manager
 from core.module_config import module_config
-from . import update_module_configs, delete_model, add_model, format_config_json
 from core.logger import logger
 from common.login import get_user
+from . import update_module_configs, delete_model, add_model, format_config_json
 
 
 MODULE_LIST = ['chatbot', 'chatbot-gemini', 'text', 'summary', 'vision', 'coding', 'oneshot', 'draw']

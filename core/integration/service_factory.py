@@ -86,7 +86,7 @@ class ServiceFactory:
     def _get_llm_config_by_module(cls, module_name: str) -> LLMConfig:
         """Create LLM configuration for a module"""
         # Get model configuration from module config
-        model_id = module_config.get_default_model(module_name)               
+        model_id = module_config.get_default_model(module_name)       
         llm_model = model_manager.get_model_by_id(model_id)
         if not llm_model:
             raise ValueError(f"Model not found: {model_id}")
@@ -106,21 +106,33 @@ class ServiceFactory:
             return cls.create_default_llm_config(model_id=model_id)
 
     @classmethod
-    def create_gen_service(cls, module_name: str) -> GenService:
+    def create_gen_service(cls, module_name: str, enabled_tools=None) -> GenService:
         """Create and configure general service for modules"""
         try:
             llm_config = cls._get_llm_config_by_module(module_name)
-            return GenService(llm_config)
+            # Get module configuration for tools
+            # get_enabled_tools() function need to be implemented
+            if not enabled_tools:
+                enabled_tools = module_config.get_enabled_tools(module_name)
+
+            return GenService(llm_config, enabled_tools=enabled_tools)
         except Exception as e:
             logger.error(f"Failed to create service for {module_name}: {str(e)}")
             raise
 
     @classmethod
-    def create_chat_service(cls, module_name: str) -> ChatService:
+    def create_chat_service(cls, module_name: str, enabled_tools=None) -> ChatService:
         """Create and configure chat service"""
         try:
+            # Get LLM configuration
             llm_config = cls._get_llm_config_by_module(module_name)
-            return ChatService(llm_config)
+            
+            # Get module configuration for tools
+            if not enabled_tools:
+                enabled_tools = module_config.get_enabled_tools(module_name)
+            
+            # Create service with tool configuration
+            return ChatService(llm_config, enabled_tools=enabled_tools)
         except Exception as e:
             logger.error(f"Failed to create service for {module_name}: {str(e)}")
             raise

@@ -1,17 +1,26 @@
 
-from datetime import datetime
-from typing import Dict, List, Optional, AsyncIterator, Union
+from typing import Dict, List, Optional, AsyncIterator
 import google.generativeai as genai
 from google.generativeai.types import content_types
 from google.api_core import exceptions
 from core.logger import logger
 from core.config import env_config
 from utils.aws import get_secret
-from . import LLMAPIProvider, LLMConfig, Message, LLMResponse
+from .base import LLMAPIProvider, LLMConfig, Message, LLMResponse
 
 
 class GeminiProvider(LLMAPIProvider):
     """Google Gemini LLM provider implementation"""
+    
+    def __init__(self, config: LLMConfig, tools=None):
+        """Initialize provider with config and tools
+        
+        Args:
+            config: LLM configuration
+            tools: Optional list of tool specifications
+        """
+        super().__init__(config, tools)
+        self._initialize_client()
     
     def _validate_config(self) -> None:
         """Validate Gemini-specific configuration"""
@@ -29,6 +38,8 @@ class GeminiProvider(LLMAPIProvider):
         try:
             gemini_secret_key = env_config.gemini_config['secret_id']
             api_key = get_secret(gemini_secret_key).get('api_key')
+            if not api_key:
+                raise ValueError("Gemini API key not configured")            
             genai.configure(api_key=api_key)
             
             # Initialize model with default system_instruction
@@ -131,7 +142,7 @@ class GeminiProvider(LLMAPIProvider):
                 
                 if context_text:
                     # Add formatted context as a bracketed prefix
-                    parts.append({"text": f"[{' | '.join(context_text)}]\n"})
+                    parts.append({"text": f"{' | '.join(context_text)}\n"})
 
             # Handle message content
             if isinstance(message.content, str):
@@ -200,7 +211,8 @@ class GeminiProvider(LLMAPIProvider):
         except Exception as e:
             self._handle_gemini_error(e)
 
-    async def generate_stream(
+    #TobeFix: 暂时用 generate_stream 替 multi_turn_generate 用于chat service
+    async def multi_turn_generate(
         self,
         messages: List[Message],
         system_prompt: Optional[str] = None,
@@ -243,7 +255,7 @@ class GeminiProvider(LLMAPIProvider):
             logger.error(f"Streaming error: {str(e)}")
             self._handle_gemini_error(e)
 
-    async def multi_turn_generate_stream(
+    async def generate_stream(
         self,
         messages: List[Message],
         system_prompt: Optional[str] = None,

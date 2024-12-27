@@ -1,7 +1,7 @@
 """
 Module configuration management
 """
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 from decimal import Decimal
 import boto3
 from botocore.exceptions import ClientError
@@ -149,16 +149,29 @@ class ModuleConfig:
             return config['parameters']
         return None
 
-    # At this stage, the system prompt is hard-coded; it will be retrieved from the database later.
-    def get_system_prompt(self, module_name: str, sub_module: str = None) -> Optional[str]:
-        """Get system prompt from module configuration"""
-        config = self.get_module_config(module_name)
-        if config:
-            if sub_module and 'sub_modules' in config:
-                sub_config = config['sub_modules'].get(sub_module, {})
-                return sub_config.get('system_prompt')
-            return config.get('system_prompt')
-        return None
+    def get_enabled_tools(self, module_name: str, sub_module: str = None) -> List[str]:
+        """
+        Get the list of enabled tools for a specific module
+        
+        Args:
+            module_name: Name of the module
+            sub_module: Optional sub-module name
+            
+        Returns:
+            List[str]: List of enabled tool module names
+        """
+        try:
+            config = self.get_module_config(module_name)
+            if config:
+                if sub_module and 'sub_modules' in config:
+                    sub_config = config['sub_modules'].get(sub_module, {})
+                    return sub_config.get('enabled_tools', [])
+                return config.get('enabled_tools', [])
+            return []
+        except Exception as e:
+            logger.error(f"Error getting enabled tools for module {module_name}: {str(e)}")
+            return []
+
 
     def init_module_config(self, module_name: str) -> Optional[Dict]:
         """Initialize default configuration for a module"""
@@ -172,7 +185,12 @@ class ModuleConfig:
                 'parameters': {
                     'temperature': Decimal('0.7'),
                     'max_tokens': 2049,
-                }
+                },
+                'enabled_tools': [
+                    'get_weather',         # Weather information
+                    'get_location_coords',  # Location coordinates
+                    'get_text_from_url'     # Get text content from webpage URL
+                ]
             },
             'chatbot-gemini': {
                 'setting_name': 'chatbot-gemini',
@@ -233,7 +251,10 @@ class ModuleConfig:
                 'parameters': {
                     'temperature': Decimal('0.2'),
                     'max_tokens': 2000
-                }
+                },
+                'enabled_tools': [
+                    'get_text_from_url'     # Get text content from webpage URL
+                ]
             },
             'vision': {
                 'setting_name': 'vision',
@@ -265,7 +286,10 @@ class ModuleConfig:
                 'parameters': {
                     'temperature': Decimal('0.7'),
                     'max_tokens': 4096
-                }
+                },
+                'enabled_tools': [
+                    'get_text_from_url'     # Get text content from webpage URL
+                ]
             }
         }
         

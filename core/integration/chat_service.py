@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, AsyncIterator
 from core.logger import logger
 from core.session import Session, SessionStore
 from llm.model_manager import model_manager
-from llm import LLMConfig, Message, LLMAPIProvider
+from llm.api_providers.base import LLMConfig, Message, LLMAPIProvider
 
 
 class ChatService:
@@ -12,16 +12,19 @@ class ChatService:
     
     def __init__(
         self,
-        model_config: LLMConfig
+        model_config: LLMConfig,
+        enabled_tools: Optional[List[str]] = None
     ):
         """Initialize chat service with model configuration
         
         Args:
             model_config: LLM configuration containing model ID and parameters
+            enabled_tools: Optional list of tool module names to enable
         """
         self.session_store = SessionStore()
         self._llm_providers: Dict[str, LLMAPIProvider] = {}
         self._active_sessions: Dict[str, Dict[str, str]] = {}
+        self.enabled_tools = enabled_tools or []
         
         # Validate model exists and config matches
         model = model_manager.get_model_by_id(model_config.model_id)
@@ -61,8 +64,8 @@ class ChatService:
             stop_sequences=self.default_model_config.stop_sequences
         )
         
-        # Create provider using factory method
-        provider = LLMAPIProvider.create(config)
+        # Create provider using factory method with enabled tools
+        provider = LLMAPIProvider.create(config, tools=self.enabled_tools)
         self._llm_providers[model_id] = provider
         return provider
 
@@ -102,31 +105,11 @@ class ChatService:
                 self._active_sessions[user_id] = {}
             self._active_sessions[user_id][module_name] = session.session_id
             
-            logger.info(f"Created new chat session {session.session_id} for user {user_id}")
+            logger.info(f"Created {module_name} session {session.session_id} for user {user_id}")
             return session
 
         except HTTPException as e:
             logger.error(f"Error in get_or_create_session: {str(e)}")
-            raise e
-
-    async def list_chat_sessions(
-        self,
-        user_id: str,
-        tags: Optional[List[str]] = None,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
-    ) -> List[Session]:
-        """List chat sessions for a user"""
-        try:
-            return await self.session_store.list_sessions(
-                user_id=user_id,
-                module_name='chatbot',
-                tags=tags,
-                start_date=start_date,
-                end_date=end_date
-            )
-        except HTTPException as e:
-            logger.error(f"Failed to list chat sessions: {str(e)}")
             raise e
 
     async def clear_chat_session(
@@ -148,28 +131,6 @@ class ChatService:
             
         except HTTPException as e:
             logger.error(f"Failed to clear chat session: {str(e)}")
-            raise e
-
-    async def delete_chat_session(
-        self,
-        session_id: str,
-        user_id: str
-    ) -> bool:
-        """Delete a chat session"""
-        try:
-            # Remove from active sessions if present
-            user_sessions = self._active_sessions.get(user_id, {})
-            for module_name, active_session_id in list(user_sessions.items()):
-                if active_session_id == session_id:
-                    user_sessions.pop(module_name)
-                    break
-            
-            return await self.session_store.delete_session(
-                session_id=session_id,
-                user_id=user_id
-            )
-        except HTTPException as e:
-            logger.error(f"Failed to delete chat session: {str(e)}")
             raise e
 
     async def sync_history(
@@ -251,7 +212,7 @@ class ChatService:
             
             try:
                 # Get the stream from LLM with conversation history and style parameters
-                async for chunk in llm.generate_stream(
+                async for chunk in llm.multi_turn_generate(
                     messages=messages,
                     system_prompt=session.context['system_prompt'],
                     **(option_params or {})  # Unpack inference params if provided
