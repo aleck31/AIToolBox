@@ -54,7 +54,7 @@ class LLMAPIProvider(ABC):
         pass
     
     @abstractmethod
-    async def generate(
+    async def generate_content(
         self,
         messages: List[Message],
         system_prompt: Optional[str] = None,
@@ -76,7 +76,8 @@ class LLMAPIProvider(ABC):
     @abstractmethod
     async def multi_turn_generate(
         self,
-        messages: List[Message],
+        message: Message,
+        history: List[Message],
         system_prompt: Optional[str] = None,
         **kwargs
     ) -> AsyncIterator[Dict]:

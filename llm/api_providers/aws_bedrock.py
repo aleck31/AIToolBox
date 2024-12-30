@@ -3,10 +3,11 @@ from typing import Dict, List, Optional, AsyncIterator, Any
 from botocore.exceptions import ClientError
 from core.logger import logger
 from core.config import env_config
-from utils.aws import get_aws_client
 from botocore import exceptions as boto_exceptions
+from utils.aws import get_aws_client
+from llm import ResponseMetadata
 from .base import LLMAPIProvider, LLMConfig, Message, LLMResponse
-from ..tools.bedrock_tools import tool_registry, BedrockToolRegistry
+from ..tools.bedrock_tools import tool_registry
 
 
 class BedrockProvider(LLMAPIProvider):
@@ -150,31 +151,6 @@ class BedrockProvider(LLMAPIProvider):
 
         return tool_result_message
 
-    def _process_response_content(
-        self,
-        content_blocks: List[Dict],
-        content: List[str],
-        tool_calls: List[Dict]
-    ) -> None:
-        """Process content blocks from a response, extracting text and tool use.
-        
-        Args:
-            content_blocks: List of content blocks from the response
-            content: List to append text content to
-            tool_calls: List to append tool calls to
-        """
-        for content_block in content_blocks:
-            if 'text' in content_block:
-                content.append(content_block['text'])
-            if 'toolUse' in content_block:
-                tool_use = content_block['toolUse']
-                tool_calls.append({
-                    'name': tool_use['name'],
-                    'args': tool_use['input'],
-                    'toolUseId': tool_use['toolUseId']
-                })
-                # Tool will be processed in the next iteration
-
     def _read_file_bytes(self, file_path: str) -> bytes:
         """Read file bytes from file path"""
         try:
@@ -192,69 +168,78 @@ class BedrockProvider(LLMAPIProvider):
                 operation_name='read_file'
             )
 
-    def _format_messages(
-        self,
-        messages: List[Message]
-    ) -> List[Dict]:
-        """Convert messages to Bedrock-specific format"""
+    def _convert_messages(self, messages: List[Message]) -> List[Dict]:
+        """Convert messages to Bedrock-specified format efficiently
+        
+        Args:
+            messages: List of messages to format
+            
+        Returns:
+            List of formatted messages for Bedrock API
+        """
         logger.debug(f"Unformatted messages: {messages}")
-        formatted_messages = []
+        return [self._convert_message(msg) for msg in messages]
 
-        for message in messages:
-            content = []
-            if message.context:
-                # Format all context key-value pairs in a natural way
-                context_text = []
-                for key, value in message.context.items():
+    def _convert_message(self, message: Message) -> Dict:
+        """Convert a single message for Bedrock API
+        
+        Args:
+            message: Message to format
+            
+        Returns:
+            Dict in Bedrock message format
+        """
+        content = []
+
+        # Handle context if present and not None
+        context = getattr(message, 'context', None)
+        if context and isinstance(context, dict):
+            context_text = []
+            for key, value in context.items():
+                if value is not None:
                     # Convert snake_case to spaces and capitalize
                     readable_key = key.replace('_', ' ').capitalize()
                     context_text.append(f"{readable_key}: {value}")
-                
-                if context_text:
-                    # Add formatted context as a bracketed prefix
-                    content.append({"text": f"{' | '.join(context_text)}\n"})
+            if context_text:
+                # Add formatted context to contex as a bracketed prefix
+                content.append({"text": f"{' | '.join(context_text)}\n"})
 
-            if isinstance(message.content, str):
+        # Handle message content
+        if isinstance(message.content, str):
+            if message.content.strip():  # Skip empty strings
                 content.append({"text": message.content})
-            elif isinstance(message.content, dict):
-                # Handle Gradio chatbox format with text and files
-                if "text" in message.content:
-                    content.append({"text": message.content["text"].strip()})
-                # Handle multimodal content
-                if "files" in message.content and isinstance(message.content["files"], list):
-                    for file_path in message.content["files"]:
-                        file_type, format = self._get_file_type_and_format(file_path)
-                        if file_type:
-                            # Read file bytes
-                            file_bytes = self._read_file_bytes(file_path)
-                            content.append({
-                                file_type: {
-                                    "format": format,
-                                    "source": {
-                                        "bytes": file_bytes
-                                    }
+        # Handle multimodal content from Gradio chatbox
+        elif isinstance(message.content, dict):
+            # Add text if present
+            if text := message.content.get("text", "").strip():
+                content.append({"text": text})
+                
+            # Add files if present
+            if files := message.content.get("files", []):
+                for file_path in files:
+                    file_type, format = self._get_file_type_and_format(file_path)
+                    if file_type:
+                        content.append({
+                            file_type: {
+                                "format": format,
+                                "source": {
+                                    "bytes": self._read_file_bytes(file_path)
                                 }
-                            })
+                            }
+                        })
             
-            formatted_messages.append({
-                "role": message.role,
-                "content": content
-            })
-
-            logger.debug(f"Formatted messages: {formatted_messages}")        
-        
-        return formatted_messages
+        return {"role": message.role, "content": content}
 
     async def _bedrock_stream(
             self,
-            messages,
-            system_prompt,
+            messages: List[Message],
+            system_prompt: Optional[str] = None,
             **kwargs
         ):
         """
         Sends a message to a model and streams the response.
         Args:
-            messages (JSON) : The messages to send to the model.
+            messages: List of formatted messages
             system_prompt: The system prompt send to the model.
         """
         try:
@@ -283,13 +268,8 @@ class BedrockProvider(LLMAPIProvider):
                 **request_params
             )
 
-            # Track response metadata and tool use state
-            response_metadata = {
-                'stop_reason': None,
-                'usage': None,
-                'metrics': None,
-                'performance_config': None
-            }
+            # Initialize response metadata
+            metadata = ResponseMetadata()
        
             message = {}
             content = []
@@ -327,20 +307,16 @@ class BedrockProvider(LLMAPIProvider):
                         text = ''
 
                 elif 'messageStop' in chunk:
-                    # Capture stop reason and additional fields
-                    response_metadata['stop_reason'] = chunk['messageStop'].get('stopReason')
-                    logger.debug(f"Stream stopped: {response_metadata['stop_reason']}")
+                    # Update metadata from stop reason
+                    metadata.stop_reason = chunk['messageStop'].get('stopReason')
+                    logger.debug(f"Stream stopped: {metadata.stop_reason}")
                     
                 elif 'metadata' in chunk:
-                    # Capture complete metadata
-                    metadata = chunk['metadata']
-                    response_metadata.update({
-                        'usage': metadata.get('usage'),
-                        'metrics': metadata.get('metrics'),
-                        'performance_config': metadata.get('performanceConfig')
-                    })
+                    # Update metadata from chunk
+                    chunk_metadata = chunk['metadata']
+                    metadata.update_from_chunk(chunk_metadata)
                     # Make metadata available to ChatService
-                    message['metadata']= response_metadata
+                    message['metadata'] = metadata.to_dict()
             return message
         
         except ClientError as e:
@@ -348,29 +324,41 @@ class BedrockProvider(LLMAPIProvider):
             logger.error(f"Streaming error: {str(e)}")
 
 
-    async def generate(
-        self,
-        messages: List[Message],
-        system_prompt: Optional[str] = None,
-        **kwargs
-    ) -> LLMResponse:
-        """Generate a response from Bedrock"""
+    async def _bedrock_generate(
+            self,
+            messages: List[Message],
+            system_prompt: Optional[str] = None,
+            **kwargs
+        ) -> Dict:
+        """Send a request to Bedrock's converse API and handle the response
+        
+        Args:
+            messages: List of formatted messages
+            system_prompt: Optional system instructions
+            **kwargs: Additional parameters for inference
+            
+        Returns:
+            Dict containing the complete response message with metadata
+            
+        Raises:
+            ClientError: For Bedrock-specific errors
+            Exception: For unexpected errors
+        """
         try:
-            formatted_messages = self._format_messages(messages)
             inference_params = self._prepare_inference_params(**kwargs)
             
             # Prepare request parameters
             request_params = {
                 "modelId": self.config.model_id,
-                "messages": formatted_messages,
+                "messages": messages,
                 "inferenceConfig": inference_params
             }
 
-            # Only add toolConfig if we have tools
-            if self.tools and len(self.tools) > 0:
+            # Add toolConfig if tools are available
+            if self.tools:
                 request_params["toolConfig"] = {"tools": self.tools}
             
-            # Only include system if prompt is provided and not empty
+            # Add system prompt if provided
             if system_prompt and system_prompt.strip():
                 request_params["system"] = [{"text": system_prompt}]
             
@@ -379,7 +367,6 @@ class BedrockProvider(LLMAPIProvider):
             if 'top_k' in kwargs:
                 additional_params['topK'] = kwargs['top_k']
             
-            # Log request before API call
             logger.debug(f"Request params for Bedrock: {request_params}")
             
             response = self.client.converse(
@@ -387,87 +374,99 @@ class BedrockProvider(LLMAPIProvider):
                 **({"additionalModelRequestFields": additional_params} if additional_params else {})
             )
             
-            # Log raw response
             logger.debug(f"Raw Bedrock response: {response}")
+
+            # Extract message and create metadata
+            resp_message = response.get('output', {}).get('message', {})
+            metadata = ResponseMetadata(
+                usage=response.get('usage'),
+                metrics=response.get('metrics'),
+                stop_reason=response.get('stopReason'),
+                performance_config=response.get('performanceConfig')
+            )
+            resp_message['metadata'] = metadata.to_dict()
             
-            # Extract content and tool use from output message
-            output_message = response.get('output', {}).get('message', {})
-            content = []
-            tool_calls = []
-            tool_results = []
+            return resp_message
             
-            # Process each content block
-            for content_block in output_message.get('content', []):
-                if 'text' in content_block:
-                    content.append(content_block['text'])
-                if 'toolUse' in content_block:
-                    tool_use = content_block['toolUse']
-                    tool_calls.append({
-                        'name': tool_use['name'],
-                        'args': tool_use['input'],
-                        'toolUseId': tool_use['toolUseId']
-                    })
-                    try:
-                        result = tool_registry.execute_tool(tool_use['name'], **tool_use['input'])
-                        # Handle tool result
-                        tool_result_message = self._handle_tool_result(
-                            tool_use, result, is_error=False
-                        )
-                        # Add result to conversation context
-                        formatted_messages.append(tool_result_message)
-                        request_params['messages'] = formatted_messages
-                        tool_results.append(tool_result_message)
+        except ClientError as e:
+            self._handle_bedrock_error(e)
+            raise
+
+    async def generate_content(
+        self,
+        messages: List[Message],
+        system_prompt: Optional[str] = None,
+        **kwargs
+    ) -> LLMResponse:
+        """Generate a response from Bedrock"""
+        try:
+            # Formatted messages to be sent to LLM
+            llm_messages = self._convert_messages(messages)
+            logger.debug(f"Formatted messages: {llm_messages}")
+              
+            # Get initial response
+            resp_message = await self._bedrock_generate(
+                messages=llm_messages,
+                system_prompt=system_prompt,
+                **kwargs
+            )
+
+            # Initialize response content and tool use
+            content = None
+            tool_use = None
+            
+            # Check if response has content
+            if resp_message.get('content'):
+                first_block = resp_message['content'][0]
+                if 'text' in first_block:
+                    content = first_block['text']
+                if 'toolUse' in first_block:
+                    tool_use = first_block['toolUse']
+                    
+                    # Handle tool use if present
+                    if tool_use and resp_message['metadata'].get('stop_reason') == "tool_use":
+                        # Add initial Assistant message to conversation
+                        resp_message.pop('metadata')
+                        llm_messages.append(resp_message)
                         
-                        # Continue conversation with updated context
-                        response = self.client.converse(
-                            **request_params,
-                            **({"additionalModelRequestFields": additional_params} if additional_params else {})
+                        try:
+                            # Execute tool
+                            result = tool_registry.execute_tool(
+                                tool_use['name'],
+                                **tool_use['input']
+                            )
+                            message_with_result = self._handle_tool_result(tool_use, result)
+                        except Exception as e:
+                            logger.error(f"Tool executing error: {str(e)}")
+                            message_with_result = self._handle_tool_result(
+                                tool_use, str(e), is_error=True
+                            )
+                            
+                        # Add tool result and get final response
+                        llm_messages.append(message_with_result)
+                        logger.debug(f"Messages with tool result: {llm_messages}")
+                        resp_message = await self._bedrock_generate(
+                            messages=llm_messages,
+                            system_prompt=system_prompt,
+                            **kwargs
                         )
-                        output_message = response.get('output', {}).get('message', {})
-                        self._process_response_content(
-                            output_message.get('content', []),
-                            content,
-                            tool_calls
-                        )
-                    except Exception as e:
-                        logger.error(f"Error executing tool {tool_use['name']}: {str(e)}")
-                        # Handle error result
-                        error_message = self._handle_tool_result(
-                            tool_use, str(e), is_error=True
-                        )
-                        # Add error to conversation context
-                        formatted_messages.append(error_message)
-                        request_params['messages'] = formatted_messages
-                        tool_results.append(error_message)
+                        
+                        # Update content from final response
+                        if resp_message.get('content'):
+                            content = resp_message['content'][0].get('text', content)
 
-                        # Continue conversation with updated context
-                        response = self.client.converse(
-                            **request_params,
-                            **({"additionalModelRequestFields": additional_params} if additional_params else {})
-                        )
-                        output_message = response.get('output', {}).get('message', {})
-                        self._process_response_content(
-                            output_message.get('content', []),
-                            content,
-                            tool_calls
-                        )
-
-            response_metadata = {
-                'usage': response.get('usage'),
-                'metrics': response.get('metrics'),
-                'stop_reason': response.get('stopReason'),
-                'performance_config': response.get('performanceConfig')
-            }
+            if content is None:
+                raise ValueError("No text content found in response")
 
             return LLMResponse(
-                content=''.join(content),  # Join text blocks into single string
-                tool_calls=tool_calls,
-                tool_results=tool_results,
-                metadata=response_metadata
+                content=content,
+                tool_use=tool_use,
+                metadata=resp_message.get('metadata')
             )
             
         except ClientError as e:
             self._handle_bedrock_error(e)
+            raise
         except Exception as e:
             raise boto_exceptions.ClientError(
                 error_response={
@@ -484,32 +483,70 @@ class BedrockProvider(LLMAPIProvider):
         messages: List[Message],
         system_prompt: Optional[str] = None,
         **kwargs
-    ) -> AsyncIterator[str]:
-        """Generate a streaming response from Bedrock using converse_stream"""
+    ) -> AsyncIterator[Dict]:
+        """Generate streaming response from Bedrock using converse_stream
+        
+        Args:
+            messages: user messages
+            system_prompt: Optional system instructions
+            **kwargs: Additional parameters for inference
+            
+        Yields:
+            Dict containing either:
+            - {"text": str} for content chunks
+            - {"metadata": dict} for response metadata
+        """
         # Placeholder, to be implemented in the next task
         pass
 
     async def multi_turn_generate(
         self,
-        messages: List[Message],
+        message: Message,
+        history: Optional[List[Message]] = None,
         system_prompt: Optional[str] = None,
         **kwargs
-    ) -> AsyncIterator[str]:
-        """Generate a streaming response from Bedrock using converse_stream"""
+    ) -> AsyncIterator[Dict]:
+        """Generate streaming response for multi-turn chat
+        
+        Args:
+            message: Current user message
+            history: Optional chat history
+            system_prompt: Optional system instructions
+            **kwargs: Additional parameters for inference
+            
+        Yields:
+            Dict containing either:
+            - {"text": str} for content chunks
+            - {"metadata": dict} for response metadata
+            
+        Note:
+            Handles tool use by maintaining proper conversation flow:
+            1. User message -> [Bedrock] -> LLM response (possibly with tool use)
+            2. If stop_reason != tool_use: -> Assistant message (reply to user)
+            3. If stop_reason == tool_use: -> execute tool -> package result as User message
+            4. User message -> [Bedrock] -> LLM response -> Assistant message (reply to user)
+        """
         try:
-            formatted_messages = self._format_messages(messages)
+            # Formatted messages to be sent to LLM
+            llm_messages = []
+            if history:
+                llm_messages.extend(self._convert_messages(history))
+            llm_messages.append(self._convert_message(message))
+
+            
+            logger.debug(f"Formatted messages to _Bedrock: {llm_messages}")
 
             # Get initial response
             resp_message = await self._bedrock_stream(
-                messages=formatted_messages,
+                messages=llm_messages,
                 system_prompt=system_prompt,
                 **kwargs
             )
 
             if resp_message['metadata']['stop_reason'] == "tool_use":
-                # Add initial response message to conversation
+                # Add initial Assistant message to conversation
                 resp_message.pop('metadata')
-                formatted_messages.append(resp_message)
+                llm_messages.append(resp_message)
                 # Process response content
                 for content_block in resp_message.get('content', []):
                     if 'toolUse' in content_block:
@@ -517,29 +554,30 @@ class BedrockProvider(LLMAPIProvider):
                         logger.debug(f"Tool use: {tool_use}")
                         try:
                             # Execute tool
-                            tool_result = tool_registry.execute_tool(tool_use['name'], **tool_use['input'])
-                            tool_result_message = self._handle_tool_result(
-                                tool_use, tool_result, is_error=False
+                            result = tool_registry.execute_tool(
+                                tool_use['name'],
+                                **tool_use['input']
                             )
-                                    
+                            message_with_result = self._handle_tool_result(tool_use, result)
+   
                         except Exception as e:
-                            logger.error(f"Error executing tool {tool_use['name']}: {str(e)}")
-                            tool_result_message = self._handle_tool_result(
-                                tool_use, str(e), is_error=True
+                            logger.error(f"Tool executing error: {str(e)}")
+                            # Add error result
+                            message_with_result = self._handle_tool_result(tool_use, str(e), is_error=True
                             )
                             continue
-
-                # Add tool result to formatted messages
-                formatted_messages.append(tool_result_message)
+                                
+                # Add tool result to llm messages
+                llm_messages.append(message_with_result)
+                logger.debug(f"Formatted messages with result: {llm_messages}")
                 
                 # Get model's response to tool result
-                logger.debug(f"Messages after tool result: {formatted_messages}")
                 resp_message = await self._bedrock_stream(
-                    messages=formatted_messages,
+                    messages=llm_messages,
                     system_prompt=system_prompt,
                     **kwargs
                 )
-                
+
             # Stream response content
             metadata = resp_message.pop('metadata', {})
             yield {'metadata': metadata}

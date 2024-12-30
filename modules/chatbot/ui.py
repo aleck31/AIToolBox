@@ -10,7 +10,7 @@ def create_chat_interface() -> gr.ChatInterface:
     # Create chat interface
     chat_interface = gr.ChatInterface(
         description="Let's chat ... (Powered by Bedrock)",
-        fn=ChatHandlers.streaming_reply,
+        fn=ChatHandlers.send_message,
         type='messages',
         multimodal=True,
         textbox=gr.MultimodalTextbox(
@@ -23,7 +23,9 @@ def create_chat_interface() -> gr.ChatInterface:
         ),
         stop_btn='🟥',
         additional_inputs_accordion=gr.Accordion(
-            label='Chat Settings', open=False),
+            label='Chat Settings', 
+            open=False
+        ),
         additional_inputs=[
             gr.Radio(
                 label="Chat Style:", 

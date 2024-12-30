@@ -101,24 +101,30 @@ class GeminiProvider(LLMAPIProvider):
             if instruction.strip()
         ]
 
-    def _format_messages(
+    def _convert_messages(
         self,
         messages: List[Message],
         system_prompt: Optional[str] = None
     ) -> List[content_types.ContentType]:
-        """Convert messages to Gemini-specific format with system prompt handling"""
-
-        formatted_messages = []
+        """Convert messages to Gemini-specific format with system prompt handling
         
-        # Create a new model instance with system prompt if needed
+        Args:
+            messages: List of messages to format
+            system_prompt: Optional system prompt to set
+            
+        Returns:
+            List of formatted messages for Gemini API
+        """
+        # Update model with system prompt if provided
         if system_prompt:
             # Get current safety settings if model exists
             safety_settings = getattr(self.model, '_safety_settings', None)
+            system_instruction = self._format_system_prompt(system_prompt)
             
             model_args = {
                 "model_name": self.config.model_id,
                 "generation_config": self._get_generation_config(),
-                "system_instruction": self._format_system_prompt(system_prompt)
+                "system_instruction": system_instruction
             }
             
             # Only set safety settings if they exist
@@ -126,51 +132,61 @@ class GeminiProvider(LLMAPIProvider):
                 model_args["safety_settings"] = safety_settings
                 
             self.model = genai.GenerativeModel(**model_args)
+            logger.debug(f"Updated Provider's model with new system_instruction: {system_instruction}")
         
-        # Format messages
-        for message in messages:
-            # Initialize content/parts list
-            parts = []
+        logger.debug(f"Unformatted messages: {messages}")
+
+        # Convert each message using _convert_message
+        return [self._convert_message(msg) for msg in messages]
+
+    def _convert_message(self, message: Message) -> Dict:
+        """Convert a single message into Gemini-specific format
+        
+        Args:
+            message: Message to format
             
-            # Format context if present
-            if message.context:
-                context_text = []
-                for key, value in message.context.items():
+        Returns:
+            Dict with role and parts formatted for Gemini API
+        """
+        parts = []
+        
+        # Handle context if present and not None
+        context = getattr(message, 'context', None)
+        if context and isinstance(context, dict):
+            context_text = []
+            for key, value in context.items():
+                if value is not None:
                     # Convert snake_case to spaces and capitalize
                     readable_key = key.replace('_', ' ').capitalize()
                     context_text.append(f"{readable_key}: {value}")
-                
-                if context_text:
-                    # Add formatted context as a bracketed prefix
-                    parts.append({"text": f"{' | '.join(context_text)}\n"})
+            if context_text:
+                # Add formatted context to contex as a bracketed prefix
+                parts.append({"text": f"{' | '.join(context_text)}\n"})
 
-            # Handle message content
-            if isinstance(message.content, str):
-                if message.content.strip():  # Skip empty strings
-                    parts.append({"text": message.content})
-            else:
-                # Handle multimodal content from Gradio chatbox
-                if "text" in message.content and message.content["text"].strip():
-                    parts.append({"text": message.content["text"]})
-                if "files" in message.content:
-                    # Handle files using genai.upload_file
-                    for file_path in message.content["files"]:
-                        try:
-                            file_ref = genai.upload_file(path=file_path)
-                            parts.append(file_ref)
-                        except Exception as e:
-                            logger.error(f"Error uploading file {file_path}: {str(e)}")
-                            continue
+        # Handle message content
+        if isinstance(message.content, str):
+            if message.content.strip():  # Skip empty strings
+                parts.append({"text": message.content})
+        # Handle multimodal content from Gradio chatbox
+        elif isinstance(message.content, dict):
+            # Add text if present
+            if text := message.content.get("text", "").strip():
+                parts.append({"text": text})
 
-            # Add formatted message with all parts
-            formatted_messages.append({
-                "role": message.role,
-                "parts": parts
-            })
-        
-        return formatted_messages
+            # Add files if present
+            if files := message.content.get("files", []):
+                for file_path in files:
+                    try:
+                        # Handle files using genai.upload_file
+                        file_ref = genai.upload_file(path=file_path)
+                        parts.append(file_ref)
+                    except Exception as e:
+                        logger.error(f"Error uploading file {file_path}: {str(e)}")
+                        continue
 
-    async def generate(
+        return {"role": message.role, "parts": parts}
+
+    async def generate_content(
         self,
         messages: List[Message],
         system_prompt: Optional[str] = None,
@@ -178,7 +194,8 @@ class GeminiProvider(LLMAPIProvider):
     ) -> LLMResponse:
         """Generate a response from Gemini using generate_content"""
         try:
-            formatted_messages = self._format_messages(messages, system_prompt)
+            formatted_messages = self._convert_messages(messages, system_prompt)
+            logger.debug(f"Formatted messages: {formatted_messages}")
             
             # Update model args if new system prompt provided
             model_args = {
@@ -211,8 +228,7 @@ class GeminiProvider(LLMAPIProvider):
         except Exception as e:
             self._handle_gemini_error(e)
 
-    #TobeFix: 暂时用 generate_stream 替 multi_turn_generate 用于chat service
-    async def multi_turn_generate(
+    async def generate_stream(
         self,
         messages: List[Message],
         system_prompt: Optional[str] = None,
@@ -220,7 +236,8 @@ class GeminiProvider(LLMAPIProvider):
     ) -> AsyncIterator[Dict]:
         """Generate a streaming response from Gemini using generate_content with stream=True"""
         try:
-            formatted_messages = self._format_messages(messages, system_prompt)
+            formatted_messages = self._convert_messages(messages, system_prompt)
+            logger.debug(f"Formatted messages: {formatted_messages}")
             
             # Update model args if new system prompt provided
             model_args = {
@@ -255,30 +272,36 @@ class GeminiProvider(LLMAPIProvider):
             logger.error(f"Streaming error: {str(e)}")
             self._handle_gemini_error(e)
 
-    async def generate_stream(
+    async def multi_turn_generate(
         self,
-        messages: List[Message],
+        message: Message,
+        history: Optional[List[Message]] = None,
         system_prompt: Optional[str] = None,
         **kwargs
     ) -> AsyncIterator[Dict]:
         """Generate streaming response using multi-turn chat"""
         try:
-            formatted_messages = self._format_messages(messages, system_prompt)
-            
+            if history:
+                formatted_messages = self._convert_messages(history, system_prompt)
+            else:
+                formatted_messages = self._convert_messages([], system_prompt)
+            logger.debug(f"Formatted history messages: {formatted_messages}")
+
             # Create chat session with history
-            chat = self.model.start_chat(history=formatted_messages[:-1])
+            chat = self.model.start_chat(history=formatted_messages)
             
-            # Get last message for the actual query
-            last_message = formatted_messages[-1]["parts"] if formatted_messages else []
+            # Format and send current message
+            current_message = self._convert_message(message)
+            logger.debug(f"Formatted Current message: {current_message}")
             
             # Update model args if new system prompt provided
             model_args = {
                 "generation_config": self._get_generation_config()
             }
             
-            # Stream response
+            # Stream response using formatted message parts
             response = chat.send_message(
-                contents=last_message,
+                current_message['parts'],
                 stream=True,
                 **model_args
             )
@@ -302,9 +325,9 @@ class GeminiProvider(LLMAPIProvider):
                     }
                 
                 # Handle any prompt feedback
-                if hasattr(chunk, 'prompt_feedback'):
-                    logger.debug(f"Prompt feedback: {chunk.prompt_feedback}")
+                # if hasattr(chunk, 'prompt_feedback'):
+                #     logger.debug(f"Prompt feedback: {chunk.prompt_feedback}")
                     
         except Exception as e:
-            logger.error(f"Streaming error: {str(e)}")
+            logger.error(f"Multi turn Generate Error: {str(e)}")
             self._handle_gemini_error(e)

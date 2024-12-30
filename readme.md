@@ -92,7 +92,7 @@ llm-toolbox/
 │   ├── init.py               # Base LLM interfaces
 │   ├── model_manager.py      # Model management
 │   ├── api_providers/        # LLM tools implementations
-│   │   ├── base.py             # Base class for LLM providers
+│   │   ├── base.py             # Abstract interface for LLM providers
 │   │   ├── aws_bedrock.py      # AWS Bedrock integration
 │   │   └── google_gemini.py    # Google Gemini integration
 │   └── tools/         # LLM tools implementations

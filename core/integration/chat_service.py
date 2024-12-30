@@ -13,18 +13,21 @@ class ChatService:
     def __init__(
         self,
         model_config: LLMConfig,
-        enabled_tools: Optional[List[str]] = None
+        enabled_tools: Optional[List[str]] = None,
+        cache_ttl: int = 600  # 10 minutes default TTL
     ):
         """Initialize chat service with model configuration
         
         Args:
             model_config: LLM configuration containing model ID and parameters
             enabled_tools: Optional list of tool module names to enable
+            cache_ttl: Time in seconds to keep sessions in cache (default 5 min)
         """
         self.session_store = SessionStore()
         self._llm_providers: Dict[str, LLMAPIProvider] = {}
-        self._active_sessions: Dict[str, Dict[str, str]] = {}
+        self._session_cache: Dict[str, tuple[Session, float]] = {}  # (session, expiry)
         self.enabled_tools = enabled_tools or []
+        self.cache_ttl = cache_ttl
         
         # Validate model exists and config matches
         model = model_manager.get_model_by_id(model_config.model_id)
@@ -69,43 +72,123 @@ class ChatService:
         self._llm_providers[model_id] = provider
         return provider
 
+    def _prepare_chat_message(self, role: str, content: Dict, context: Optional[Dict] = None, metadata: Optional[Dict] = None) -> Message:
+        """Create standardized interaction entry
+        
+        Args:
+            role: Message role (user/assistant/system)
+            content: Raw content dict with text and/or files
+            metadata: Optional metadata dict
+            
+        Returns:
+            Interaction dict with standardized format
+        """
+        # message_meta = {"timestamp": datetime.now().isoformat()}
+        # if metadata:
+        #     message_meta.update(metadata)
+        chat_message = Message(
+            role = role,
+            content=content,
+            context=context if context else None,
+            metadata=metadata if metadata else None,
+        )
+        return chat_message
+
+    def _get_cache_key(self, user_id: str, module_name: str) -> str:
+        """Generate cache key for session"""
+        return f"{user_id}:{module_name}"
+
+    def _is_cache_valid(self, cache_entry: tuple[Session, float]) -> bool:
+        """Check if cached session is still valid"""
+        session, expiry = cache_entry
+        return datetime.now().timestamp() < expiry
+
+    def _update_cache(self, user_id: str, module_name: str, session: Session) -> None:
+        """Update session cache with new expiry"""
+        cache_key = self._get_cache_key(user_id, module_name)
+        expiry = datetime.now().timestamp() + self.cache_ttl
+        self._session_cache[cache_key] = (session, expiry)
+        logger.debug(f"Updated cache for session {session.session_id} (expires: {expiry})")
+
+    def _cleanup_cache(self) -> None:
+        """Remove expired sessions from cache"""
+        now = datetime.now().timestamp()
+        expired = [k for k, (_, exp) in self._session_cache.items() if exp < now]
+        for key in expired:
+            del self._session_cache[key]
+        if expired:
+            logger.debug(f"Cleaned up {len(expired)} expired sessions from cache")
+
     async def get_or_create_session(
         self,
         user_id: str,
         module_name: str,
         session_name: Optional[str] = None
     ) -> Session:
-        """Get existing active session or create new one"""
-        try:
-            # Check for existing active session
-            user_sessions = self._active_sessions.get(user_id, {})
-            if module_name in user_sessions:
-                session_id = user_sessions[module_name]
-                try:
-                    # Verify session is still valid
-                    session = await self.session_store.get_session(session_id, user_id)
-                    return session
-                except HTTPException:
-                    # Session expired or invalid, remove from tracking
-                    if user_id in self._active_sessions:
-                        self._active_sessions[user_id].pop(module_name, None)
-
-            # Create and cache session
-            session_name = session_name or f"{module_name.title()} Session"
+        """Get existing active session or create new one
+        
+        Args:
+            user_id: User identifier
+            module_name: Module requesting the session
+            session_name: Optional custom session name
             
-            # Create session through session manager with standardized format
+        Returns:
+            Active session for the user/module
+            
+        Note:
+            First checks in-memory cache, then falls back to DynamoDB query
+            Cache entries expire after TTL to prevent stale data
+        """
+        try:
+            # Clean expired cache entries
+            self._cleanup_cache()
+            
+            # Check cache first
+            cache_key = self._get_cache_key(user_id, module_name)
+            if cache_key in self._session_cache:
+                cached = self._session_cache[cache_key]
+                if self._is_cache_valid(cached):
+                    session = cached[0]
+                    logger.debug(
+                        f"Cache hit: Found session {session.session_id} "
+                        f"for user {user_id} in cache"
+                    )
+                    return session
+                else:
+                    # Remove expired entry
+                    del self._session_cache[cache_key]
+            
+            # Cache miss - query database
+            active_sessions = await self.session_store.list_sessions(
+                user_id=user_id,
+                module_name=module_name
+            )
+            
+            if active_sessions:
+                session = active_sessions[0]
+                logger.debug(
+                    f"Cache miss: Found existing {module_name} session {session.session_id} "
+                    f"for user {user_id} (created: {session.created_time}"
+                )
+                # Update cache
+                self._update_cache(user_id, module_name, session)
+                return session
+            
+            # Create new session if none active
+            session_name = session_name or f"{module_name.title()} Session"
             session = await self.session_store.create_session(
                 user_id=user_id,
                 module_name=module_name,
                 session_name=session_name
             )
+
+            logger.debug(
+                f"Created new {module_name} session {session.session_id} "
+                f"for user {user_id} (created: {session.created_time}"
+            )
             
-            # Track new session
-            if user_id not in self._active_sessions:
-                self._active_sessions[user_id] = {}
-            self._active_sessions[user_id][module_name] = session.session_id
-            
-            logger.info(f"Created {module_name} session {session.session_id} for user {user_id}")
+            # Cache new session
+            self._update_cache(user_id, module_name, session)
             return session
 
         except HTTPException as e:
@@ -119,12 +202,9 @@ class ChatService:
     ) -> Session:
         """Clear chat history while preserving session"""
         try:
-            # Get existing session
             session = await self.session_store.get_session(session_id, user_id)
-            
             # Clear history while preserving metadata and context
             session.history = []
-            
             # Update session in store
             await self.session_store.update_session(session, user_id)
             return session
@@ -133,134 +213,105 @@ class ChatService:
             logger.error(f"Failed to clear chat session: {str(e)}")
             raise e
 
-    async def sync_history(
-        self,
-        session: Session,
-        ui_history: List[Dict[str, str]]
-    ) -> None:
-        """Sync session history with UI history state
-        
-        Args:
-            session: Session to update
-            ui_history: Current history state from UI
-        """
-        # Convert UI history to session format
-        session.history = [
-            {
-                "role": msg["role"],
-                "content": msg["content"] if isinstance(msg["content"], dict) else {"text": msg["content"]},
-                "timestamp": msg.get("timestamp", datetime.now().isoformat())
-            }
-            for msg in ui_history
-        ]
-        # Update session in store
-        await self.session_store.update_session(session, session.user_id)
-
-    async def send_message(
+    async def streaming_reply(
         self,
         session_id: str,
-        content: Dict[str, str],
-        ui_history: Optional[List[Dict[str, str]]] = None,
-        option_params: Optional[Dict[str, float]] = None
-    ) -> AsyncIterator[str]:
-        """Send a message in a chat session and stream the response
+        ui_input: Dict,
+        ui_history: Optional[List[Dict]] = None,
+        style_params: Optional[Dict] = None
+    ) -> AsyncIterator[Dict]:
+        """Process user message and stream assistant's response
         
         Args:
-            session_id: ID of the chat session
-            content: Message content with text and optional files
-            ui_history: Optional UI chat history for syncing
-            option_params: Optional LLM generation parameters
+            session_id: Active chat session ID
+            ui_input: Dict with text and/or files
+            ui_history: Current UI chat history state
+            style_params: LLM generation parameters
             
         Yields:
-            Generated response chunks for streaming
+            Response chunks for Gradio chatbot
         """
         try:
-            # Get session without redundant validation since it was already validated
-            # when obtained through get_or_create_session
+            # Get session (already validated by get_or_create_session)
             session = await self.session_store.get_session(session_id)
-            
-            # Sync with UI history if provided
-            if ui_history is not None:
-                await self.sync_history(session, ui_history)
 
-            logger.debug(f"Content from handler: {content}")
+            # Get history before adding new message
+            history = ui_history or session.history
+            history_messages = []
+            for msg in history:
+                history_messages.append(
+                    self._prepare_chat_message(
+                        role=msg["role"], 
+                        content=msg["content"]
+                        # context={"local_time": msg["timestamp"]}  # history messages don't need timestamps in context 
+                    )
+                )
 
-            # Get model ID from session
-            model_id = session.metadata.model_id
-            llm = self._get_llm_provider(model_id)
+            # Convert new message to chat Message format
+            user_message = self._prepare_chat_message(
+                role="user",
+                content=ui_input,
+                context={"local_time": datetime.now().astimezone().isoformat()}
+            )
+            logger.debug(f"New Message send to LLM Provider: {user_message}")
+
+            # Add new message to session after processing history
+            session.add_interaction(user_message.to_dict())
             
-            # Add user message to session
-            session.add_interaction({
-                "role": "user",
-                "content": content,
-                "timestamp": datetime.now().astimezone().isoformat()  # timestamp with tzinfo
-            })
+            # Get LLM provider
+            llm = self._get_llm_provider(session.metadata.model_id)
             
-            # Convert session history to messages
-            messages = []
-            for interaction in session.history:
-                messages.append(Message(
-                    role=interaction["role"],
-                    content=interaction["content"],
-                    # Provides context for when the message was sent
-                    context={"local_time": interaction["timestamp"]}
-                ))
-            
-            # Stream response
-            full_response = ""
-            stream_metadata = None
+            # Track response and metadata
+            response_chunks = []
+            response_metadata = {}
             
             try:
-                # Get the stream from LLM with conversation history and style parameters
+                # Stream from LLM
                 async for chunk in llm.multi_turn_generate(
-                    messages=messages,
-                    system_prompt=session.context['system_prompt'],
-                    **(option_params or {})  # Unpack inference params if provided
+                    message=user_message,
+                    history=history_messages,
+                    system_prompt=session.context.get('system_prompt'),
+                    **(style_params or {})
                 ):
-                    # All chunks should be dictionaries with type indicators
                     if not isinstance(chunk, dict):
                         logger.warning(f"Unexpected chunk type: {type(chunk)}")
                         continue
                         
                     if 'metadata' in chunk:
-                        # Store metadata for later use
-                        stream_metadata = chunk['metadata']
+                        response_metadata.update(chunk['metadata'])
                     elif 'text' in chunk:
-                        # Process text chunk
-                        text = chunk['text']
-                        full_response += text
-                        # Yield accumulated response for Gradio UI
-                        yield full_response
-                    else:
-                        logger.warning(f"Unknown chunk format: {chunk}")
-                
-                # Add assistant message to session after streaming completes
-                if full_response:  # Only add if we got a response
-                    # Add assistant message with timezone-aware timestamp
-                    current_time = datetime.now().astimezone()
-                    interaction_data = {
-                        "role": "assistant",
-                        "content": {"text": full_response},
-                        "timestamp": current_time.isoformat()
-                    }
-                    
-                    # Add metadata if available from stream
-                    if stream_metadata:
-                        interaction_data["metadata"] = {
-                            "usage": stream_metadata.get('usage', {}),
-                            "metrics": stream_metadata.get('metrics', {}),
-                            "stop_reason": stream_metadata.get('stop_reason'),
-                            "trace": stream_metadata.get('trace', {})
+                        response_chunks.append(chunk['text'])
+                        # Stream progressive response
+                        yield {
+                            "role": "assistant",
+                            "content": ''.join(response_chunks)
                         }
-                    
-                    # Add interaction and update session
-                    session.add_interaction(interaction_data)
-                    await self.session_store.update_session(session, session.user_id)
+                
+                # Add complete response to pending updates
+                if response_chunks:
+                    assistant_message = self._prepare_chat_message(
+                        role="assistant",
+                        content={"text": ''.join(response_chunks)},
+                        metadata=response_metadata
+                    )
+                logger.debug(f"Message replied by LLM Provider: {assistant_message}")
+                
+                # Add assistant message to session
+                session.add_interaction(assistant_message.to_dict())
+
+                # Persist interaction history to session sotre
+                await self.session_store.update_session(session, session.user_id)
                     
             except Exception as e:
                 logger.error(f"LLM error in session {session_id}: {str(e)}")
-                yield "I apologize, but I encountered an error while generating the response."
+                yield {
+                    "role": "assistant",
+                    "content": "I apologize, but I encountered an error while generating the response."
+                }
                 
         except Exception as e:
-            logger.error(f"Error in send_message: {str(e)}")
-            yield "I apologize, but I encountered an error. Please try again."
+            logger.error(f"Error in [streaming_reply]: {str(e)}")
+            yield {
+                "role": "assistant",
+                "content": "I apologize, but I encountered an error. Please try again."
+            }

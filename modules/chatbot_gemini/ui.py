@@ -10,7 +10,7 @@ def create_chat_interface() -> gr.ChatInterface:
     # Create chat interface
     chat_interface = gr.ChatInterface(
         description="Let's chat ... (Powered by Gemini)",
-        fn=GeminiChatHandlers.streaming_reply,
+        fn=GeminiChatHandlers.send_message,
         type='messages',
         multimodal=True,
         textbox=gr.MultimodalTextbox(

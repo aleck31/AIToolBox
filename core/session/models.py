@@ -71,19 +71,19 @@ class Session:
             'context': self.context
         }
 
-    def add_interaction(self, data: Dict[str, Any]) -> None:
+    def add_interaction(self, message: Dict[str, Any]) -> None:
         """
             Add an interaction to session history,
             For multimodal content just add as file path
         """
         # Normalize content format
-        if isinstance(data.get('content'), str):
-            data['content'] = {'text': data['content']}
+        if isinstance(message.get('content'), str):
+            message['content'] = {'text': message['content']}
             
         # Ensure timestamp
-        if 'timestamp' not in data:
-            data['timestamp'] = datetime.now().isoformat()
+        if 'timestamp' not in message:
+            message['timestamp'] = datetime.now().isoformat()
             
-        self.history.append(data)
+        self.history.append(message)
         self.updated_time = datetime.now()  # Store as datetime object
         self.context['total_interactions'] += 1

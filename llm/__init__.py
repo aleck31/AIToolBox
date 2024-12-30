@@ -1,7 +1,26 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 from typing import Dict, List, Optional, Union
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
+
+
+@dataclass
+class ResponseMetadata:
+    """Standardized metadata structure for LLM responses"""
+    stop_reason: Optional[str] = None
+    usage: Optional[Dict] = None
+    metrics: Optional[Dict] = None
+    performance_config: Optional[Dict] = None
+
+    def update_from_chunk(self, chunk_metadata: Dict) -> None:
+        """Update metadata fields from a chunk"""
+        self.usage = chunk_metadata.get('usage', self.usage)
+        self.metrics = chunk_metadata.get('metrics', self.metrics)
+        self.performance_config = chunk_metadata.get('performanceConfig', self.performance_config)
+
+    def to_dict(self) -> Dict:
+        """Convert metadata to dictionary, excluding None values"""
+        return {k: v for k, v in asdict(self).items() if v is not None}
 
 
 @dataclass
@@ -21,14 +40,19 @@ class Message:
     """Basic message structure"""
     role: str
     content: Union[str, Dict]
-    context: Optional[Dict] = None
+    context: Optional[Dict] = None    
+    metadata: Optional[Dict] = None
+
+    def to_dict(self) -> Dict:
+        """Convert message to dictionary, excluding None values"""
+        return {k: v for k, v in asdict(self).items() if v is not None}
 
 
 @dataclass
 class LLMResponse:
     """Basic LLM response structure"""
     content: str
-    tool_calls: Optional[List[Dict]] = None
+    tool_use: Optional[List[Dict]] = None
     tool_results: Optional[List[Dict]] = None
     metadata: Optional[Dict] = None
 
@@ -57,15 +81,8 @@ class LLMModel:
             raise ValueError(f"Invalid model type. Must be one of: {', '.join(VALID_MODEL_TYPES)}")
 
     def to_dict(self) -> Dict:
-        """Convert to dictionary for storage"""
-        return {
-            'name': self.name,
-            'model_id': self.model_id,
-            'api_provider': self.api_provider,
-            'type': self.type,
-            'vendor': self.vendor,
-            'description': self.description
-        }
+        """Convert to dictionary for storage, excluding None values"""
+        return {k: v for k, v in asdict(self).items() if v is not None}
 
     @classmethod
     def from_dict(cls, data: Dict) -> 'LLMModel':

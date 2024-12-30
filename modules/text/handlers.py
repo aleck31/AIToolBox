@@ -60,8 +60,8 @@ class TextHandlers:
         return cls._service
 
     @classmethod
-    async def _build_prompt(cls, text: str, operation: str, options: Dict) -> Dict[str, str]:
-        """Build prompt for text processing"""
+    async def _build_content(cls, text: str, operation: str, options: Dict) -> Dict[str, str]:
+        """Build content for text processing"""
         target_lang = options.get('target_lang', 'en_US')
         system_prompt = SYSTEM_PROMPTS[operation].format(target_lang=target_lang)
         
@@ -69,7 +69,7 @@ class TextHandlers:
         if operation == 'rewrite':
             style_key = options.get('style', '正常')
             style_prompt = STYLES[style_key]['prompt']
-            prompt = f"""Rewrite the text within <{tag}> </{tag}> tags following this style instruction:
+            user_prompt = f"""Rewrite the text within <{tag}> </{tag}> tags following this style instruction:
                 {style_prompt}
                 Ensuring the output is in {target_lang} language:
                 <{tag}>
@@ -77,7 +77,7 @@ class TextHandlers:
                 </{tag}>
                 """
         else:
-            prompt = f"""Process the text within <{tag}></{tag}> tags according to the given instructions:
+            user_prompt = f"""Process the text within <{tag}></{tag}> tags according to the given instructions:
             Ensuring the output is in {target_lang} language:
             <{tag}>
             {text}
@@ -85,7 +85,7 @@ class TextHandlers:
             """
                 
         return {
-            "text": prompt,
+            "text": user_prompt,
             "system_prompt": system_prompt
         }
 
@@ -125,20 +125,20 @@ class TextHandlers:
 
                 # Build prompt with operation-specific configuration
                 options = options or {}
-                prompts = await cls._build_prompt(text, operation, options)
-                logger.debug(f"Build prompts: {prompts}")
+                content = await cls._build_content(text, operation, options)
+                logger.debug(f"Build content: {content}")
 
                 # Update session with style-specific system prompt
-                session.context['system_prompt'] = prompts.pop('system_prompt')        
+                session.context['system_prompt'] = content.pop('system_prompt')        
                 # Persist updated context to session store
                 await cls._service.session_store.update_session(session, user_id)
 
-                logger.debug(f"Content sent to service: {prompts}")
+                # logger.debug(f"Content sent to service: {prompts}")
 
                 # Generate response with session context
-                response = await cls._service.generate_content(
+                response = await cls._service.generate_text(
                     session_id=session.session_id,
-                    content=prompts
+                    content=content
                 )
                 
                 if not response:
