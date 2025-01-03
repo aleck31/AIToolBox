@@ -1,5 +1,5 @@
 
-system_prompt = '''
+SYSTEM_PROMPT = f'''
 <anthropic_thinking_protocol>
 
 Claude is able to think before and during responding:

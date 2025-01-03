@@ -1,43 +1,13 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
-from . import gen_with_think
-
-def format_retry_input(current_input, previous_output):
-    """Format the retry input maintaining conversation context"""
-    if isinstance(current_input, dict):
-        text = current_input.get("text", "")
-        files = current_input.get("files", [])
-    else:
-        text = current_input if current_input else ""
-        files = []
-    
-    retry_text = f"""
-    Previous conversation:
-    User: {text}
-    Assistant: {previous_output}
-
-    Please continue our conversation, taking into account the context above. 
-    Feel free to:
-    - Ask clarifying questions if needed
-    - Build upon previous ideas
-    - Suggest related topics or alternatives
-    - Provide more detailed explanations
-    - Challenge assumptions or explore different perspectives
-
-    User: {text}
-    """
-
-    return {"text": retry_text, "files": files}
-
-def handle_retry_generation(input_data, previous_output):
-    """Handle retry generation with streaming response"""
-    formatted_input = format_retry_input(input_data, previous_output)
-    for chunk in gen_with_think(formatted_input):
-        yield chunk
+from .handlers import OneshotHandlers
 
 with gr.Blocks(theme=gr.themes.Soft()) as tab_oneshot:
     gr.Markdown("One-shot Response Generator (Powered by Claude 3.5 v2)")
+    
+    # Add state for conversation history (list of message dicts)
+    history = gr.State(value=[])
     
     with gr.Row():
         with gr.Column(scale=10):
@@ -50,41 +20,77 @@ with gr.Blocks(theme=gr.themes.Soft()) as tab_oneshot:
                     scale=13,
                     min_width=60,
                     lines=8,
-                    submit_btn="✨ Go",
+                    submit_btn=None,
                     container=False
                 )
+            
+            with gr.Accordion(label='Thinking Process', open=False):
+                thinking_output = gr.Markdown(
+                    header_links=True,
+                    show_label=False,
+                    line_breaks=True,
+                    value=""
+                )
+                
             with gr.Accordion(label='Response', open=True):
-                output = gr.Markdown(
+                response_output = gr.Markdown(
                     header_links=True,
                     show_label=False,
                     line_breaks=True,
                     value=""
                 )
 
-        with gr.Column(scale=2, min_width=200):    
-            retry_btn = gr.Button("🤔 Ask further", variant="secondary")  # Updated label
+        with gr.Column(scale=2, min_width=200):
+            submit_btn = gr.Button("✨ Go", variant="primary", scale=1)  
             clear_btn = gr.ClearButton(
                 value="🗑️ Clear",
-                components=[input_box, output]
+                components=[input_box, thinking_output, response_output]
             )
 
-    examples = gr.Examples(
-        examples=['写一首关于梦想的打油诗'],
-        inputs=[input_box]
-    )
+    def update_btn_immediate():
+        """Update button label immediately on click"""
+        return "💭 Thinking"
 
-    # Connect the submit event directly to the input box
-    input_box.submit(
-        fn=gen_with_think,
-        inputs=input_box,
-        outputs=output,
+    def update_btn_label(response):
+        """Update submit button label after response"""
+        return "🤔 Ask further" if response else "✨ Go"
+
+    def update_history(input_data, history, response):
+        """Update conversation history with new interaction"""
+        return history + [
+            {"role": "user", "content": input_data},
+            {"role": "assistant", "content": response}
+        ]
+
+    # Connect the submit button with history
+    submit_btn.click(
+        fn=update_btn_immediate,  # First update button
+        outputs=submit_btn
+    ).then(
+        fn=OneshotHandlers.gen_with_think,  # Then generate response
+        inputs=[input_box, history],
+        outputs=[thinking_output, response_output],
         api_name="oneshot"
+    ).then(
+        fn=update_history,  # update history
+        inputs=[input_box, history, response_output],
+        outputs=history
+    ).then(
+        fn=update_btn_label,
+        inputs=response_output,
+        outputs=submit_btn
     )
 
-    # Enhanced retry functionality for better conversation flow
-    retry_btn.click(
-        fn=handle_retry_generation,
-        inputs=[input_box, output],
-        outputs=output,
-        api_name="oneshot_retry"
+    # Clear all content and reset submit button
+    clear_btn.click(
+        lambda: (None, None, None, [], "✨ Go"),
+        outputs=[input_box, thinking_output, response_output, history, submit_btn]
+    )
+    # Add Enter key support for input box
+    input_box.submit(
+        fn=lambda: None,  # Trigger submit button click
+        outputs=None
+    ).then(
+        fn=lambda: gr.Button.click(submit_btn),
+        outputs=None
     )
