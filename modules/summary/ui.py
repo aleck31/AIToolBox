@@ -1,40 +1,38 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
-from utils import web
-from . import text_summary
+from .handlers import SummaryHandlers
 
-
-with gr.Blocks() as tab_summary:
-    gr.Markdown("Summarize article or webpage for you.  (Powered by Bedrock)")
-    with gr.Row():
-        saved_text = gr.State()
-        with gr.Column(scale=6, min_width=450):
-            with gr.Row():
-                with gr.Tab("Original Text"):
-                    input_text = gr.Textbox(
-                        label='text', show_label=False, lines=11)
-                    input_text.change(lambda x: x, input_text, saved_text)
-                with gr.Tab("Web URL"):
-                    with gr.Row():
-                        input_url = gr.Textbox(
-                            label='url', show_label=False, lines=1, scale=11)
-                        btn_fetch = gr.Button('🧲', min_width=16, visible=False, size='sm', scale=1)
-                        input_url.change(lambda: gr.Button(
-                            visible=True, interactive=True), None, btn_fetch)
-                        btn_fetch.click(lambda: gr.Button('⏳', interactive=False), None, btn_fetch).then(
-                            web.convert_url_text, input_url, saved_text).success(lambda: gr.Button('🟢'), None, btn_fetch)
-
-            with gr.Row():
-                input_lang = gr.Radio(label="Target Language:", choices=[
-                                    'original', 'Chinese', 'English'], value="original", scale=1)
-            with gr.Row():
-                btn_clear = gr.Button("🗑️ Clear")
-                btn_summit = gr.Button("▶️ Go", variant='primary')
-
-        with gr.Column(scale=6, min_width=450):
-            gr.Markdown('Summary')
-            output = gr.Markdown(
+def create_summary_interface() -> gr.Interface:
+    """Initialize service and create summary interface"""
+    # Initialize service
+    SummaryHandlers.initialize()
+    
+    # Create interface
+    interface = gr.Interface(
+        fn=SummaryHandlers.summarize_text,
+        inputs=[
+            gr.Textbox(
+                label="Text or URL",
+                placeholder="Enter text to summarize or paste a URL",
+                lines=11
+            )
+        ],
+        additional_inputs=[
+            gr.Radio(
+                label="Target Language:",
+                show_label=False,
+                choices=['original', 'Chinese', 'English'],
+                value="original"
+            )
+        ],
+        additional_inputs_accordion=gr.Accordion(
+            label='Target Language', 
+            open=True
+        ),
+        outputs=[
+            gr.Markdown(
+                label="Summary",
                 header_links=True,
                 line_breaks=True,
                 container=True,
@@ -42,15 +40,15 @@ with gr.Blocks() as tab_summary:
                 min_height=320,
                 value=""  # Initialize with empty value for streaming
             )
+        ],
+        description="Summarize text or webpage content for you. (Powered by Bedrock)",
+        submit_btn=gr.Button("⌨️ Format", variant='primary'),
+        clear_btn=gr.Button("🗑️ Clear"),
+        flagging_mode='never',
+        api_name="summary"
+    )
+    
+    return interface
 
-        btn_clear.click(
-            lambda: [None, None, ""],
-            outputs=[input_text, input_url, output]
-        )
-        # Update to use streaming response
-        btn_summit.click(
-            fn=text_summary,
-            inputs=[saved_text, input_lang],
-            outputs=output,
-            api_name="summary"
-        )
+# Create interface
+tab_summary = create_summary_interface()
