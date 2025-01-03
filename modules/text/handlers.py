@@ -23,7 +23,7 @@ TEXT_OPERATIONS = {
         "function": lambda text, options, request: TextHandlers.rewrite(text, options, request),
         "options": {
             "label": "Style",
-            "type": "radio",
+            "type": "dropdown",
             "choices": list(STYLES.keys()),
             "default": "正常"
         }
@@ -136,7 +136,7 @@ class TextHandlers:
                 # logger.debug(f"Content sent to service: {prompts}")
 
                 # Generate response with session context
-                response = await cls._service.generate_text(
+                response = await cls._service.gen_text(
                     session_id=session.session_id,
                     content=content
                 )
@@ -189,10 +189,10 @@ class TextHandlers:
             *args: Additional arguments (style options and target language)
         """
         try:
-            # Last argument is always target_lang
-            target_lang = args[-1]
-            # Other args are between text and target_lang
-            other_args = args[:-1]
+            # First argument is target_lang after operation and text
+            target_lang = args[0]
+            # Other args are after target_lang
+            other_args = args[1:]
             
             # Collect options for the current operation
             options = {"target_lang": target_lang}
