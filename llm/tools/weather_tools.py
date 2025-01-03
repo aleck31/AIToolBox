@@ -4,8 +4,8 @@ from typing import Optional, Dict, Any
 import time
 
 # Create TTL cache instances
-location_cache = TTLCache(maxsize=1024, ttl=300)  # Cache for 5 minutes
-weather_cache = TTLCache(maxsize=1024, ttl=300)  # Cache for 5 minutes
+location_cache = TTLCache(maxsize=100, ttl=86400)  # Cache for 1 day
+weather_cache = TTLCache(maxsize=100, ttl=21600)  # Cache for 6 hours
 
 def get_location_coords_with_cache(place: str) -> Dict[str, Any]:
     """Get latitude and longitude for a place name using OpenStreetMap Nominatim"""
@@ -37,8 +37,13 @@ def get_location_coords_with_cache(place: str) -> Dict[str, Any]:
             "success": False
         }
 
-def get_weather_with_cache(place: str) -> Dict[str, Any]:
-    """Get detailed weather information for a location"""
+def get_weather_with_cache(place: str, target_date: Optional[str] = None) -> Dict[str, Any]:
+    """Get weather information for a location, either current or for a specific date
+    
+    Args:
+        place: Location name (e.g., 'London, UK', 'New York City')
+        target_date: Optional ISO date string (YYYY-MM-DD). If None, returns current weather
+    """
     # First get coordinates
     location = get_location_coords(place)
     if not location.get("success"):
@@ -47,14 +52,26 @@ def get_weather_with_cache(place: str) -> Dict[str, Any]:
     # Get weather data from Open-Meteo
     url = "https://api.open-meteo.com/v1/forecast"
     try:
-        params = {
-            "latitude": location["latitude"],
-            "longitude": location["longitude"],
-            "current": ["temperature_2m", "relative_humidity_2m", "weather_code", 
-                       "wind_speed_10m", "wind_direction_10m", "precipitation"],
-            "timezone": "auto",
-            "forecast_days": 1
-        }
+        if target_date is None:
+            # Get current weather
+            params = {
+                "latitude": location["latitude"],
+                "longitude": location["longitude"],
+                "current": ["temperature_2m", "relative_humidity_2m", "weather_code", 
+                           "wind_speed_10m", "wind_direction_10m", "precipitation"],
+                "timezone": "auto"
+            }
+        else:
+            # Get forecast for specific date
+            params = {
+                "latitude": location["latitude"],
+                "longitude": location["longitude"],
+                "daily": ["temperature_2m_max", "temperature_2m_min", "precipitation_probability_max",
+                         "weather_code", "wind_speed_10m_max"],
+                "timezone": "auto",
+                "start_date": target_date,
+                "end_date": target_date
+            }
         
         response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
@@ -74,38 +91,71 @@ def get_weather_with_cache(place: str) -> Dict[str, Any]:
             95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Thunderstorm with heavy hail"
         }
         
-        current = data["current"]
-        weather_desc = weather_codes.get(current["weather_code"], "Unknown")
-        
-        return {
-            "success": True,
-            "location": location["display_name"],
-            "temperature": {
-                "value": current["temperature_2m"],
-                "unit": "°C"
-            },
-            "humidity": {
-                "value": current["relative_humidity_2m"],
-                "unit": "%"
-            },
-            "wind": {
-                "speed": {
-                    "value": current["wind_speed_10m"],
-                    "unit": "km/h"
+        if target_date is None:
+            # Return current weather
+            current = data["current"]
+            weather_desc = weather_codes.get(current["weather_code"], "Unknown")
+            
+            return {
+                "success": True,
+                "location": location["display_name"],
+                "temperature": {
+                    "value": current["temperature_2m"],
+                    "unit": "°C"
                 },
-                "direction": current["wind_direction_10m"]
-            },
-            "precipitation": {
-                "value": current["precipitation"],
-                "unit": "mm"
-            },
-            "conditions": weather_desc,
-            "timestamp": data["current"]["time"]
-        }
+                "humidity": {
+                    "value": current["relative_humidity_2m"],
+                    "unit": "%"
+                },
+                "wind": {
+                    "speed": {
+                        "value": current["wind_speed_10m"],
+                        "unit": "km/h"
+                    },
+                    "direction": current["wind_direction_10m"]
+                },
+                "precipitation": {
+                    "value": current["precipitation"],
+                    "unit": "mm"
+                },
+                "conditions": weather_desc,
+                "timestamp": current["time"]
+            }
+        else:
+            # Return forecast for target day
+            daily = data["daily"]
+            target_idx = 0  # We requested exactly one day
+            
+            return {
+                "success": True,
+                "location": location["display_name"],
+                "date": daily["time"][target_idx],
+                "temperature": {
+                    "max": {
+                        "value": daily["temperature_2m_max"][target_idx],
+                        "unit": "°C"
+                    },
+                    "min": {
+                        "value": daily["temperature_2m_min"][target_idx],
+                        "unit": "°C"
+                    }
+                },
+                "precipitation": {
+                    "probability": daily["precipitation_probability_max"][target_idx],
+                    "unit": "%"
+                },
+                "wind": {
+                    "speed": {
+                        "value": daily["wind_speed_10m_max"][target_idx],
+                        "unit": "km/h"
+                    }
+                },
+                "conditions": weather_codes.get(daily["weather_code"][target_idx], "Unknown")
+            }
         
     except requests.RequestException as e:
         return {
-            "error": f"Failed to get weather data: {str(e)}",
+            "error": f"Failed to get forecast data: {str(e)}",
             "success": False
         }
 
@@ -118,12 +168,13 @@ def get_location_coords(place: str) -> Dict[str, Any]:
     location_cache[place] = result
     return result
 
-def get_weather(place: str) -> Dict[str, Any]:
+def get_weather(place: str, target_date: Optional[str] = None) -> Dict[str, Any]:
     """Cached wrapper for get_weather_with_cache"""
-    if place in weather_cache:
-        return weather_cache[place]
-    result = get_weather_with_cache(place)
-    weather_cache[place] = result
+    cache_key = f"{place}_{target_date if target_date else 'current'}"
+    if cache_key in weather_cache:
+        return weather_cache[cache_key]
+    result = get_weather_with_cache(place, target_date)
+    weather_cache[cache_key] = result
     return result
 
 
@@ -132,14 +183,19 @@ list_of_tools_specs = [
     {
         "toolSpec": {
             "name": "get_weather",
-            "description": "Get current weather information for a location. Use this when asked about current weather, temperature, humidity, wind, precipitation, or general weather conditions for a specific place. The location should be a city name, optionally with country (e.g., 'Paris, France', 'Tokyo', 'New York City, USA').",
+            "description": "Get weather information for a location, either current weather or forecast for a specific date. Use this for both current conditions and future predictions. Location names must be translated to English.",
             "inputSchema": {
                 "json": {
                     "type": "object",
                     "properties": {
                         "place": {
                             "type": "string",
-                            "description": "Location name (e.g., 'London, UK', 'New York City', 'Tokyo, Japan')"
+                            "description": "Location name in English (e.g., 'London, UK', 'New York City', 'Tokyo, Japan'). Always use English names for locations, for example use 'Beijing' instead of '北京'."
+                        },
+                        "target_date": {
+                            "type": "string",
+                            "description": "Target date in YYYY-MM-DD format (e.g., '2024-12-30'). Leave empty for current weather",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
                         }
                     },
                     "required": ["place"]
@@ -150,14 +206,14 @@ list_of_tools_specs = [
     {
         "toolSpec": {
             "name": "get_location_coords",
-            "description": "Get geographic coordinates for a location. Use this when you need precise latitude/longitude for a place, or to verify/disambiguate location names. This is typically used internally before weather queries to ensure accurate location matching.",
+            "description": "Get geographic coordinates for a location. Use this when you need precise latitude/longitude for a place, or to verify/disambiguate location names. This is typically used internally before weather queries to ensure accurate location matching. Location names must be translated to English.",
             "inputSchema": {
                 "json": {
                     "type": "object",
                     "properties": {
                         "place": {
                             "type": "string",
-                            "description": "Location name to get coordinates for"
+                            "description": "Location name in English (e.g., 'London, UK', 'New York City'). Always translate non-English names to English before use."
                         }
                     },
                     "required": ["place"]
