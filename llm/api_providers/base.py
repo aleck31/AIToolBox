@@ -60,7 +60,17 @@ class LLMAPIProvider(ABC):
         system_prompt: Optional[str] = None,
         **kwargs
     ) -> LLMResponse:
-        """Generate a response"""
+        """Generate a response
+        Args:
+            messages: user messages
+            system_prompt: Optional system instructions
+            **kwargs: Additional parameters for inference
+            
+        Return:
+            Dict containing either:
+            - {"content": dict} for content chunks
+            - {"metadata": dict} for response metadata        
+        """        
         pass
     
     @abstractmethod
@@ -70,7 +80,17 @@ class LLMAPIProvider(ABC):
         system_prompt: Optional[str] = None,
         **kwargs
     ) -> AsyncIterator[Dict]:
-        """Generate a streaming response"""
+        """Generate a streaming response
+        Args:
+            messages: user messages
+            system_prompt: Optional system instructions
+            **kwargs: Additional parameters for inference
+            
+        Yields:
+            Dict containing either:
+            - {"content": dict} for content chunks
+            - {"metadata": dict} for response metadata        
+        """
         pass
 
     @abstractmethod
@@ -81,5 +101,16 @@ class LLMAPIProvider(ABC):
         system_prompt: Optional[str] = None,
         **kwargs
     ) -> AsyncIterator[Dict]:
-        """Generate streaming response for multi-turn chat"""
+        """Generate streaming response for multi-turn chat
+        Args:
+            message: Current user message
+            history: Optional chat history
+            system_prompt: Optional system instructions
+            **kwargs: Additional parameters for inference
+            
+        Yields:
+            Dict containing either:
+            - {"content": dict} for content chunks
+            - {"metadata": dict} for response metadata  
+        """
         pass

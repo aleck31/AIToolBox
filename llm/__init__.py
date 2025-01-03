@@ -5,8 +5,39 @@ from dataclasses import dataclass, asdict
 
 
 @dataclass
+class LLMConfig:
+    """Model-specific parameters for LLM providers"""
+    api_provider: str
+    model_id: str
+    max_tokens: int = 4096
+    temperature: float = 0.9
+    top_p: float = 0.99
+    top_k: Optional[int] = 200
+    stop_sequences: Optional[List[str]] = None
+
+
+@dataclass
+class Message:
+    """Chat message structure"""
+    role: str
+    content: Union[str, Dict]
+    context: Optional[Dict] = None    
+    metadata: Optional[Dict] = None
+
+    def to_dict(self) -> Dict:
+        """Convert message to dictionary, excluding None values"""
+        return {k: v for k, v in asdict(self).items() if v is not None}
+
+
+@dataclass
+class LLMResponse:
+    """Basic LLM response structure"""
+    content: Dict # text, image, video
+    metadata: Optional[Dict] = None
+
+@dataclass
 class ResponseMetadata:
-    """Standardized metadata structure for LLM responses"""
+    """Metadata structure for LLM responses with stop_reason"""
     stop_reason: Optional[str] = None
     usage: Optional[Dict] = None
     metrics: Optional[Dict] = None
@@ -21,40 +52,6 @@ class ResponseMetadata:
     def to_dict(self) -> Dict:
         """Convert metadata to dictionary, excluding None values"""
         return {k: v for k, v in asdict(self).items() if v is not None}
-
-
-@dataclass
-class LLMConfig:
-    """Model-specific parameters for LLM providers"""
-    api_provider: str
-    model_id: str
-    max_tokens: int = 4096
-    temperature: float = 0.9
-    top_p: float = 0.99
-    top_k: Optional[int] = 200
-    stop_sequences: Optional[List[str]] = None
-
-
-@dataclass
-class Message:
-    """Basic message structure"""
-    role: str
-    content: Union[str, Dict]
-    context: Optional[Dict] = None    
-    metadata: Optional[Dict] = None
-
-    def to_dict(self) -> Dict:
-        """Convert message to dictionary, excluding None values"""
-        return {k: v for k, v in asdict(self).items() if v is not None}
-
-
-@dataclass
-class LLMResponse:
-    """Basic LLM response structure"""
-    content: str
-    tool_use: Optional[List[Dict]] = None
-    tool_results: Optional[List[Dict]] = None
-    metadata: Optional[Dict] = None
 
 
 VALID_MODEL_TYPES = ['text', 'multimodal', 'image', 'embedding']
@@ -95,10 +92,3 @@ class LLMModel:
             vendor=data.get('vendor', ''),
             description=data.get('description', '')
         )
-
-def moc_chat(name, message, history):
-    history = history or []
-    message = message.lower()
-    salutation = "Good morning" if message else "Good evening"
-    greeting = f"{salutation} {name}. {message} degrees today"
-    return greeting

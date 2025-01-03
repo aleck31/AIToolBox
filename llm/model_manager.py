@@ -104,8 +104,12 @@ class ModelManager:
             logger.error(f"Error getting model by ID {model_id}: {str(e)}")
             return None
 
-    def get_models(self) -> List[LLMModel]:
-        """Get all configured LLM models"""
+    def get_models(self, filter=None) -> List[LLMModel]:
+        """Get all configured LLM models
+
+        Args:
+            filter: [Optional] Dict containing filtering conditions based on LLMModel properties        
+        """
         try:
             response = self.table.get_item(
                 Key={

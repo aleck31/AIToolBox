@@ -44,7 +44,9 @@ def create_main_interface(request: Request = None):
         theme="Base",
         css=css,
         analytics_enabled=False,  # Disable analytics to prevent session issues
-    ).queue()
+    ).queue(
+        default_concurrency_limit=5
+    )
     
     logger.debug("Main Gradio interface created successfully")
     return interface

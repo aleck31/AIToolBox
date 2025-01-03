@@ -1,5 +1,4 @@
-
-from typing import Dict, List, Optional, AsyncIterator
+from typing import Dict, List, Optional, Iterator, AsyncIterator
 import google.generativeai as genai
 from google.generativeai.types import content_types
 from google.api_core import exceptions
@@ -153,15 +152,17 @@ class GeminiProvider(LLMAPIProvider):
         # Handle context if present and not None
         context = getattr(message, 'context', None)
         if context and isinstance(context, dict):
-            context_text = []
+            context_items = []
             for key, value in context.items():
                 if value is not None:
                     # Convert snake_case to spaces and capitalize
                     readable_key = key.replace('_', ' ').capitalize()
-                    context_text.append(f"{readable_key}: {value}")
-            if context_text:
-                # Add formatted context to contex as a bracketed prefix
-                parts.append({"text": f"{' | '.join(context_text)}\n"})
+                    context_items.append(f"{readable_key}: {value}")
+            if context_items:
+                # Add formatted context with clear labeling
+                parts.append({
+                    "text": f"Context Information:\n{' | '.join(context_items)}\n"
+                })
 
         # Handle message content
         if isinstance(message.content, str):
@@ -186,13 +187,13 @@ class GeminiProvider(LLMAPIProvider):
 
         return {"role": message.role, "parts": parts}
 
-    async def generate_content(
+    def _generate_content_sync(
         self,
         messages: List[Message],
         system_prompt: Optional[str] = None,
         **kwargs
     ) -> LLMResponse:
-        """Generate a response from Gemini using generate_content"""
+        """Synchronous implementation of content generation"""
         try:
             formatted_messages = self._convert_messages(messages, system_prompt)
             logger.debug(f"Formatted messages: {formatted_messages}")
@@ -228,13 +229,13 @@ class GeminiProvider(LLMAPIProvider):
         except Exception as e:
             self._handle_gemini_error(e)
 
-    async def generate_stream(
+    def _generate_stream_sync(
         self,
         messages: List[Message],
         system_prompt: Optional[str] = None,
         **kwargs
-    ) -> AsyncIterator[Dict]:
-        """Generate a streaming response from Gemini using generate_content with stream=True"""
+    ) -> Iterator[Dict]:
+        """Synchronous implementation of streaming generation"""
         try:
             formatted_messages = self._convert_messages(messages, system_prompt)
             logger.debug(f"Formatted messages: {formatted_messages}")
@@ -250,7 +251,8 @@ class GeminiProvider(LLMAPIProvider):
                 stream=True,
                 **model_args
             )
-            # Handle synchronous iterator in async context
+            
+            # Stream response chunks
             for chunk in response:
                 if hasattr(chunk, 'text'):
                     yield {'text': chunk.text}
@@ -272,6 +274,25 @@ class GeminiProvider(LLMAPIProvider):
             logger.error(f"Streaming error: {str(e)}")
             self._handle_gemini_error(e)
 
+    async def generate_content(
+        self,
+        messages: List[Message],
+        system_prompt: Optional[str] = None,
+        **kwargs
+    ) -> LLMResponse:
+        """Generate a response from Gemini using generate_content"""
+        return self._generate_content_sync(messages, system_prompt, **kwargs)
+
+    async def generate_stream(
+        self,
+        messages: List[Message],
+        system_prompt: Optional[str] = None,
+        **kwargs
+    ) -> AsyncIterator[Dict]:
+        """Generate a streaming response from Gemini using generate_content with stream=True"""
+        for chunk in self._generate_stream_sync(messages, system_prompt, **kwargs):
+            yield chunk
+
     async def multi_turn_generate(
         self,
         message: Message,
@@ -279,7 +300,18 @@ class GeminiProvider(LLMAPIProvider):
         system_prompt: Optional[str] = None,
         **kwargs
     ) -> AsyncIterator[Dict]:
-        """Generate streaming response using multi-turn chat"""
+        """Generate streaming response using multi-turn chat
+        Args:
+            message: Current user message
+            history: Optional chat history
+            system_prompt: Optional system instructions
+            **kwargs: Additional parameters for inference
+            
+        Yields:
+            Dict containing either:
+            - {"content": dict} for content chunks
+            - {"metadata": dict} for response metadata
+        """
         try:
             if history:
                 formatted_messages = self._convert_messages(history, system_prompt)
@@ -300,16 +332,15 @@ class GeminiProvider(LLMAPIProvider):
             }
             
             # Stream response using formatted message parts
-            response = chat.send_message(
+            for chunk in chat.send_message(
                 current_message['parts'],
                 stream=True,
                 **model_args
-            )
-            
-            # Handle synchronous iterator in async context
-            for chunk in response:
+            ):
                 if hasattr(chunk, 'text'):
-                    yield {'text': chunk.text}
+                    yield {
+                        'content': {'text': chunk.text}
+                    }
                 
                 # Extract usage metadata if available
                 if hasattr(chunk, 'usage_metadata'):
@@ -323,10 +354,6 @@ class GeminiProvider(LLMAPIProvider):
                             }
                         }
                     }
-                
-                # Handle any prompt feedback
-                # if hasattr(chunk, 'prompt_feedback'):
-                #     logger.debug(f"Prompt feedback: {chunk.prompt_feedback}")
                     
         except Exception as e:
             logger.error(f"Multi turn Generate Error: {str(e)}")

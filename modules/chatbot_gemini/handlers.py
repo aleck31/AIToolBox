@@ -1,3 +1,4 @@
+import asyncio
 import gradio as gr
 from typing import List, Dict, Optional, AsyncGenerator, Union
 from core.logger import logger
@@ -69,7 +70,7 @@ class GeminiChatHandlers:
             request: Gradio request with session data
             
         Yields:
-            Dict with role and content for assistant's response
+            Message chunks for Gradio chatbot
         """
         try:
             # Initialize services if needed
@@ -77,7 +78,7 @@ class GeminiChatHandlers:
 
             # Validate and format user input
             if not ui_input:
-                yield {"role": "assistant", "content": "Please provide a message or file."}
+                yield "Please provide a message or file."
                 return
                         
             # Convert Gradio input to a unified dictionary format
@@ -93,13 +94,13 @@ class GeminiChatHandlers:
 
             # Require either text or files
             if not unified_input["text"] and not unified_input.get("files"):
-                yield {"role": "assistant", "content": "Please provide a message or file."}
+                yield "Please provide a message or file."
                 return
             
             # Get authenticated user from FastAPI session
             user_id = request.session.get('user', {}).get('username')
             if not user_id:
-                yield {"role": "assistant", "content": "Authentication required. Please log in again."}
+                yield "Authentication required. Please log in again."
                 return
 
             try:
@@ -119,19 +120,20 @@ class GeminiChatHandlers:
                 await cls.chat_service.session_store.update_session(session, user_id)
                 
                 # Prepare style-specific inference parameters
-                style_params = {
-                    k: v for k, v in style_config["options"].items()
-                    if v is not None
-                }
+                style_params = {k: v for k, v in style_config["options"].items() if v is not None}
                 
                 # Stream chat response with UI history sync and style parameters
+                buffered_text = ""
                 async for chunk in cls.chat_service.streaming_reply(
                     session_id=session.session_id,
                     ui_input=unified_input,
                     ui_history=ui_history,
                     style_params=style_params
                 ):
-                    yield chunk
+                    # Accumulate text for display while maintaining streaming
+                    buffered_text += chunk
+                    yield buffered_text
+                    await asyncio.sleep(0)  # Add sleep for Gradio UI streaming echo
 
             except Exception as e:
                 logger.error(f"Unexpected error in chat service: {str(e)}")

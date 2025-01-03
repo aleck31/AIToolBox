@@ -192,7 +192,7 @@ class ChatService:
             return session
 
         except HTTPException as e:
-            logger.error(f"Error in get_or_create_session: {str(e)}")
+            logger.error(f"Error in [get_or_create_session]: {str(e)}")
             raise e
 
     async def clear_chat_session(
@@ -219,7 +219,7 @@ class ChatService:
         ui_input: Dict,
         ui_history: Optional[List[Dict]] = None,
         style_params: Optional[Dict] = None
-    ) -> AsyncIterator[Dict]:
+    ) -> AsyncIterator[str]:
         """Process user message and stream assistant's response
         
         Args:
@@ -229,7 +229,7 @@ class ChatService:
             style_params: LLM generation parameters
             
         Yields:
-            Response chunks for Gradio chatbot
+            Message chunks for handler
         """
         try:
             # Get session (already validated by get_or_create_session)
@@ -243,7 +243,7 @@ class ChatService:
                     self._prepare_chat_message(
                         role=msg["role"], 
                         content=msg["content"]
-                        # context={"local_time": msg["timestamp"]}  # history messages don't need timestamps in context 
+                        # context={"local_time": msg["timestamp"]}  # history messages no need context 
                     )
                 )
 
@@ -251,7 +251,11 @@ class ChatService:
             user_message = self._prepare_chat_message(
                 role="user",
                 content=ui_input,
-                context={"local_time": datetime.now().astimezone().isoformat()}
+                # Add custom context that you want LLM to know
+                context={
+                    'local_time': datetime.now().astimezone().isoformat(),
+                    'user_name': session.user_id
+                }
             )
             logger.debug(f"New Message send to LLM Provider: {user_message}")
 
@@ -261,9 +265,10 @@ class ChatService:
             # Get LLM provider
             llm = self._get_llm_provider(session.metadata.model_id)
             
-            # Track response and metadata
-            response_chunks = []
-            response_metadata = {}
+            # Track complete response for session
+            accumulated_text = []
+            resp_metadata = {}
+            assistant_message = None
             
             try:
                 # Stream from LLM
@@ -276,42 +281,35 @@ class ChatService:
                     if not isinstance(chunk, dict):
                         logger.warning(f"Unexpected chunk type: {type(chunk)}")
                         continue
-                        
-                    if 'metadata' in chunk:
-                        response_metadata.update(chunk['metadata'])
-                    elif 'text' in chunk:
-                        response_chunks.append(chunk['text'])
-                        # Stream progressive response
-                        yield {
-                            "role": "assistant",
-                            "content": ''.join(response_chunks)
-                        }
+
+                    # Handle metadata updates
+                    if chunk_metadata := chunk.get('metadata'):
+                        resp_metadata.update(chunk_metadata)
+                    
+                    # Handle content chunks
+                    if chunk_text := chunk.get('content', {}).get('text'):
+                        accumulated_text.append(chunk_text)
+                        yield chunk_text
                 
-                # Add complete response to pending updates
-                if response_chunks:
+                # Add complete response to session
+                if accumulated_text:
                     assistant_message = self._prepare_chat_message(
                         role="assistant",
-                        content={"text": ''.join(response_chunks)},
-                        metadata=response_metadata
+                        content={"text": ''.join(accumulated_text)},
+                        metadata=resp_metadata
                     )
-                logger.debug(f"Message replied by LLM Provider: {assistant_message}")
-                
-                # Add assistant message to session
-                session.add_interaction(assistant_message.to_dict())
+                    logger.debug(f"Message replied by LLM Provider: {assistant_message}")
+                    
+                    # Add assistant message to session
+                    session.add_interaction(assistant_message.to_dict())
 
-                # Persist interaction history to session sotre
+                # Persist interaction history to session store
                 await self.session_store.update_session(session, session.user_id)
                     
             except Exception as e:
                 logger.error(f"LLM error in session {session_id}: {str(e)}")
-                yield {
-                    "role": "assistant",
-                    "content": "I apologize, but I encountered an error while generating the response."
-                }
+                yield "I apologize, but I encountered an error while generating the response."
                 
         except Exception as e:
             logger.error(f"Error in [streaming_reply]: {str(e)}")
-            yield {
-                "role": "assistant",
-                "content": "I apologize, but I encountered an error. Please try again."
-            }
+            yield "I apologize, but I encountered an error. Please try again."
