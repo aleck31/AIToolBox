@@ -1,56 +1,96 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
-from core.module_config import AppConf
-from modules import coding
+from .handlers import CodingHandlers, DEV_LANGS
 
 
-with gr.Blocks() as tab_coding:
-    description = gr.Markdown("Let's build ... (Powered by Bedrock)")
-    with gr.Row():
-        # 输入需求
-        with gr.Column(scale=7, min_width=500):
-            input_requirement = gr.Textbox(
-                label="Describe your requirements:", lines=5)
-        with gr.Column(scale=3, min_width=120):
-            input_lang = gr.Radio(
-                label="Programming Language", choices=AppConf.CODELANGS, value="Python")
-    with gr.Row():
-        # 输出代码结果
-        with gr.Column(scale=7, min_width=500):
-            support_langs = ["python", "markdown", "json",
-                             "html", "javascript", "typescript", "yaml"]
-            lang_format = input_lang.value.lower(
-            ) if input_lang.value.lower() in support_langs else None
-            output_codes = gr.Code(label="Code", language=lang_format, lines=9)
-        with gr.Column(scale=3, min_width=100):
-            with gr.Row():
-                btn_code_clear = gr.ClearButton(
-                    [input_requirement, output_codes], value='🗑️ Clear')
-                btn_code_submit = gr.Button(
-                    value='⌨️ Generate', variant='primary')
-                btn_code_submit.click(fn=coding.gen_code, inputs=[
-                                      input_requirement, input_lang], outputs=output_codes)
-    with gr.Row():
-        error_box = gr.Textbox(label="Error", visible=False)
+def create_coding_interface() -> gr.Blocks:
+    """Initialize service and create coding interface with handlers"""
+    # Initialize service
+    CodingHandlers.initialize()
+    
+    # Create interface
+    interface = gr.Blocks(theme=gr.themes.Soft())
+    
+    with interface:
+        gr.Markdown("Code Generation")
+        
+        # Main layout row
+        with gr.Row():
+            # Left column: Input and output
+            with gr.Column(scale=7, min_width=500):
+                # Requirements input
+                input_requirement = gr.Textbox(
+                    label="Describe your requirements:",
+                    placeholder="What would you like me to help you code?",
+                    lines=5,
+                    show_copy_button=True
+                )
+                
+                # Architecture Design output
+                with gr.Accordion(label="Architecture Design", open=False):
+                    output_thinking = gr.Markdown(
+                        label='Design',
+                        show_label=False,
+                        line_breaks=True,
+                        header_links=True,
+                        value=""
+                    )
+                
+                # Generated code output
+                with gr.Accordion(label="Generated Code", open=True):
+                    code_output = gr.Markdown(
+                        label='Code',
+                        show_label=False,
+                        line_breaks=True,
+                        min_height=120,
+                        show_copy_button=True,
+                        header_links=True
+                    )
+            
+            # Right column: Settings and controls
+            with gr.Column(scale=3, min_width=120):
+                # Language selection
+                input_lang = gr.Radio(
+                    label="Programming Language",
+                    choices=DEV_LANGS,
+                    value="Python"
+                )
+                with gr.Row():
+                    btn_code_clear = gr.ClearButton(
+                        value="🗑️ Clear",
+                        components=[input_requirement, output_thinking, code_output]
+                    )
+                    btn_code_submit = gr.Button(
+                        value="⌨️ Generate",
+                        variant="primary"
+                    )
 
+        # Event handler functions
+        def update_btn_immediate():
+            """Update button label immediately on click"""
+            return "💭 Thinking"
 
-tab_format = gr.Interface(
-    coding.format_text,
-    inputs=[
-        gr.Textbox(label="Please input the text:", lines=9, scale=5),
-        gr.Radio(label="File format", choices=["JSON", "YAML"], value="JSON")
-    ],
-    outputs=gr.Code(label='Formatted', language='markdown', lines=15, scale=5),
-    examples=[[
-        """The the Super Hero Squad formed in 2016 and based in Metro City, this active squad boasts three remarkable members. 
-        Molecule Man, 29, possesses radiation resistance and the ability to emit radiation blasts. 
-        Madame Uppercut, a formidable 39-year-old, can deliver punches of immense force, and withstand colossal damage. 
-        Eternal Flame, an enigmatic being estimated to be 1,000,000 years old, wields immortality, inferno summoning, and teleportation.
-        """, "JSON"]],
-    cache_examples=False,
-    # live=True,
-    description="A Json/YAML formatter... (Powered by Bedrock)",
-    submit_btn=gr.Button("⌨️ Format", variant='primary'),
-    clear_btn=gr.Button("🗑️ Clear")
-)
+        def update_btn_label(code):
+            """Update submit button label after response"""
+            return "🤔 Regenerate" if code else "⌨️ Generate"
+
+        # Event bindings
+        btn_code_submit.click(
+            fn=update_btn_immediate,  # First update button
+            outputs=btn_code_submit
+        ).then(
+            fn=CodingHandlers.gen_code,  # Then generate code
+            inputs=[input_requirement, input_lang],
+            outputs=[output_thinking, code_output],
+            api_name="gen_code"
+        ).then(
+            fn=update_btn_label,  # Update button based on result
+            inputs=code_output,
+            outputs=btn_code_submit
+        )
+        
+    return interface
+
+# Create interface
+tab_coding = create_coding_interface()

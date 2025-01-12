@@ -23,7 +23,7 @@ class ChatService:
             enabled_tools: Optional list of tool module names to enable
             cache_ttl: Time in seconds to keep sessions in cache (default 5 min)
         """
-        self.session_store = SessionStore()
+        self.session_store = SessionStore.get_instance()
         self._llm_providers: Dict[str, LLMAPIProvider] = {}
         self._session_cache: Dict[str, tuple[Session, float]] = {}  # (session, expiry)
         self.enabled_tools = enabled_tools or []

@@ -64,16 +64,16 @@ class SummaryHandlers:
                     module_name='summary'
                 )
 
+                # Update session with system prompt
+                session.context['system_prompt'] = SYSTEM_PROMPT
+                # Persist updated context
+                await cls._service.session_store.update_session(session, user_id)
+
                 # Build content with system prompt
                 content = {
                     "text": build_user_prompt(text, target_lang)
                 }
                 logger.debug(f"Build content: {content}")
-
-                # Update session with system prompt
-                session.context['system_prompt'] = SYSTEM_PROMPT
-                # Persist updated context
-                await cls._service.session_store.update_session(session, user_id)
 
                 # Stream response with accumulated display
                 buffered_text = ""

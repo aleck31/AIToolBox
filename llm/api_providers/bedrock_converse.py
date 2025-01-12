@@ -10,8 +10,8 @@ from .base import LLMAPIProvider, LLMConfig, Message, LLMResponse
 from ..tools.bedrock_tools import tool_registry
 
 
-class BedrockProvider(LLMAPIProvider):
-    """Amazon Bedrock LLM provider implementation with tool support"""
+class BedrockConverse(LLMAPIProvider):
+    """Amazon Bedrock LLM provider implemented with Converse API, featuring comprehensive tool support."""
     
     def __init__(self, config: LLMConfig, tools: Optional[List[str]] = None):
         """Initialize provider with config and tools
@@ -79,7 +79,7 @@ class BedrockProvider(LLMAPIProvider):
         error_code = error.response['Error']['Code']
         error_message = error.response['Error']['Message']
         
-        logger.error(f"[BedrockProvider] {error_message}")
+        logger.error(f"[BedrockConverse] {error_message}")
         if error_code in ['ThrottlingException', 'TooManyRequestsException']:
             raise error  # Already a boto ClientError with proper error code
 
@@ -454,7 +454,7 @@ class BedrockProvider(LLMAPIProvider):
             
         Return:
             Dict containing either:
-            - {"content": dict} for content chunks
+            - {"content": dict} for content such as text, images, and videos.
             - {"metadata": dict} for response metadata        
         
         """

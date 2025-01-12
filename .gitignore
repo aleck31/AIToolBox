@@ -30,3 +30,4 @@ logs/
 demo*
 tmp/*
 config.json
+.pid

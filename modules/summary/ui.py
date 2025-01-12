@@ -3,7 +3,8 @@
 import gradio as gr
 from .handlers import SummaryHandlers
 
-def create_summary_interface() -> gr.Interface:
+
+def create_interface() -> gr.Interface:
     """Initialize service and create summary interface"""
     # Initialize service
     SummaryHandlers.initialize()
@@ -18,18 +19,19 @@ def create_summary_interface() -> gr.Interface:
                 lines=11
             )
         ],
+        additional_inputs_accordion=gr.Accordion(
+            label='Options', 
+            open=True
+        ),
         additional_inputs=[
             gr.Radio(
                 label="Target Language:",
                 show_label=False,
-                choices=['original', 'Chinese', 'English'],
-                value="original"
+                info='Select target language',
+                choices=['Original', 'Chinese', 'English'],
+                value="Original"
             )
         ],
-        additional_inputs_accordion=gr.Accordion(
-            label='Target Language', 
-            open=True
-        ),
         outputs=[
             gr.Markdown(
                 label="Summary",
@@ -42,7 +44,7 @@ def create_summary_interface() -> gr.Interface:
             )
         ],
         description="Summarize text or webpage content for you. (Powered by Bedrock)",
-        submit_btn=gr.Button("⌨️ Format", variant='primary'),
+        submit_btn=gr.Button("▶️ Summary", variant='primary'),
         clear_btn=gr.Button("🗑️ Clear"),
         flagging_mode='never',
         api_name="summary"
@@ -51,4 +53,4 @@ def create_summary_interface() -> gr.Interface:
     return interface
 
 # Create interface
-tab_summary = create_summary_interface()
+tab_summary = create_interface()

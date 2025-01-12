@@ -22,7 +22,7 @@ class GenService:
             llm_config: LLM configuration containing model ID and parameters
             enabled_tools: Optional list of tool module names to enable
         """
-        self.session_store = SessionStore()
+        self.session_store = SessionStore.get_instance()
         self._llm_providers: Dict[str, LLMAPIProvider] = {}
         self.enabled_tools = enabled_tools or []
         

@@ -1,28 +1,15 @@
 from typing import Optional, Dict
 from llm import LLMConfig
 from llm.model_manager import model_manager
-from ..session import SessionStore
 from .chat_service import ChatService
 from .gen_service import GenService
+from .draw_service import DrawService
 from core.logger import logger
 from core.module_config import module_config
 
 
 class ServiceFactory:
     """Factory for creating and configuring services"""
-    
-    _session_store = None
-    
-    @classmethod
-    def get_session_store(cls) -> SessionStore:
-        """Get or create session store instance"""
-        if cls._session_store is None:
-            try:
-                cls._session_store = SessionStore()
-            except Exception as e:
-                logger.error(f"Failed to create session store: {str(e)}")
-                raise
-        return cls._session_store
 
     @staticmethod
     def create_default_llm_config(
@@ -135,4 +122,24 @@ class ServiceFactory:
             return ChatService(llm_config, enabled_tools=enabled_tools)
         except Exception as e:
             logger.error(f"Failed to create service for {module_name}: {str(e)}")
+            raise
+
+    @classmethod
+    def create_draw_service(cls, module_name: str = 'draw') -> DrawService:
+        """Create and configure draw service
+        
+        Args:
+            module_name: Name of the module (defaults to 'draw')
+            
+        Returns:
+            DrawService: Configured draw service instance
+        """
+        try:
+            # Get LLM configuration for draw module
+            llm_config = cls._get_llm_config_by_module(module_name)
+            
+            # Create service (no tools needed for image generation)
+            return DrawService(llm_config)
+        except Exception as e:
+            logger.error(f"Failed to create draw service: {str(e)}")
             raise

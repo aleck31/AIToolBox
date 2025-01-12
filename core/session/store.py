@@ -4,7 +4,6 @@ Simplified session storage implementation
 import uuid
 from typing import Dict, List, Optional, Any
 from datetime import datetime
-from dataclasses import asdict
 from core.config import env_config
 from core.logger import logger
 from core.module_config import module_config
@@ -14,6 +13,20 @@ from .models import Session, SessionMetadata
 
 class SessionStore:
     """Simplified session management with DynamoDB storage"""
+    
+    # Singleton instance
+    _instance = None
+    
+    @classmethod
+    def get_instance(cls) -> 'SessionStore':
+        """Get or create singleton instance"""
+        if cls._instance is None:
+            try:
+                cls._instance = cls()
+            except Exception as e:
+                logger.error(f"Failed to create session store: {str(e)}")
+                raise
+        return cls._instance
     
     def __init__(
         self,

@@ -54,7 +54,7 @@ class ResponseMetadata:
         return {k: v for k, v in asdict(self).items() if v is not None}
 
 
-VALID_MODEL_TYPES = ['text', 'multimodal', 'image', 'embedding']
+VALID_MODEL_TYPES = ['text', 'multimodal', 'image', 'video', 'embedding']
 
 @dataclass
 class LLMModel:

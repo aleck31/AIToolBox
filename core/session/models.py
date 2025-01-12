@@ -24,7 +24,7 @@ class Session:
         session_name: str,
         created_time: datetime,
         updated_time: datetime,
-        user_id: str,
+        user_id: str,   # The user_id is equivalent to username
         metadata: SessionMetadata,
         history: Optional[List[Dict]] = None
     ):

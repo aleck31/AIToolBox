@@ -2,72 +2,95 @@
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
 from gradio_pdf import PDF
-from . import vision_analyze_claude, vision_analyze_gemini
+from .handlers import VisionHandlers
 
 
-def handle_file(file_path, prompt, model):
-    if not file_path:
-        yield "Please upload an image or document first."
-        return
+def create_interface() -> gr.Blocks:
+    """Initialize and create the vision analysis interface
 
-    match model:
-        case 'Claude':
-            for chunk in vision_analyze_claude(file_path, prompt):
-                yield chunk
-        case 'Gemini':
-            for chunk in vision_analyze_gemini(file_path, prompt):
-                yield chunk
-        case _:
-            yield "Invalid model selected"
-
-
-with gr.Blocks() as tab_vision:
-    description = gr.Markdown("I can see 乛◡乛")
-    with gr.Row():
+    Returns:
+        gr.Blocks: The configured Gradio interface
+    """
+    # Get available models and default choice
+    model_names, _ = VisionHandlers.get_available_models()
+    default_model = model_names[0] if model_names else None
+    # Create interface
+    interface = gr.Blocks()
+    
+    with interface:
+        gr.Markdown("I can see 乛◡乛")
+        
         saved_path = gr.State()
-        with gr.Column(scale=6, min_width=450):
-            with gr.Row(min_height=360):
-                with gr.Tab("Image"):
-                    input_img = gr.Image(
-                        label='Img preview', type='filepath',
-                        sources=['upload', 'webcam', 'clipboard'],
-                        show_download_button=False
+        
+        with gr.Row():
+            with gr.Column(scale=6, min_width=450):
+                with gr.Row(min_height=350):
+                    with gr.Tab("🖼️Image"):
+                        input_img = gr.Image(
+                            label='Image Preview', 
+                            type='filepath',
+                            sources=['upload', 'webcam', 'clipboard'],
+                            show_download_button=False,
+                            elem_id="vision_image_input"
+                        )
+                        input_img.change(lambda x: x, input_img, saved_path)
+                    with gr.Tab("📄Document"):
+                        input_pdf = PDF(
+                            label='PDF Preview',
+                            elem_id="vision_pdf_input"
+                        )
+                        input_pdf.change(lambda x: x, input_pdf, saved_path)
+                
+                with gr.Row():
+                    input_require = gr.Textbox(
+                        label="What would you like me to analyze?",
+                        show_label=False,
+                        placeholder="Describe what you want me to look for, or leave empty for a general analysis",
+                        lines=3
                     )
-                    input_img.change(lambda x: x, input_img, saved_path)
-                with gr.Tab("Document"):
-                    input_pdf = PDF(
-                        label='PDF preview'
+                
+                with gr.Accordion(
+                    label='Options', 
+                    open=False
+                ):
+                    input_model = gr.Dropdown(
+                        info="Select vision model",
+                        show_label=False,
+                        choices=model_names,
+                        value=default_model,
+                        interactive=True,
+                        min_width=120
                     )
-                    input_pdf.change(lambda x: x, input_pdf, saved_path)
-            with gr.Row():
-                input_require = gr.Textbox(
-                    label="What do you want me to do?", lines=3, scale=6)
-                input_model = gr.Radio(
-                    label="Model:", interactive=True, scale=1, min_width=120,
-                    choices=['Claude', 'Gemini'], value='Claude')
-            with gr.Row():
-                # btn_clear = gr.ClearButton([input_img, input_pdf, input_require, output], value='🗑️ Clear')
-                btn_clear = gr.Button("🗑️ Clear")
-                btn_summit = gr.Button("▶️ Go", variant='primary')
+                
+                with gr.Row():
+                    btn_clear = gr.Button(value="🗑️ Clear All")
+                    btn_submit = gr.Button("▶️ Analyze", variant='primary')
 
-        with gr.Column(scale=6, min_width=450):
-            # with gr.Accordion('Output:', open=True):
-            #     output = gr.Markdown(label="Output", show_label=True, line_breaks=True)
-            gr.Markdown('Response')
-            output = gr.Markdown(
-                header_links=True,
-                line_breaks=True,
-                container=True,
-                show_copy_button=True,
-                min_height=320
-            )
+            with gr.Column(scale=6, min_width=450):
+                gr.Markdown('Analysis Results')
+                output = gr.Markdown(
+                    value="",
+                    line_breaks=True,
+                    container=True,
+                    show_copy_button=True,
+                    min_height=320
+                )
 
-        btn_clear.click(
-            lambda: [None, None, "", ""],
-            outputs=[input_img, input_pdf, input_require, output]
-        )
-        btn_summit.click(
-            fn=handle_file,
+        btn_submit.click(
+            fn=VisionHandlers.analyze_image,
             inputs=[saved_path, input_require, input_model],
-            outputs=output
+            outputs=output,
+            api_name="vision_analyze"
         )
+
+        # Handle clear button click
+        btn_clear.click(
+            fn=lambda: ['', '', '', '', ''],
+            inputs=None,
+            outputs=[input_img, input_pdf, input_require, saved_path, output]
+        )
+
+        return interface
+
+# Create interface
+tab_vision = create_interface()

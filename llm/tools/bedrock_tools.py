@@ -71,7 +71,7 @@ class BedrockToolRegistry:
             logger.error(f"Error executing tool {tool_name}: {str(e)}")
             return {"error": str(e)}
 
-# Map of tool names to their module names
+# Map of tool names to their package names
 Tool_Packages = {
     'get_weather': 'weather_tools',
     'get_location_coords': 'weather_tools',

@@ -14,10 +14,6 @@ class AppConf:
     A class to store and manage configuration. [Legacy]
 
     """
-
-    # Constants
-    CODELANGS = ["Python", "GoLang", "Rust", "Java", "C++",
-                 "Swift", "Javascript", "Typescript", "HTML", "SQL", "Shell"]
     
     # The list of style presets for Stable Diffusion
     # https://docs.aws.amazon.com/zh_cn/bedrock/latest/userguide/model-parameters-diffusion-1-0-text-image.html
@@ -42,22 +38,22 @@ class ModuleConfig:
         self.dynamodb = session.resource('dynamodb')
         self.table = self.dynamodb.Table(env_config.database_config['setting_table'])
 
-    def _convert_decimal_to_float(self, obj: Any) -> Any:
+    def _decimal_to_float(self, obj: Any) -> Any:
         """Helper function to convert Decimal values to float in nested dictionaries and lists"""
         if isinstance(obj, dict):
-            return {key: self._convert_decimal_to_float(value) for key, value in obj.items()}
+            return {key: self._decimal_to_float(value) for key, value in obj.items()}
         elif isinstance(obj, list):
-            return [self._convert_decimal_to_float(item) for item in obj]
+            return [self._decimal_to_float(item) for item in obj]
         elif isinstance(obj, Decimal):
             return float(obj)
         return obj
 
-    def _convert_float_to_decimal(self, obj: Any) -> Any:
+    def _float_to_decimal(self, obj: Any) -> Any:
         """Helper function to convert float values to Decimal for DynamoDB"""
         if isinstance(obj, dict):
-            return {key: self._convert_float_to_decimal(value) for key, value in obj.items()}
+            return {key: self._float_to_decimal(value) for key, value in obj.items()}
         elif isinstance(obj, list):
-            return [self._convert_float_to_decimal(item) for item in obj]
+            return [self._float_to_decimal(item) for item in obj]
         elif isinstance(obj, float):
             return Decimal(str(obj))
         return obj
@@ -81,7 +77,7 @@ class ModuleConfig:
                 }
             )
             if 'Item' in response:
-                config = self._convert_decimal_to_float(response['Item'])
+                config = self._decimal_to_float(response['Item'])
                 if sub_module and 'sub_modules' in config:
                     return config['sub_modules'].get(sub_module)
                 return config
@@ -107,7 +103,7 @@ class ModuleConfig:
             config['type'] = 'module'
             
             # Convert float values to Decimal for DynamoDB
-            config = self._convert_float_to_decimal(config)
+            config = self._float_to_decimal(config)
             
             self.table.put_item(Item=config)
             logger.info(f"Updated config for module: {module_name}")
@@ -298,7 +294,7 @@ class ModuleConfig:
             try:
                 self.table.put_item(Item=config)
                 logger.info(f"Initialized config for module: {module_name}")
-                return self._convert_decimal_to_float(config)
+                return self._decimal_to_float(config)
             except Exception as e:
                 logger.error(f"Error initializing module config: {str(e)}")
                 return None

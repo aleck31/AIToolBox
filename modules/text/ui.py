@@ -6,7 +6,7 @@ from core.logger import logger
 from .handlers import TEXT_OPERATIONS, LANGS, TextHandlers
 
 
-def create_text_interface() -> gr.Blocks:
+def create_interface() -> gr.Blocks:
     """Initialize service and create text processing interface with handlers"""
     # Initialize service
     TextHandlers.initialize()
@@ -19,14 +19,6 @@ def create_text_interface() -> gr.Blocks:
         description = f"{TEXT_OPERATIONS[operation]['description']}"
         values.insert(0, description)
         return values
-
-    def clear_inputs() -> Tuple[str, str, str]:
-        """Clear all input and output fields"""
-        return (
-            "",
-            "",
-            "",
-        )
 
     # Create interface
     interface = gr.Blocks(theme=gr.themes.Soft())
@@ -52,6 +44,8 @@ def create_text_interface() -> gr.Blocks:
                         # Target language selection
                         target_language = gr.Dropdown(
                             label="Target Language",
+                            show_label=False,
+                            info='Select target language',
                             choices=LANGS,
                             value='en_US'
                         )
@@ -68,6 +62,8 @@ def create_text_interface() -> gr.Blocks:
                                     if options["type"] == "dropdown":
                                         option_components[f"{op_name}_{options['label']}"] = gr.Dropdown(
                                             label=options["label"],
+                                            show_label=False,
+                                            info='Choose writing style',
                                             choices=options["choices"],
                                             value=options["default"]
                                         )
@@ -91,8 +87,8 @@ def create_text_interface() -> gr.Blocks:
 
                 # Action buttons
                 with gr.Row():
-                    clear_btn = gr.Button("🗑️ Clear", size="lg")
-                    submit_btn = gr.Button("▶️ Process", variant="primary", size="lg")
+                    btn_clear = gr.Button("🗑️ Clear")
+                    btn_submit = gr.Button("▶️ Process", variant="primary")
 
             # Output column
             with gr.Column(scale=2):
@@ -123,7 +119,7 @@ def create_text_interface() -> gr.Blocks:
         
         # Handle submit button click - Note: Gradio automatically handles the request parameter
         submit_inputs = [input_operation, input_text, target_language] + list(option_components.values())
-        submit_btn.click(
+        btn_submit.click(
             fn=TextHandlers.process_text,
             inputs=submit_inputs,
             outputs=output_text,
@@ -131,13 +127,13 @@ def create_text_interface() -> gr.Blocks:
         )
         
         # Handle clear button click
-        clear_btn.click(
-            fn=clear_inputs,
+        btn_clear.click(
+            fn=lambda: ['', ''],
             inputs=None,
-            outputs=[input_text, input_text, output_text]
+            outputs=[input_text, output_text]
         )
 
     return interface
 
 # Create interface
-tab_text = create_text_interface()
+tab_text = create_interface()

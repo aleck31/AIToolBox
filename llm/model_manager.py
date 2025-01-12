@@ -78,12 +78,12 @@ class ModelManager:
             logger.error(f"Error ensuring table exists: {str(e)}")
             raise
 
-    def _convert_decimal_to_float(self, obj):
+    def _decimal_to_float(self, obj):
         """Helper function to convert Decimal values to float in nested dictionaries and lists"""
         if isinstance(obj, dict):
-            return {key: self._convert_decimal_to_float(value) for key, value in obj.items()}
+            return {key: self._decimal_to_float(value) for key, value in obj.items()}
         elif isinstance(obj, list):
-            return [self._convert_decimal_to_float(item) for item in obj]
+            return [self._decimal_to_float(item) for item in obj]
         elif isinstance(obj, Decimal):
             return float(obj)
         return obj
@@ -104,23 +104,48 @@ class ModelManager:
             logger.error(f"Error getting model by ID {model_id}: {str(e)}")
             return None
 
-    def get_models(self, filter=None) -> List[LLMModel]:
-        """Get all configured LLM models
+    def get_models(self, filter: Optional[Dict] = None) -> List[LLMModel]:
+        """Get configured LLM models with optional filtering
 
         Args:
-            filter: [Optional] Dict containing filtering conditions based on LLMModel properties        
+            filter: Optional dictionary of model properties to filter by.
+                   Example: {'type': 'multimodal'} returns only multimodal models
+                   Supported properties: name, model_id, api_provider, type, vendor
+
+        Returns:
+            List of LLMModel instances matching the filter criteria
         """
         try:
+            # Get all models from DynamoDB
             response = self.table.get_item(
                 Key={
                     'setting_name': 'llm_models',
                     'type': 'global'
                 }
             )
-            if 'Item' in response:
-                models_data = self._convert_decimal_to_float(response['Item'].get('models', []))
-                return [LLMModel.from_dict(model_data) for model_data in models_data]
-            return []
+            
+            if 'Item' not in response:
+                return []
+                
+            # Convert stored data to LLMModel instances
+            models_data = self._decimal_to_float(response['Item'].get('models', []))
+            models = [LLMModel.from_dict(model_data) for model_data in models_data]
+            
+            # Apply filters if provided
+            if filter:
+                filtered_models = []
+                for model in models:
+                    matches = True
+                    for key, value in filter.items():
+                        if not hasattr(model, key) or getattr(model, key) != value:
+                            matches = False
+                            break
+                    if matches:
+                        filtered_models.append(model)
+                return filtered_models
+                
+            return models
+            
         except ClientError as e:
             logger.error(f"Error getting LLM models: {str(e)}")
             return []
@@ -156,7 +181,56 @@ class ModelManager:
             logger.error(f"Error adding LLM model: {str(e)}")
             raise
 
-    def delete_model(self, model_id: str) -> bool:
+    def update_model(self, model: LLMModel) -> bool:
+        """Update an existing LLM model
+        
+        Args:
+            model: LLMModel instance with updated properties
+            
+        Returns:
+            bool: True if update successful
+        """
+        try:
+            if not model.model_id:
+                raise ValueError("Model ID is required")
+            
+            # Get current models
+            models = self.get_models()
+            
+            # Find model to update
+            model_exists = False
+            updated_models = []
+            for existing in models:
+                if existing.model_id == model.model_id:
+                    model_exists = True
+                    # Check if another model has the same name (except self)
+                    if model.name != existing.name and any(m.name == model.name for m in models):
+                        raise ValueError(f"Model with name '{model.name}' already exists")
+                    updated_models.append(model)
+                else:
+                    updated_models.append(existing)
+            
+            if not model_exists:
+                raise ValueError(f"Model with ID '{model.model_id}' not found")
+            
+            # Convert models to dict format for storage
+            models_data = [m.to_dict() for m in updated_models]
+            
+            # Update table
+            self.table.put_item(
+                Item={
+                    'setting_name': 'llm_models',
+                    'type': 'global',
+                    'models': models_data
+                }
+            )
+            logger.info(f"Updated LLM model: {model.name} ({model.model_id})")
+            return True
+        except Exception as e:
+            logger.error(f"Error updating LLM model: {str(e)}")
+            raise
+
+    def delete_model_by_id(self, model_id: str) -> bool:
         """Delete an LLM model by model_id"""
         try:
             if not model_id:

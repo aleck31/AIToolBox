@@ -13,6 +13,10 @@ def create_chat_interface() -> gr.ChatInterface:
         fn=ChatHandlers.send_message,
         type='messages',
         multimodal=True,
+        # chatbot=gr.Chatbot(
+        #     type='messages',
+        #     show_copy_button=True
+        # ),
         textbox=gr.MultimodalTextbox(
             file_types=['text', 'image','.pdf'],
             placeholder="Type a message or upload image(s)",

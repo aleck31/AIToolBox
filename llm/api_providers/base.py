@@ -25,13 +25,16 @@ class LLMAPIProvider(ABC):
         Returns:
             LLMAPIProvider: Provider instance with tools configured
         """
-        from llm.api_providers.aws_bedrock import BedrockProvider
+        from llm.api_providers.bedrock_converse import BedrockConverse
+        from llm.api_providers.bedrock_invoke import BedrockInvoke
         from llm.api_providers.google_gemini import GeminiProvider
         from llm.api_providers.openai import OpenAIProvider
         
         # Get provider class
         providers = {
-            'BEDROCK': BedrockProvider,
+            'BEDROCK': BedrockConverse,
+            'BEDROCKINVOKE': BedrockInvoke,
+            # 'ANTHROPIC': AnthropicProvider,
             'GEMINI': GeminiProvider, 
             'OPENAI': OpenAIProvider
         }
