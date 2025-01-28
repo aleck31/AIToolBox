@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
 from fastapi import HTTPException
-from llm import VALID_MODEL_TYPES
+from llm import VALID_MODALITY
 from llm.tools.bedrock_tools import tool_registry
 from core.logger import logger
 from .account import account
@@ -21,14 +21,17 @@ from .modules import (
 
 
 # Update tools interactivity based on model selection
-def set_tools_interactive(model_id):
-    if model_id.startswith("anthropic"):
-        return gr.CheckboxGroup(interactive=True)
+def set_tools_visible(model_id):
+    # tobefix: 
+    if model_id and model_id.startswith("anthropic"):
+        return gr.CheckboxGroup(visible=True)
     else:
-        return gr.CheckboxGroup(interactive=False)
+        return gr.CheckboxGroup(visible=False)
 
 
 with gr.Blocks() as tab_setting:
+    # State to store current model choices
+    model_choices_state = gr.State()
 
     with gr.Tab("Account"):
         with gr.Row():
@@ -64,8 +67,8 @@ with gr.Blocks() as tab_setting:
         with gr.Row():
             with gr.Row(equal_height=True):
                 btn_refresh_sessions = gr.Button("🔃 Refresh Sessions", size="sm")
+                btn_clear_history = gr.Button("🧹 Clear History", size="sm", visible=False)
                 btn_delete_session = gr.Button("🗑️ Delete Session", variant='stop', size="sm", visible=False)
-                btn_clear_history = gr.Button("🧹 Clear History", size="sm", visible=False)            
 
             # Track selected session id
             selected_session_id = gr.State(value=None)
@@ -85,7 +88,7 @@ with gr.Blocks() as tab_setting:
                     gr.Button(visible=False),
                     gr.Button(visible=False)
                 ]
-                
+
             sessions_list.select(
                 fn=handle_session_select,
                 inputs=[sessions_list],
@@ -111,10 +114,10 @@ with gr.Blocks() as tab_setting:
                 outputs=[sessions_list]
             )
 
-    with gr.Tab("Module Configurations"):
+    with gr.Tab("Module Configuration"):
         with gr.Row():
             with gr.Column(scale=10):
-                gr.Markdown("Configure settings for each module including default models, system prompts and parameters.")
+                gr.Markdown("Configure settings for each module.")
             with gr.Column(scale=2):
                 btn_refresh_all = gr.Button(value='🔃 Refresh Configs', min_width=28, size='sm')
 
@@ -140,7 +143,7 @@ with gr.Blocks() as tab_setting:
                                 # Default Model
                                 module_models[module_name] = gr.Dropdown(
                                     label="Default Model",
-                                    choices=get_model_choices(),
+                                    choices=[],  # Will be populated from state
                                     interactive=True
                                 )
 
@@ -148,7 +151,8 @@ with gr.Blocks() as tab_setting:
                                 module_tools[module_name] = gr.CheckboxGroup(
                                     label="Enabled Tools",
                                     choices=available_tools,
-                                    interactive=False  # Default to non-interactive
+                                    interactive=True,
+                                    visible=False       # Default to invisible
                                 )
 
                             with gr.Column(scale=6):
@@ -161,7 +165,7 @@ with gr.Blocks() as tab_setting:
 
                         # event handler for default model change
                         module_models[module_name].change(
-                            fn=set_tools_interactive,
+                            fn=set_tools_visible,
                             inputs=[module_models[module_name]],
                             outputs=[module_tools[module_name]]
                         )
@@ -186,7 +190,7 @@ with gr.Blocks() as tab_setting:
             ]
         )
 
-    with gr.Tab("LLM Models"):
+    with gr.Tab("Models"):
         with gr.Row():
             with gr.Column(scale=11):
                 gr.Markdown("Add, view, and delete LLM models that can be used across different modules.")
@@ -195,12 +199,12 @@ with gr.Blocks() as tab_setting:
 
         with gr.Row():
             models_list = gr.Dataframe(
-                headers=["Name", "Model ID", "API Provider", "Type", "Description"],
-                datatype=["str", "str", "str", "str", "str"],
+                headers=["Name", "Model ID", "API Provider", "Vendor", "Modality", "Description"],
+                datatype=["str", "str", "str", "str", "str", "str"],
                 label="Available Models",
                 show_label=False,
                 interactive=False,  # Set to false since we'll use select for editing
-                col_count=(5, "fixed")
+                col_count=(6, "fixed")
             )
 
         # API Provider choices
@@ -224,9 +228,13 @@ with gr.Blocks() as tab_setting:
                         choices=API_PROVIDERS,
                         value="Bedrock"
                     )
-                    model_type = gr.Dropdown(
-                        label="Model Type",
-                        choices=VALID_MODEL_TYPES,
+                    model_vendor = gr.Textbox(
+                        label="Vendor",
+                        placeholder="e.g., Anthropic, Google, Amazon"
+                    )                    
+                    model_modality = gr.Dropdown(
+                        label="Modality",
+                        choices=VALID_MODALITY,
                         value="text"
                     )
                     model_desc = gr.Textbox(
@@ -241,14 +249,16 @@ with gr.Blocks() as tab_setting:
         # Handle model selection for editing
         def handle_model_select(evt: gr.SelectData, models):
             if evt.value:
-                row = models.iloc[evt.index[0]]
+                if evt.value:
+                    row = models.iloc[evt.index[0]]
                 return {
                     form_title: gr.Markdown("| **Edit Model**"),
                     model_name: row[0],
                     model_id: gr.Textbox(value=row[1], interactive=False),
                     model_provider: row[2],
-                    model_type: row[3],
-                    model_desc: row[4],
+                    model_vendor: row[3],
+                    model_modality: row[4],
+                    model_desc: row[5],
                     btn_submit: gr.Button(value="Update Model", variant="primary"),
                     btn_delete: gr.Button(visible=True),
                     btn_cancel: gr.Button(visible=True)
@@ -258,7 +268,8 @@ with gr.Blocks() as tab_setting:
                 model_name: "",
                 model_id: gr.Textbox(value="", interactive=True),
                 model_provider: "Bedrock",
-                model_type: "text",
+                model_vendor: "",
+                model_modality: "text",
                 model_desc: "",
                 btn_submit: gr.Button(value="Add Model", variant="primary"),
                 btn_delete: gr.Button(visible=False),
@@ -273,7 +284,8 @@ with gr.Blocks() as tab_setting:
                 model_name,
                 model_id,
                 model_provider,
-                model_type,
+                model_vendor,
+                model_modality,
                 model_desc,
                 btn_submit,
                 btn_delete,
@@ -283,20 +295,31 @@ with gr.Blocks() as tab_setting:
 
         # Submit button handler
         btn_submit.click(
-            fn=lambda name, id, provider, type, desc, btn_text: (
-                update_model(name, id, provider, type, desc) 
+            fn=lambda name, id, provider, vendor, modality, desc, btn_text: (
+                update_model(name, id, provider, vendor, modality, desc) 
                 if btn_text == "Update Model" 
-                else add_model(name, id, provider, type, desc)
+                else add_model(name, id, provider, vendor, modality, desc)
             ),
             inputs=[
                 model_name,
                 model_id,
                 model_provider,
-                model_type,
+                model_vendor,
+                model_modality,
                 model_desc,
                 btn_submit  # Pass button text to determine action
             ],
             outputs=[models_list]
+        ).then(
+            # Update model choices state after adding/updating model
+            fn=get_model_choices,
+            inputs=[],
+            outputs=[model_choices_state]
+        ).then(
+            # Update module dropdowns with new choices
+            fn=lambda choices: [gr.Dropdown(choices=choices) for _ in MODULE_LIST],
+            inputs=[model_choices_state],
+            outputs=[module_models[m] for m in MODULE_LIST]
         )
 
         # Delete button handler
@@ -305,12 +328,23 @@ with gr.Blocks() as tab_setting:
             inputs=[model_id],
             outputs=[models_list]
         ).then(
+            # Update model choices state after deleting model
+            fn=get_model_choices,
+            inputs=[],
+            outputs=[model_choices_state]
+        ).then(
+            # Update module dropdowns with new choices
+            fn=lambda choices: [gr.Dropdown(choices=choices) for _ in MODULE_LIST],
+            inputs=[model_choices_state],
+            outputs=[module_models[m] for m in MODULE_LIST]
+        ).then(
             # Reset form after deletion
             lambda: (
                 gr.Markdown("| **Add New Model**"),
                 "",
                 gr.Textbox(value="", interactive=True),
                 "Bedrock",
+                "",
                 "text",
                 "",
                 gr.Button(value="Add Model", variant="primary"),
@@ -322,7 +356,8 @@ with gr.Blocks() as tab_setting:
                 model_name,
                 model_id,
                 model_provider,
-                model_type,
+                model_vendor,
+                model_modality,
                 model_desc,
                 btn_submit,
                 btn_delete,
@@ -337,6 +372,7 @@ with gr.Blocks() as tab_setting:
                 "",
                 gr.Textbox(value="", interactive=True),
                 "Bedrock",
+                "",
                 "text",
                 "",
                 gr.Button(value="Add Model", variant="primary"),
@@ -348,7 +384,8 @@ with gr.Blocks() as tab_setting:
                 model_name,
                 model_id,
                 model_provider,
-                model_type,
+                model_vendor,
+                model_modality,
                 model_desc,
                 btn_submit,
                 btn_delete,
@@ -373,6 +410,17 @@ with gr.Blocks() as tab_setting:
         inputs=[user_name],
         outputs=[sessions_list]
     ).success(
+        # Initialize model choices state
+        fn=get_model_choices,
+        inputs=[],
+        outputs=[model_choices_state]
+    ).success(
+        # Initialize module dropdowns with choices
+        fn=lambda choices: [gr.Dropdown(choices=choices) for _ in MODULE_LIST],
+        inputs=[model_choices_state],
+        outputs=[module_models[m] for m in MODULE_LIST]
+    ).success(
+        # Initialize module configs
         fn=refresh_module_configs,
         inputs=[],
         outputs=[
@@ -384,12 +432,4 @@ with gr.Blocks() as tab_setting:
         fn=refresh_models,
         inputs=[],
         outputs=[models_list]
-    ).success(
-        # Update initial tools interactivity based on current models
-        fn=lambda: [
-            set_tools_interactive(module_models[m].value)
-            for m in MODULE_LIST
-        ],
-        inputs=[],
-        outputs=[module_tools[m] for m in MODULE_LIST]
     )

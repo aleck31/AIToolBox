@@ -7,6 +7,7 @@ from dataclasses import dataclass, asdict
 @dataclass
 class LLMConfig:
     """Model-specific parameters for LLM providers"""
+    # Do we need to update LLMConfig for compatibility with generative models like Stable Diffusion and Nova?
     api_provider: str
     model_id: str
     max_tokens: int = 4096
@@ -54,7 +55,7 @@ class ResponseMetadata:
         return {k: v for k, v in asdict(self).items() if v is not None}
 
 
-VALID_MODEL_TYPES = ['text', 'multimodal', 'image', 'video', 'embedding']
+VALID_MODALITY = ['text', 'vision', 'image', 'video', 'embedding']
 
 @dataclass
 class LLMModel:
@@ -62,7 +63,7 @@ class LLMModel:
     name: str
     model_id: str
     api_provider: str
-    type: str
+    modality: str
     vendor: str = ""      # Optional
     description: str = "" # Optional
 
@@ -74,8 +75,8 @@ class LLMModel:
             raise ValueError("Model ID is required")
         if not self.api_provider:
             raise ValueError("API provider is required")
-        if self.type not in VALID_MODEL_TYPES:
-            raise ValueError(f"Invalid model type. Must be one of: {', '.join(VALID_MODEL_TYPES)}")
+        if self.modality not in VALID_MODALITY:
+            raise ValueError(f"Invalid model modality. Must be one of: {', '.join(VALID_MODALITY)}")
 
     def to_dict(self) -> Dict:
         """Convert to dictionary for storage, excluding None values"""
@@ -88,7 +89,7 @@ class LLMModel:
             name=data['name'],
             model_id=data['model_id'],
             api_provider=data['api_provider'],
-            type=data.get('type', 'text'),
+            modality=data.get('modality', 'text'),
             vendor=data.get('vendor', ''),
             description=data.get('description', '')
         )

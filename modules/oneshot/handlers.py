@@ -15,16 +15,10 @@ class OneshotHandlers:
     _service = None
     
     @classmethod
-    def initialize(cls):
-        """Initialize shared service if not already initialized"""
+    async def _get_service(cls):
+        """Get or initialize service lazily"""
         if cls._service is None:
             cls._service = ServiceFactory.create_gen_service('oneshot')
-
-    @classmethod
-    async def _get_service(cls):
-        """Get or initialize service"""
-        if not cls._service:
-            cls.initialize()
         return cls._service
 
     @classmethod
@@ -61,26 +55,27 @@ class OneshotHandlers:
                 response: response content after thinking ends
         """
         try:
-            # Initialize services if needed
-            cls.initialize()
+            # Get service (initializes lazily if needed)
+            service = await cls._get_service()
 
             # Get authenticated user from FastAPI session if available
             try:
-                user_id = request.session.get('user', {}).get('username')
+                user_name = request.session.get('user', {}).get('username')
 
                 # Get or create session
-                session = await cls._service.get_or_create_session(
-                    user_id=user_id,
+                session = await service.get_or_create_session(
+                    user_name=user_name,
                     module_name='oneshot'
                 )
             except Exception as e:
                 logger.error(f"Failed to create session: {str(e)}")
                 yield ("Error initializing session", f"Error: {str(e)}")
+                return
 
             # Update session with system prompt
             session.context['system_prompt'] = SYSTEM_PROMPT
             # Persist updated context
-            await cls._service.session_store.update_session(session, user_id)
+            await service.session_store.update_session(session, user_name)
 
             # Build content with option history
             text = input.get('text', '')
@@ -98,7 +93,7 @@ class OneshotHandlers:
             backtick_count = 0  # Count of ``` occurrences
             in_thinking_mode = True
             
-            async for chunk in cls._service.gen_text_stream(
+            async for chunk in service.gen_text_stream(
                 session_id=session.session_id,
                 content=content
             ):
@@ -122,12 +117,4 @@ class OneshotHandlers:
         except Exception as e:
             logger.error(f"Error in [gen_with_think]: {str(e)}")
             yield ("Error during processing", f"Error: {str(e)}")
-
-# Very close, but there is still a bug. For example, 
-'''
-in the following content, it will output the final "xxx ```" to the response block module, causing the ```thinking tag to not close properly.
-
-```thinking
-Here are some thoughts xxxx xxxx
-xxx ```
-'''
+# Focus on lazy-initialization refactoring  without dealing with the backtick handling logic.

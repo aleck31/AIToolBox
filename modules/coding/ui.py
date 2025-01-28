@@ -5,11 +5,8 @@ from .handlers import CodingHandlers, DEV_LANGS
 
 
 def create_coding_interface() -> gr.Blocks:
-    """Initialize service and create coding interface with handlers"""
-    # Initialize service
-    CodingHandlers.initialize()
-    
-    # Create interface
+    """Create coding interface with handlers"""
+    # Create interface without eager initialization
     interface = gr.Blocks(theme=gr.themes.Soft())
     
     with interface:

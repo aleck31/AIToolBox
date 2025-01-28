@@ -59,14 +59,18 @@ class BedrockToolRegistry:
                 
         return self.tool_specs.get(tool_name)
         
-    def execute_tool(self, tool_name: str, **kwargs) -> Dict[str, Any]:
+    async def execute_tool(self, tool_name: str, **kwargs) -> Dict[str, Any]:
         """Execute a loaded tool"""
         if tool_name not in self.tools:
             raise ValueError(f"Tool not found: {tool_name}")
             
         try:
             tool_func = self.tools[tool_name]
-            return tool_func(**kwargs)
+            # Check if the tool function is async
+            if inspect.iscoroutinefunction(tool_func):
+                return await tool_func(**kwargs)
+            else:
+                return tool_func(**kwargs)
         except Exception as e:
             logger.error(f"Error executing tool {tool_name}: {str(e)}")
             return {"error": str(e)}
@@ -75,7 +79,8 @@ class BedrockToolRegistry:
 Tool_Packages = {
     'get_weather': 'weather_tools',
     'get_location_coords': 'weather_tools',
-    'get_text_from_url': 'web_tools'
+    'get_text_from_url': 'web_tools',
+    'generate_image': 'draw_tools'
 }
 
 # Create global registry instance

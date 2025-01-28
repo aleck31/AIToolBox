@@ -6,7 +6,6 @@ from typing import Dict, List, Optional, Tuple, Any
 from PIL import Image
 from fastapi import HTTPException
 from botocore.exceptions import ClientError
-
 from core.logger import logger
 from core.session import Session, SessionStore
 from core.module_config import module_config
@@ -62,14 +61,14 @@ class DrawService:
 
     async def get_or_create_session(
         self,
-        user_id: str,
+        user_name: str,
         module_name: str = "draw",
         session_name: Optional[str] = None
     ) -> Session:
         """Get existing active session or Create new session for stateful generation"""
         try:
             active_sessions = await self.session_store.list_sessions(
-                user_id=user_id,
+                user_name=user_name,
                 module_name=module_name
             )
 
@@ -77,20 +76,20 @@ class DrawService:
                 session = active_sessions[0]
                 logger.debug(
                     f"Found existing {module_name} session {session.session_id} "
-                    f"for user {user_id} (created: {session.created_time})"
+                    f"for user {user_name} (created: {session.created_time})"
                 )
                 return session
 
             session_name = session_name or f"{module_name.title()} Session"
             session = await self.session_store.create_session(
-                user_id=user_id,
+                user_name=user_name,
                 module_name=module_name,
                 session_name=session_name
             )
 
             logger.debug(
                 f"Created new {module_name} session {session.session_id} "
-                f"for user {user_id} (created: {session.created_time})"
+                f"for user {user_name} (created: {session.created_time})"
             )
             
             return session
@@ -98,16 +97,16 @@ class DrawService:
             logger.error(f"Error in [get_or_create_session]: {str(e)}")
             raise e
 
-    async def gen_image_stream(
+    async def gen_image(
         self,
         prompt: str,
-        negative_prompt: str = "",
+        negative_prompt: str,
+        seed: int,
         style: str = "",
         steps: int = 50,
-        seed: Optional[int] = None,
         option_params: Optional[Dict[str, Any]] = None
-    ) -> Tuple[Image.Image, int]:
-        """Generate image using the configured model
+    ) -> Image.Image:
+        """Generate image using the configured model with synchronous API
         
         Args:
             prompt: Text prompt for image generation
@@ -118,10 +117,10 @@ class DrawService:
             option_params: Optional parameters for generation
             
         Returns:
-            Tuple[Image.Image, int]: Generated image and used seed
+            Image.Image: Generated image
         """
         try:
-            # Get model ID and provider
+            # Always use current default model from module settings
             model_id = self.default_llm_config.model_id
             llm = self._get_llm_provider(model_id)
 
@@ -130,31 +129,30 @@ class DrawService:
 
             # Prepare request body based on model type
             if "stable-diffusion-xl" in model_id:
+                # Handle negative prompts as a single entry if present
+                text_prompts = [{"text": prompt, "weight": 1}]
+                if negative_prompt:
+                    text_prompts.append({"text": negative_prompt, "weight": -1})
+                
+                # Ensure correct parameter types for SDXL
                 request_body = {
-                    'text_prompts': [
-                        {'text': prompt, 'weight': 1.0}
-                    ] + [
-                        {'text': neg, 'weight': -1.0} 
-                        for neg in [negative_prompt] if neg
-                    ],
-                    'steps': steps,
-                    'seed': seed,
-                    'style_preset': style or 'enhance',
+                    "text_prompts": text_prompts,
+                    "seed": seed if seed is not None else 0,
+                    "steps": steps,
                     # SDXL specific parameters
-                    'clip_guidance_preset': params.get('clip_guidance_preset', 'FAST_GREEN'),
-                    'sampler': params.get('sampler', 'K_DPMPP_2S_ANCESTRAL'),
-                    'height': params.get('height', 1152),
-                    'width': params.get('width', 896),
-                    'cfg_scale': params.get('cfg_scale', 7)
+                    'style_preset': style or 'enhance',
+                    "height": int(params.get("height", 1152)),
+                    "width": int(params.get("width", 896)),
+                    "cfg_scale": params.get("cfg_scale", 7.0)
                 }
             else:
                 request_body = {
-                    'prompt': f'{prompt}, style preset: {style or "enhance"}',
-                    'negative_prompt': negative_prompt,
-                    'seed': seed,
+                    "prompt": f"{prompt}, style preset: {style or 'enhance'}",
+                    "negative_prompt": negative_prompt,
+                    "seed": seed if seed is not None else 0,
                     # SD3 specific parameters
-                    'mode': params.get('mode', 'text-to-image'),
-                    'aspect_ratio': params.get('aspect_ratio', '2:3')
+                    "mode": params.get("mode", "text-to-image"),
+                    "aspect_ratio": params.get("aspect_ratio", "2:3")
                 }
 
             # Update with any additional parameters
@@ -164,13 +162,20 @@ class DrawService:
             # Generate image
             try:
                 logger.info(f"Invoking model [{model_id}] for image generation")
-                response = await llm.generate_stream(
+                
+                # Use synchronous generation
+                logger.debug(f"[DrawService] Sending request body: {json.dumps(request_body, indent=2)}")
+                response = await llm.generate_content(
                     request_body,
                     accept="application/json",
                     content_type="application/json"
                 )
                 
-                response_body = json.loads(response.get("body").read())
+                if not response.content:
+                    raise ValueError("No response received from model")
+                    
+                response_body = response.content
+                logger.debug(f"[DrawService] Received response: {json.dumps(response_body, indent=2)}")
                 
                 # Log generation metrics
                 if 'seeds' in response_body:
@@ -185,7 +190,7 @@ class DrawService:
                     base64_img = response_body["images"][0]
                     
                 image = Image.open(io.BytesIO(base64.b64decode(base64_img)))
-                return image, seed or response_body.get('seeds', [0])[0]
+                return image
 
             except ClientError as e:
                 logger.error(
@@ -195,7 +200,7 @@ class DrawService:
                 raise
 
         except Exception as e:
-            logger.error(f"Error in [gen_image_stream]: {str(e)}")
+            logger.error(f"Error in [gen_image]: {str(e)}")
             raise HTTPException(
                 status_code=500,
                 detail=f"Image generation failed: {str(e)}"

@@ -56,7 +56,7 @@ class VisionHandlers:
             - Dict mapping display names to model IDs
         """
         if cls._cached_models is None:
-            cls._cached_models = model_manager.get_models(filter={'type': 'multimodal'})
+            cls._cached_models = model_manager.get_models(filter={'type': 'vision'})
             # logger.debug(f"Cached available multimodal models: {cls._cached_models}")
             
         if not cls._cached_models:
@@ -105,7 +105,7 @@ class VisionHandlers:
         
         try:
             # Get authenticated user from FastAPI session
-            user_id = request.session.get('user', {}).get('username')
+            user_name = request.session.get('user', {}).get('username')
 
             # Get service for the selected model
             service = await cls._get_service(model_id)
@@ -113,7 +113,7 @@ class VisionHandlers:
             
             # Get or create session
             session = await service.get_or_create_session(
-                user_id=user_id,
+                user_name=user_name,
                 module_name='vision'
             )
             logger.debug(f"Created/retrieved session: {session.session_id}")
@@ -121,7 +121,7 @@ class VisionHandlers:
             # Update session with system prompt
             session.context['system_prompt'] = VISION_SYSTEM_PROMPT
             # Persist updated context
-            await service.session_store.update_session(session, user_id)
+            await service.session_store.update_session(session, user_name)
             logger.debug("Updated session with vision system prompt")
 
             # Build content

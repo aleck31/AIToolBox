@@ -5,11 +5,8 @@ from .handlers import OneshotHandlers
 
 
 def create_oneshot_interface() -> gr.Blocks:
-    """Initialize service and create oneshot interface with handlers"""
-    # Initialize service
-    OneshotHandlers.initialize()
-    
-    # Create interface
+    """Create oneshot interface with handlers"""
+    # Create interface without eager initialization
     interface = gr.Blocks(theme=gr.themes.Soft())
     
     with interface:
@@ -30,6 +27,7 @@ def create_oneshot_interface() -> gr.Blocks:
                         min_width=60,
                         lines=8,
                         submit_btn=None,
+                        max_plain_text_length=2500,
                         container=False
                     )
                 

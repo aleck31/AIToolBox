@@ -1,15 +1,18 @@
 from fastapi import HTTPException
 from datetime import datetime
-from typing import Dict, List, Optional, AsyncIterator
+from itertools import groupby
+from typing import Dict, List, Optional, AsyncIterator, Tuple
 from core.logger import logger
-from core.session import Session, SessionStore
+from core.session import Session, SessionStore, SessionMetadata
 from llm.model_manager import model_manager
 from llm.api_providers.base import LLMConfig, Message, LLMAPIProvider
 
 
 class ChatService:
     """Main service for handling chat interactions"""
-    
+
+    enabled_tools: List[str]
+        
     def __init__(
         self,
         model_config: LLMConfig,
@@ -83,9 +86,6 @@ class ChatService:
         Returns:
             Interaction dict with standardized format
         """
-        # message_meta = {"timestamp": datetime.now().isoformat()}
-        # if metadata:
-        #     message_meta.update(metadata)
         chat_message = Message(
             role = role,
             content=content,
@@ -94,18 +94,18 @@ class ChatService:
         )
         return chat_message
 
-    def _get_cache_key(self, user_id: str, module_name: str) -> str:
+    def _get_cache_key(self, user_name: str, module_name: str) -> str:
         """Generate cache key for session"""
-        return f"{user_id}:{module_name}"
+        return f"{user_name}:{module_name}"
 
     def _is_cache_valid(self, cache_entry: tuple[Session, float]) -> bool:
         """Check if cached session is still valid"""
         session, expiry = cache_entry
         return datetime.now().timestamp() < expiry
 
-    def _update_cache(self, user_id: str, module_name: str, session: Session) -> None:
+    def _update_cache(self, user_name: str, module_name: str, session: Session) -> None:
         """Update session cache with new expiry"""
-        cache_key = self._get_cache_key(user_id, module_name)
+        cache_key = self._get_cache_key(user_name, module_name)
         expiry = datetime.now().timestamp() + self.cache_ttl
         self._session_cache[cache_key] = (session, expiry)
         logger.debug(f"Updated cache for session {session.session_id} (expires: {expiry})")
@@ -121,14 +121,14 @@ class ChatService:
 
     async def get_or_create_session(
         self,
-        user_id: str,
+        user_name: str,
         module_name: str,
         session_name: Optional[str] = None
     ) -> Session:
         """Get existing active session or create new one
         
         Args:
-            user_id: User identifier
+            user_name: User identifier
             module_name: Module requesting the session
             session_name: Optional custom session name
             
@@ -144,14 +144,14 @@ class ChatService:
             self._cleanup_cache()
             
             # Check cache first
-            cache_key = self._get_cache_key(user_id, module_name)
+            cache_key = self._get_cache_key(user_name, module_name)
             if cache_key in self._session_cache:
                 cached = self._session_cache[cache_key]
                 if self._is_cache_valid(cached):
                     session = cached[0]
                     logger.debug(
                         f"Cache hit: Found session {session.session_id} "
-                        f"for user {user_id} in cache"
+                        f"for user {user_name} in cache"
                     )
                     return session
                 else:
@@ -160,7 +160,7 @@ class ChatService:
             
             # Cache miss - query database
             active_sessions = await self.session_store.list_sessions(
-                user_id=user_id,
+                user_name=user_name,
                 module_name=module_name
             )
             
@@ -168,57 +168,121 @@ class ChatService:
                 session = active_sessions[0]
                 logger.debug(
                     f"Cache miss: Found existing {module_name} session {session.session_id} "
-                    f"for user {user_id} (created: {session.created_time}"
+                    f"for user {user_name} (created: {session.created_time}"
                 )
                 # Update cache
-                self._update_cache(user_id, module_name, session)
+                self._update_cache(user_name, module_name, session)
                 return session
             
             # Create new session if none active
             session_name = session_name or f"{module_name.title()} Session"
+            metadata = SessionMetadata(module_name=module_name)
             session = await self.session_store.create_session(
-                user_id=user_id,
+                user_name=user_name,
                 module_name=module_name,
-                session_name=session_name
+                session_name=session_name,
+                metadata=metadata
             )
 
             logger.debug(
                 f"Created new {module_name} session {session.session_id} "
-                f"for user {user_id} (created: {session.created_time}"
+                f"for user {user_name} (created: {session.created_time}"
             )
             
             # Cache new session
-            self._update_cache(user_id, module_name, session)
+            self._update_cache(user_name, module_name, session)
             return session
 
         except HTTPException as e:
             logger.error(f"Error in [get_or_create_session]: {str(e)}")
             raise e
 
-    async def clear_chat_session(
+    def _get_file_desc(self, file_path, role):
+        file_desc = ''
+        if file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+            # For user uploads
+            if role == 'user':
+                file_desc="[User shared an image]"
+            # For assistant-generated files
+            elif role == 'assistant':
+                file_desc="[Generated an image in response]"
+        elif file_path.lower().endswith(('.mp4', '.mov', '.webm')):
+            if role == 'user':
+                file_desc="[User shared a video]"
+            elif role == 'assistant':
+                file_desc="[Generated a video in response]"
+        elif file_path.lower().endswith(('.pdf', '.doc', '.docx')):
+            if role == 'user':
+                file_desc="[User shared a document]"
+            elif role == 'assistant':
+                file_desc="[Generated a document in response]"
+        return file_desc
+
+    async def load_chat_history(
         self,
-        session_id: str,
-        user_id: str
-    ) -> Session:
-        """Clear chat history while preserving session"""
-        try:
-            session = await self.session_store.get_session(session_id, user_id)
-            # Clear history while preserving metadata and context
-            session.history = []
-            # Update session in store
-            await self.session_store.update_session(session, user_id)
-            return session
+        user_name: str,
+        module_name: str,
+        max_number: int = 24
+    ) -> List[Dict[str, str]]:
+        """Load chat history from chat session store for current user
+        
+        Args:
+            user_name: User identifier
+            module_name: Module requesting the history
+            max_number: Maximum number of messages to return
             
-        except HTTPException as e:
-            logger.error(f"Failed to clear chat session: {str(e)}")
-            raise e
+        Returns:
+            List of message dictionaries for Gradio chatbot
+        """
+        try:
+            # Force refresh from DynamoDB by querying active sessions directly
+            active_sessions = await self.session_store.list_sessions(
+                user_name=user_name,
+                module_name=module_name
+            )
+            
+            if not active_sessions:
+                # Create new session if none exists
+                session = await self.session_store.create_session(
+                    user_name=user_name,
+                    module_name=module_name
+                )
+            else:
+                session = active_sessions[0]  # Get most recent session
+                
+            # Update cache with fresh data
+            self._update_cache(user_name, module_name, session)
+            
+            # Load messages for Gradio chatbot using display limit
+            messages = []
+            if session.history:
+                for msg in session.history[-max_number:]:
+                    # Handle different content types
+                    if isinstance(msg['content'], dict):
+                        # Handle text content
+                        if text := msg['content'].get('text'):
+                            messages.append({"role": msg['role'], "content": text})
+                        # Handle image/file content
+                        if files := msg['content'].get('files'):
+                            messages.append({"role": msg['role'], "content": files})
+                    else:
+                        # Legacy format - plain text content
+                        messages.append({"role": msg['role'], "content": msg['content']})
+            
+            logger.debug(f"Loaded {len(session.history)} records from {module_name} Chat Session")
+            return messages  # Return same history for both chatbot and chatbot_state handling in the handler
+            
+        except Exception as e:
+            logger.error(f"Error loading chat history: {str(e)}")
+            return [], []
 
     async def streaming_reply(
         self,
         session_id: str,
         ui_input: Dict,
         ui_history: Optional[List[Dict]] = None,
-        style_params: Optional[Dict] = None
+        style_params: Optional[Dict] = None,
+        max_number: int = 12
     ) -> AsyncIterator[str]:
         """Process user message and stream assistant's response
         
@@ -227,6 +291,7 @@ class ChatService:
             ui_input: Dict with text and/or files
             ui_history: Current UI chat history state
             style_params: LLM generation parameters
+            max_number: Maximum number of messages sent to LLM
             
         Yields:
             Message chunks for handler
@@ -235,17 +300,42 @@ class ChatService:
             # Get session (already validated by get_or_create_session)
             session = await self.session_store.get_session(session_id)
 
-            # Get history before adding new message
-            history = ui_history or session.history
+            # Group consecutive messages by role and merge their content
             history_messages = []
-            for msg in history:
-                history_messages.append(
-                    self._prepare_chat_message(
-                        role=msg["role"], 
-                        content=msg["content"]
-                        # context={"local_time": msg["timestamp"]}  # history messages no need context 
-                    )
-                )
+            for role, group in groupby(ui_history, key=lambda x: x["role"]):
+                texts, files = [], []
+                
+                # Collect content from all messages in group
+                for msg in group:
+                    content = msg["content"]
+                    if isinstance(content, str):
+                        texts.append(content)
+                    elif isinstance(content, (list, tuple)):
+                        files.extend(content)
+                    elif isinstance(content, dict):
+                        if text := content.get("text"):
+                            texts.append(text)
+                        if msg_files := content.get("files"):
+                            files.extend(msg_files)
+                
+                # Create merged message with text and file descriptions
+                message_content = {}
+                if texts:
+                    message_content["text"] = "\n".join(texts)
+                
+                # Handle media files based on role and type
+                if files:
+                    # Add a description to provide context, but omit the file to save tokens
+                    file_descs = []
+                    for file in files:
+                        file_descs.append(self._get_file_desc(file, role))
+                    message_content["text"] = (message_content.get("text", "") + "\n".join(file_descs)).strip()
+                    
+                if message_content:
+                    history_messages.append(self._prepare_chat_message(
+                        role=role,
+                        content=message_content
+                    ))
 
             # Convert new message to chat Message format
             user_message = self._prepare_chat_message(
@@ -254,16 +344,15 @@ class ChatService:
                 # Add custom context that you want LLM to know
                 context={
                     'local_time': datetime.now().astimezone().isoformat(),
-                    'user_name': session.user_id
+                    'user_name': session.user_name
                 }
             )
-            logger.debug(f"New Message send to LLM Provider: {user_message}")
-
-            # Add new message to session after processing history
-            session.add_interaction(user_message.to_dict())
+            logger.debug(f"User Message send to LLM Provider: {user_message}")
             
+            # Allow per-session model override with fallback to default
+            model_id = session.metadata.model_id or self.default_model_config.model_id
             # Get LLM provider
-            llm = self._get_llm_provider(session.metadata.model_id)
+            llm = self._get_llm_provider(model_id)
             
             # Track complete response for session
             accumulated_text = []
@@ -274,7 +363,7 @@ class ChatService:
                 # Stream from LLM
                 async for chunk in llm.multi_turn_generate(
                     message=user_message,
-                    history=history_messages,
+                    history=history_messages[-max_number:],
                     system_prompt=session.context.get('system_prompt'),
                     **(style_params or {})
                 ):
@@ -287,24 +376,38 @@ class ChatService:
                         resp_metadata.update(chunk_metadata)
                     
                     # Handle content chunks
-                    if chunk_text := chunk.get('content', {}).get('text'):
-                        accumulated_text.append(chunk_text)
-                        yield chunk_text
+                    content = chunk.get('content', {})
+                    if 'text' in content:
+                        accumulated_text.append(content['text'])
+                        yield content['text']
+                    elif 'file_path' in content:
+                        # For file content, yield the entire content dict
+                        yield content
                 
                 # Add complete response to session
                 if accumulated_text:
+                    # Prepare message content
+                    message_content = {}
+                    if accumulated_text:
+                        message_content["text"] = ''.join(accumulated_text)
+                    # Add any file content from the last chunk
+                    if chunk and 'file_path' in content:
+                        message_content["files"] = [chunk['content']['file_path']]
+
+                    # Add user message to session store after successful LLM response
+                    session.add_interaction(user_message.to_dict())
+
                     assistant_message = self._prepare_chat_message(
                         role="assistant",
-                        content={"text": ''.join(accumulated_text)},
+                        content=message_content,
                         metadata=resp_metadata
                     )
                     logger.debug(f"Message replied by LLM Provider: {assistant_message}")
-                    
                     # Add assistant message to session
                     session.add_interaction(assistant_message.to_dict())
 
                 # Persist interaction history to session store
-                await self.session_store.update_session(session, session.user_id)
+                await self.session_store.update_session(session, session.user_name)
                     
             except Exception as e:
                 logger.error(f"LLM error in session {session_id}: {str(e)}")

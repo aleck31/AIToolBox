@@ -47,16 +47,11 @@ class TextHandlers:
     _service = None
     
     @classmethod
-    def initialize(cls):
-        """Initialize shared service if not already initialized"""
+    async def _get_service(cls):
+        """Get or initialize service lazily"""
         if cls._service is None:
             cls._service = ServiceFactory.create_gen_service('text')
-
-    @classmethod
-    async def _get_service(cls):
-        """Get or initialize service"""
-        if not cls._service:
-            cls.initialize()
+            logger.debug(f"Created new text service with model: {cls._service.default_llm_config.model_id}")
         return cls._service
 
     @classmethod
@@ -102,24 +97,23 @@ class TextHandlers:
             return "Please provide some text to process."
 
         try:
-            # Initialize services if needed
-            cls.initialize()
+            # Get service (initializes lazily if needed)
+            service = await cls._get_service()
 
             # Get user info from FastAPI session
             user_info = request.session.get('user', {})
-            user_id = user_info.get('username')
+            user_name = user_info.get('username')
             
-            if not user_id:
+            if not user_name:
                 raise HTTPException(
                     status_code=401,
                     detail="Authentication required. Please log in again."
                 )
             
             try:
-
                 # Get or create session
-                session = await cls._service.get_or_create_session(
-                    user_id=user_id,
+                session = await service.get_or_create_session(
+                    user_name=user_name,
                     module_name='text'
                 )
 
@@ -131,12 +125,10 @@ class TextHandlers:
                 # Update session with style-specific system prompt
                 session.context['system_prompt'] = content.pop('system_prompt')        
                 # Persist updated context to session store
-                await cls._service.session_store.update_session(session, user_id)
-
-                # logger.debug(f"Content sent to service: {prompts}")
+                await service.session_store.update_session(session, user_name)
 
                 # Generate response with session context
-                response = await cls._service.gen_text(
+                response = await service.gen_text(
                     session_id=session.session_id,
                     content=content
                 )

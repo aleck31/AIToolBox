@@ -10,11 +10,11 @@ def get_model_choices():
 def refresh_models():
     """Refresh models list"""
     models = model_manager.get_models()
-    models_data = [[m.name, m.model_id, m.api_provider, m.type, m.description] 
+    models_data = [[m.name, m.model_id, m.api_provider, m.vendor, m.modality, m.description] 
                   for m in models]
     return models_data
 
-def add_model(name, model_id, api_provider, type, description):
+def add_model(name, model_id, api_provider, vendor, modality, description):
     """Add a new LLM model"""
     try:
         if not name or not model_id:
@@ -24,7 +24,8 @@ def add_model(name, model_id, api_provider, type, description):
             name=name,
             model_id=model_id,
             api_provider=api_provider,
-            type=type,
+            vendor=vendor,
+            modality=modality,
             description=description
         )
         
@@ -36,7 +37,7 @@ def add_model(name, model_id, api_provider, type, description):
         gr.Error(str(e))
         return None
 
-def update_model(name, model_id, api_provider, type, description):
+def update_model(name, model_id, api_provider, vendor, modality, description):
     """Update an existing LLM model"""
     try:
         if not name or not model_id:
@@ -46,7 +47,8 @@ def update_model(name, model_id, api_provider, type, description):
             name=name,
             model_id=model_id,
             api_provider=api_provider,
-            type=type,
+            vendor=vendor,
+            modality=modality,
             description=description
         )
         

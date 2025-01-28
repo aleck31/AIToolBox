@@ -137,8 +137,21 @@ class BedrockConverse(LLMAPIProvider):
             tool_result['content'] = [{'text': str(result)}]
             tool_result['status'] = 'error'
         else:
-            # For successful results, ensure we have a proper JSON structure
-            if isinstance(result, dict):
+            # For successful results, handle different result types
+            if isinstance(result, dict) and 'base64_image' in result:
+                # Handle image results by adding both image and metadata
+                tool_result['content'] = [
+                    {
+                        'image': {
+                            'format': 'png',
+                            'source': {
+                                'bytes': result['base64_image'].encode()
+                            }
+                        }
+                    },
+                    {'json': result.get('metadata', {})}
+                ]
+            elif isinstance(result, dict):
                 tool_result['content'] = [{'json': result}]
             else:
                 # Convert non-dict results to string and use text format
@@ -176,9 +189,8 @@ class BedrockConverse(LLMAPIProvider):
             messages: List of messages to format
             
         Returns:
-            List of formatted messages for Bedrock API
+            List of Converted messages for Bedrock API
         """
-        logger.debug(f"Unformatted messages: {messages}")
         return [self._convert_message(msg) for msg in messages]
 
     def _convert_message(self, message: Message) -> Dict:
@@ -245,7 +257,7 @@ class BedrockConverse(LLMAPIProvider):
         """Send a request to Bedrock's converse API and handle the response
         
         Args:
-            messages: List of formatted messages
+            messages: List of Converted messages
             system_prompt: Optional system instructions
             **kwargs: Additional parameters for inference
             
@@ -315,7 +327,7 @@ class BedrockConverse(LLMAPIProvider):
         """
         Send a request to Bedrock's converse stream API and handle the streaming response
         Args:
-            messages: List of formatted messages
+            messages: List of Converted messages
             system_prompt: The system prompt send to the model.
             **kwargs: Additional parameters for inference
                         
@@ -459,9 +471,9 @@ class BedrockConverse(LLMAPIProvider):
         
         """
         try:
-            # Formatted messages to be sent to LLM
+            # Converted messages to be sent to LLM
             llm_messages = self._convert_messages(messages)
-            logger.debug(f"Formatted messages: {llm_messages}")
+            logger.debug(f"Converted messages: {llm_messages}")
               
             # Get initial response
             response = self._converse_sync(
@@ -485,7 +497,7 @@ class BedrockConverse(LLMAPIProvider):
   
                 try:
                     # Execute tool
-                    result = tool_registry.execute_tool(
+                    result = await tool_registry.execute_tool(
                         tool_use['name'],
                         **tool_use['input']
                     )
@@ -553,7 +565,7 @@ class BedrockConverse(LLMAPIProvider):
         try:
             # Format messages for Bedrock
             llm_messages = self._convert_messages(messages)
-            logger.debug(f"Formatted messages: {llm_messages}")
+            logger.debug(f"Converted messages: {llm_messages}")
             
             # Convert synchronous stream to async
             for chunk in self._converse_stream_sync(
@@ -572,11 +584,11 @@ class BedrockConverse(LLMAPIProvider):
                     })
                     try:
                         # Execute tool with unpacked input
-                        result = tool_registry.execute_tool(
+                        tool_result = await tool_registry.execute_tool(
                             tool_use['name'],
                             **tool_use['input']
                         )
-                        message_with_result = self._handle_tool_result(tool_use, result)
+                        message_with_result = self._handle_tool_result(tool_use, tool_result)
                     except Exception as e:
                         logger.error(f"Tool executing error: {str(e)}")
                         message_with_result = self._handle_tool_result(
@@ -592,9 +604,17 @@ class BedrockConverse(LLMAPIProvider):
                         system_prompt=system_prompt,
                         **kwargs
                     ):
+                        content = {}
+                        # Add text if present
                         if text := response.get('content', {}).get('text'):
+                            content['text'] = text
+                        # Check for file_path in tool result
+                        if 'file_path' in tool_result:
+                            content['file_path'] = tool_result['file_path']
+
+                        if content:
                             yield {
-                                'content': {'text': text},
+                                'content': content,
                                 'metadata': response.get('metadata', {})
                             }
 
@@ -632,10 +652,11 @@ class BedrockConverse(LLMAPIProvider):
             # Prepare conversation messages
             messages = []
             if history:
-                messages.extend(history)            
+                logger.debug(f"Unconverted history messages: {history}")
+                messages.extend(history)   
             # Add current message
             messages.append(message)
-            logger.debug(f"Processing multi-turn chat with {len(messages)} messages")
+            logger.info(f"Processing multi-turn chat with {len(messages)} messages")
             
             # Stream responses using async iterator
             async for chunk in self.generate_stream(

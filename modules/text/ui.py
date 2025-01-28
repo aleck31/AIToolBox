@@ -7,10 +7,7 @@ from .handlers import TEXT_OPERATIONS, LANGS, TextHandlers
 
 
 def create_interface() -> gr.Blocks:
-    """Initialize service and create text processing interface with handlers"""
-    # Initialize service
-    TextHandlers.initialize()
-    
+    """Create text processing interface with handlers"""
     def update_interface(operation: str) -> List[Any]:
         """Update interface based on selected operation"""
         values = []

@@ -112,7 +112,7 @@ class GeminiProvider(LLMAPIProvider):
             system_prompt: Optional system prompt to set
             
         Returns:
-            List of formatted messages for Gemini API
+            List of Converted messages for Gemini API
         """
         # Update model with system prompt if provided
         if system_prompt:
@@ -132,8 +132,6 @@ class GeminiProvider(LLMAPIProvider):
                 
             self.model = genai.GenerativeModel(**model_args)
             logger.debug(f"Updated Provider's model with new system_instruction: {system_instruction}")
-        
-        logger.debug(f"Unformatted messages: {messages}")
 
         # Convert each message using _convert_message
         return [self._convert_message(msg) for msg in messages]
@@ -195,8 +193,8 @@ class GeminiProvider(LLMAPIProvider):
     ) -> LLMResponse:
         """Synchronous implementation of content generation"""
         try:
-            formatted_messages = self._convert_messages(messages, system_prompt)
-            logger.debug(f"Formatted messages: {formatted_messages}")
+            llm_messages = self._convert_messages(messages, system_prompt)
+            logger.debug(f"Converted messages: {llm_messages}")
             
             # Update model args if new system prompt provided
             model_args = {
@@ -205,7 +203,7 @@ class GeminiProvider(LLMAPIProvider):
             
             # Generate response using generate_content
             response = self.model.generate_content(
-                contents=formatted_messages,
+                contents=llm_messages,
                 **model_args
             )
 
@@ -237,8 +235,8 @@ class GeminiProvider(LLMAPIProvider):
     ) -> Iterator[Dict]:
         """Synchronous implementation of streaming generation"""
         try:
-            formatted_messages = self._convert_messages(messages, system_prompt)
-            logger.debug(f"Formatted messages: {formatted_messages}")
+            llm_messages = self._convert_messages(messages, system_prompt)
+            logger.debug(f"Converted messages: {llm_messages}")
             
             # Update model args if new system prompt provided
             model_args = {
@@ -247,7 +245,7 @@ class GeminiProvider(LLMAPIProvider):
             
             # Generate streaming response using generate_content
             response = self.model.generate_content(
-                contents=formatted_messages,
+                contents=llm_messages,
                 stream=True,
                 **model_args
             )
@@ -314,18 +312,21 @@ class GeminiProvider(LLMAPIProvider):
         """
         try:
             if history:
-                formatted_messages = self._convert_messages(history, system_prompt)
+                logger.debug(f"Unconverted history messages: {history}")
+                llm_messages = self._convert_messages(history, system_prompt)
             else:
-                formatted_messages = self._convert_messages([], system_prompt)
-            logger.debug(f"Formatted history messages: {formatted_messages}")
+                llm_messages = self._convert_messages([], system_prompt)
+            logger.debug(f"Converted history messages: {llm_messages}")
 
-            # Create chat session with history
-            chat = self.model.start_chat(history=formatted_messages)
-            
             # Format and send current message
             current_message = self._convert_message(message)
-            logger.debug(f"Formatted Current message: {current_message}")
-            
+            logger.debug(f"Converted Current message: {current_message}")
+
+            # Create chat session with history
+            chat = self.model.start_chat(history=llm_messages)
+            logger.info(f"Processing multi-turn chat with {len(llm_messages)+1} messages")
+
+
             # Update model args if new system prompt provided
             model_args = {
                 "generation_config": self._get_generation_config()

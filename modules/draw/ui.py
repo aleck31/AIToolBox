@@ -6,32 +6,12 @@ from .handlers import DrawHandlers
 
 
 def create_interface() -> gr.Blocks:
-    """Initialize service and create image generation interface with handlers"""
-    # Initialize handlers
-    handlers = DrawHandlers()
-    
-    # Create interface
+    """Create image generation interface with handlers"""
+    # Create interface without eager initialization
     interface = gr.Blocks(theme=gr.themes.Soft())
     
     with interface:
         gr.Markdown("Draw something interesting...")
-
-        with gr.Row():
-            with gr.Column(scale=2):
-                # Operation area
-                input_task = gr.Radio(
-                    choices=['Text-Image', 'Nova-Generation', 'Nova-Editing'],
-                    label="Task type",
-                    value="Proofreading ✍️"
-                )
-
-            with gr.Column(scale=2):
-                input_copy_numb = gr.Number(
-                    value=1,
-                    label="Number of copies",
-                    container=False
-                )
-
 
         with gr.Row():
             # Input column
@@ -41,13 +21,13 @@ def create_interface() -> gr.Blocks:
                     lines=5,
                     placeholder="Describe what you want to draw..."
                 )
-                
+
                 # Optional parameters
                 input_negative = gr.Text(
                     label="Negative Prompt",
                     placeholder="What you don't want in the image..."
                 )
-                
+
                 with gr.Row():
                     # SDXL preset style
                     input_style = gr.Dropdown(
@@ -85,6 +65,10 @@ def create_interface() -> gr.Blocks:
                         components=[input_prompt, input_negative],
                         value='🗑️ Clear'
                     )
+                    btn_optimize = gr.Button(
+                        "✨ Optimize",
+                        variant='secondary'
+                    )
                     btn_img_gen = gr.Button(
                         "🪄 Draw",
                         variant='primary'
@@ -97,9 +81,16 @@ def create_interface() -> gr.Blocks:
                     label="Generated Image"
                 )
         
+        # Handle prompt optimization
+        btn_optimize.click(
+            fn=DrawHandlers.optimize_prompt,
+            inputs=[input_prompt],
+            outputs=[input_prompt]
+        )
+
         # Handle image generation
         btn_img_gen.click(
-            fn=handlers.generate_image,
+            fn=DrawHandlers.generate_image,
             inputs=[
                 input_prompt,
                 input_negative,

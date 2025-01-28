@@ -37,6 +37,7 @@ class ModuleConfig:
         session = boto3.Session(region_name=env_config.default_region)
         self.dynamodb = session.resource('dynamodb')
         self.table = self.dynamodb.Table(env_config.database_config['setting_table'])
+        self._config_cache = {}  # Cache for module configurations
 
     def _decimal_to_float(self, obj: Any) -> Any:
         """Helper function to convert Decimal values to float in nested dictionaries and lists"""
@@ -69,19 +70,34 @@ class ModuleConfig:
         Returns:
             dict: Module configuration or None if not found
         """
+        # Check cache first
+        cache_key = f"{module_name}:{sub_module}" if sub_module else module_name
+        if cache_key in self._config_cache:
+            return self._config_cache[cache_key]
+
         try:
+            logger.debug(f"Getting config for module: {module_name}")
             response = self.table.get_item(
                 Key={
                     'setting_name': module_name,
                     'type': 'module'
                 }
             )
+            logger.debug(f"DynamoDB response: {response}")
             if 'Item' in response:
                 config = self._decimal_to_float(response['Item'])
-                if sub_module and 'sub_modules' in config:
-                    return config['sub_modules'].get(sub_module)
+                # Simplify module configuration by removing submodule configurations
+                # if sub_module and 'sub_modules' in config:
+                #     sub_config = config['sub_modules'].get(sub_module)
+                #     if sub_config:
+                #         self._config_cache[cache_key] = sub_config
+                #         return sub_config
+                self._config_cache[cache_key] = config
                 return config
-            return self.init_module_config(module_name)
+            logger.debug(f"No config found for {module_name}, initializing default")
+            if config := self.init_module_config(module_name):
+                self._config_cache[cache_key] = config
+            return config
         except ClientError as e:
             logger.error(f"Error getting module config: {str(e)}")
             return None
@@ -106,6 +122,12 @@ class ModuleConfig:
             config = self._float_to_decimal(config)
             
             self.table.put_item(Item=config)
+            
+            # Clear cache entries for this module
+            cache_keys_to_remove = [k for k in self._config_cache if k.startswith(f"{module_name}:") or k == module_name]
+            for key in cache_keys_to_remove:
+                self._config_cache.pop(key, None)
+                
             logger.info(f"Updated config for module: {module_name}")
             return True
         except Exception as e:
@@ -139,9 +161,9 @@ class ModuleConfig:
         """Get inference parameters from module configuration"""
         config = self.get_module_config(module_name)
         if config and 'parameters' in config:
-            if sub_module and 'sub_modules' in config:
-                sub_config = config['sub_modules'].get(sub_module, {})
-                return sub_config.get('parameters', config['parameters'])
+            # if sub_module and 'sub_modules' in config:
+            #     sub_config = config['sub_modules'].get(sub_module, {})
+            #     return sub_config.get('parameters', config['parameters'])
             return config['parameters']
         return None
 
@@ -159,9 +181,9 @@ class ModuleConfig:
         try:
             config = self.get_module_config(module_name)
             if config:
-                if sub_module and 'sub_modules' in config:
-                    sub_config = config['sub_modules'].get(sub_module, {})
-                    return sub_config.get('enabled_tools', [])
+                # if sub_module and 'sub_modules' in config:
+                #     sub_config = config['sub_modules'].get(sub_module, {})
+                #     return sub_config.get('enabled_tools', [])
                 return config.get('enabled_tools', [])
             return []
         except Exception as e:
@@ -185,7 +207,8 @@ class ModuleConfig:
                 'enabled_tools': [
                     'get_weather',         # Weather information
                     'get_location_coords',  # Location coordinates
-                    'get_text_from_url'     # Get text content from webpage URL
+                    'get_text_from_url',   # Get text content from webpage URL
+                    'generate_image'       # AI image generation
                 ]
             },
             'chatbot-gemini': {
@@ -219,23 +242,8 @@ class ModuleConfig:
                 'default_model': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
                 'parameters': {
                     'temperature': Decimal('0.7'),
-                    'max_tokens': 1000
-                },
-                'sub_modules': {
-                    'translate': {
-                        'system_prompt': 'You are a translation assistant.',
-                        'parameters': {
-                            'temperature': Decimal('0.3'),
-                            'max_tokens': 1000
-                        }
-                    },
-                    'rewrite': {
-                        'system_prompt': 'You are a text rewriting assistant.',
-                        'parameters': {
-                            'temperature': Decimal('0.7'),
-                            'max_tokens': 1000
-                        }
-                    }
+                    'max_tokens': 2000,
+                    "top_k": 200
                 }
             },
             'summary': {
@@ -263,16 +271,6 @@ class ModuleConfig:
                     'max_tokens': 1000
                 }
             },
-            'draw': {
-                'setting_name': 'draw',
-                'type': 'module',
-                'description': 'Draw Module',
-                'default_model': 'stability.stable-image-ultra-v1:0',
-                'parameters': {
-                    'temperature': Decimal('0.7'),
-                    'max_tokens': 1000
-                }
-            },
             'oneshot': {
                 'setting_name': 'oneshot',
                 'type': 'module',
@@ -286,6 +284,32 @@ class ModuleConfig:
                 'enabled_tools': [
                     'get_text_from_url'     # Get text content from webpage URL
                 ]
+            },
+            'draw': {
+                'setting_name': 'draw',
+                'type': 'module',
+                'description': 'Draw Module',
+                'default_model': 'stability.stable-image-ultra-v1:0',
+                # basic parameters for generative models
+                'parameters': {
+                    'height': 1152,
+                    'width': 896,
+                    'cfg_scale': 7,
+                    'steps': 50
+                }
+            },
+            'creative': {
+                'setting_name': 'creative',
+                'type': 'module',
+                'description': 'Creative Module',
+                'default_model': 'amazon.nova-canvas-v1:0',
+                # basic parameters for generative models
+                'parameters': {
+                    'height': 1152,
+                    'width': 896,
+                    'cfg_scale': 7,
+                    'steps': 50
+                }
             }
         }
         

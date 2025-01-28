@@ -5,11 +5,8 @@ from .handlers import SummaryHandlers
 
 
 def create_interface() -> gr.Interface:
-    """Initialize service and create summary interface"""
-    # Initialize service
-    SummaryHandlers.initialize()
-    
-    # Create interface
+    """Create summary interface"""
+    # Create interface without eager initialization
     interface = gr.Interface(
         fn=SummaryHandlers.summarize_text,
         inputs=[

@@ -17,7 +17,7 @@ DEFAULT_MODELS = [
         name='claude3.5-sonnet-v2',
         model_id='anthropic.claude-3-5-sonnet-20241022-v2:0',
         api_provider='Bedrock',
-        type='multimodal',
+        modality='vision',
         description='Claude 3.5 Sonnet model for general use',
         vendor='Anthropic'
     ),
@@ -25,18 +25,42 @@ DEFAULT_MODELS = [
         name='gemini-pro',
         model_id='gemini-1.5-pro',
         api_provider='Gemini',
-        type='multimodal',
+        modality='vision',
         description='Gemini Pro model for text and vision',
         vendor='Google'
     ),
     LLMModel(
+        modality= "vision",
+        api_provider= "Bedrock",
+        description= "Nova Pro is a vision understanding foundation model. It is multilingual and can reason over text, images and videos.",
+        model_id= "amazon.nova-pro-v1:0",
+        name= "Nova Pro",
+        vendor= "Amazon"
+    ),
+    LLMModel(
+        modality= "image",
+        api_provider= "BedrockInvoke",
+        description= "Nova image generation model. It generates images from text and allows users to upload and edit an existing image. ",
+        model_id= "amazon.nova-canvas-v1:0",
+        name= "Nova Canvas",
+        vendor= "Amazon"
+    ),
+    LLMModel(
         name='stable-diffusion',
         model_id='stability.stable-image-ultra-v1:0',
-        api_provider='Bedrock',
-        type='image',
+        api_provider='BedrockInvoke',
+        modality='image',
         description='Stable Diffusion Ultra for image generation',
         vendor='Stability AI'
-    )    
+    ),
+    LLMModel(
+        modality= "video",
+        api_provider= "BedrockInvoke",
+        description= "Nova video generation model. It generates short high-definition videos, up to 9 seconds long from input images or a natural language prompt.",
+        model_id= "amazon.nova-reel-v1:0",
+        name= "Nova Reel",
+        vendor= "Amazon"       
+    ) 
 ]
 
 
@@ -49,6 +73,8 @@ class ModelManager:
             self.ensure_table_exists()
             self.table = self.dynamodb.Table(self.table_name)
             logger.debug(f"Initialized ModelManager with table: {self.table_name}")
+            # Initialize default models if none exist
+            self.init_default_models()
         except Exception as e:
             logger.error(f"Failed to initialize ModelManager: {str(e)}")
             raise
@@ -109,8 +135,8 @@ class ModelManager:
 
         Args:
             filter: Optional dictionary of model properties to filter by.
-                   Example: {'type': 'multimodal'} returns only multimodal models
-                   Supported properties: name, model_id, api_provider, type, vendor
+                   Example: {'modality': 'vision'} returns only vision models
+                   Supported properties: name, model_id, api_provider, modality, vendor
 
         Returns:
             List of LLMModel instances matching the filter criteria
@@ -119,7 +145,7 @@ class ModelManager:
             # Get all models from DynamoDB
             response = self.table.get_item(
                 Key={
-                    'setting_name': 'llm_models',
+                    'setting_name': 'model_manager',
                     'type': 'global'
                 }
             )
@@ -170,7 +196,7 @@ class ModelManager:
             # Update table
             self.table.put_item(
                 Item={
-                    'setting_name': 'llm_models',
+                    'setting_name': 'model_manager',
                     'type': 'global',
                     'models': models_data
                 }
@@ -219,7 +245,7 @@ class ModelManager:
             # Update table
             self.table.put_item(
                 Item={
-                    'setting_name': 'llm_models',
+                    'setting_name': 'model_manager',
                     'type': 'global',
                     'models': models_data
                 }
@@ -252,7 +278,7 @@ class ModelManager:
             # Update table
             self.table.put_item(
                 Item={
-                    'setting_name': 'llm_models',
+                    'setting_name': 'model_manager',
                     'type': 'global',
                     'models': models_data
                 }
@@ -271,7 +297,7 @@ class ModelManager:
                 models_data = [model.to_dict() for model in DEFAULT_MODELS]
                 self.table.put_item(
                     Item={
-                        'setting_name': 'llm_models',
+                        'setting_name': 'model_manager',
                         'type': 'global',
                         'models': models_data
                     }

@@ -1,47 +1,65 @@
 import gradio as gr
 from .handlers import ChatHandlers
 from .prompts import CHAT_STYLES
-from core.logger import logger
 
 
-def create_chat_interface() -> gr.ChatInterface:
+def create_interface() -> gr.Blocks:
     """Create chat interface with handlers"""
-    
-    # Create chat interface
-    chat_interface = gr.ChatInterface(
-        description="Let's chat ... (Powered by Bedrock)",
-        fn=ChatHandlers.send_message,
-        type='messages',
-        multimodal=True,
-        # chatbot=gr.Chatbot(
-        #     type='messages',
-        #     show_copy_button=True
-        # ),
-        textbox=gr.MultimodalTextbox(
-            file_types=['text', 'image','.pdf'],
-            placeholder="Type a message or upload image(s)",
-            stop_btn=True,
-            max_plain_text_length=2048,
-            scale=13,
-            min_width=90
-        ),
-        stop_btn='🟥',
-        additional_inputs_accordion=gr.Accordion(
-            label='Chat Settings', 
-            open=False
-        ),
-        additional_inputs=[
-            gr.Radio(
-                label="Chat Style:", 
-                show_label=False,
-                choices=list(CHAT_STYLES.keys()),
-                value="正常",
-                info="Select conversation style"
+
+    mtextbox=gr.MultimodalTextbox(
+                file_types=['text', 'image','.pdf'],
+                placeholder="Type a message or upload image(s)",
+                stop_btn=True,
+                max_plain_text_length=2048,
+                scale=13,
+                min_width=90,
+                render=False
             )
-        ]
+    
+    chatbot=gr.Chatbot(
+        type='messages',
+        show_copy_button=True,
+        min_height=560,
+        avatar_images=(None, "modules/chatbot/avata_bot.png"),
+        render=False
     )
+
+    input_style = gr.Radio(
+        label="Chat Style:", 
+        show_label=False,
+        choices=list(CHAT_STYLES.keys()),
+        value="正常",
+        info="Select conversation style",
+        render=False
+    )
+
+    with gr.Blocks() as chat_interface:
+
+        gr.Markdown("Let's chat ... (Powered by Bedrock)")
+
+        # Create chat interface with history loading
+        chat=gr.ChatInterface(
+            fn=ChatHandlers.send_message,
+            type='messages',
+            multimodal=True,
+            chatbot=chatbot,
+            textbox=mtextbox,
+            stop_btn='🟥',
+            additional_inputs_accordion=gr.Accordion(
+                label='Chat Settings', 
+                open=False,
+                render=False
+            ),
+            additional_inputs=[input_style]
+        )
+
+        chat.load(
+            fn=ChatHandlers.load_history,
+            inputs=[],
+            outputs=[chat.chatbot, chat.chatbot_state]  # Update both visual and internal state
+        )
 
     return chat_interface
 
 # Create interface
-tab_chatbot = create_chat_interface()
+tab_chatbot = create_interface()

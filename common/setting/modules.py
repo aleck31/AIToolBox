@@ -15,7 +15,7 @@ def format_paras_json(parameters):
     display_parms = module_config._decimal_to_float(parameters)
 
     # List of parameters that should be integers
-    int_params = ['max_tokens', 'top_k']
+    int_params = ['max_tokens', 'top_k', 'width', 'height', 'steps']
     for p in int_params:
         if p in display_parms and isinstance(display_parms[p], (int, float)):
             display_parms[p] = int(display_parms[p])

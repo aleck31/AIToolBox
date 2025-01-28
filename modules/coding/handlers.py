@@ -17,16 +17,10 @@ class CodingHandlers:
     _service = None
     
     @classmethod
-    def initialize(cls):
-        """Initialize shared service if not already initialized"""
+    async def _get_service(cls):
+        """Get or initialize service lazily"""
         if cls._service is None:
             cls._service = ServiceFactory.create_gen_service('coding')
-
-    @classmethod
-    async def _get_service(cls):
-        """Get or initialize service"""
-        if not cls._service:
-            cls.initialize()
         return cls._service
 
     @classmethod
@@ -61,16 +55,16 @@ class CodingHandlers:
                 response: Generated code with explanation
         """
         try:
-            # Initialize services if needed
-            cls.initialize()
+            # Get service (initializes lazily if needed)
+            service = await cls._get_service()
 
             # Get authenticated user from FastAPI session if available
             try:
-                user_id = request.session.get('user', {}).get('username')
+                user_name = request.session.get('user', {}).get('username')
 
                 # Get or create session
-                session = await cls._service.get_or_create_session(
-                    user_id=user_id,
+                session = await service.get_or_create_session(
+                    user_name=user_name,
                     module_name='coding'
                 )
             except Exception as e:
@@ -80,7 +74,7 @@ class CodingHandlers:
 
             # First phase: Architecture design
             session.context['system_prompt'] = ARCHITECT_PROMPT
-            await cls._service.session_store.update_session(session, user_id)
+            await service.session_store.update_session(session, user_name)
 
             content = await cls._build_content(
                 text=f"Provide {language} code framework architecture according to the following requirements:\n{requirement}",
@@ -88,7 +82,7 @@ class CodingHandlers:
             )
 
             architecture_buffer = ""
-            async for chunk in cls._service.gen_text_stream(
+            async for chunk in service.gen_text_stream(
                 session_id=session.session_id,
                 content=content
             ):
@@ -98,7 +92,7 @@ class CodingHandlers:
 
             # Second phase: Code generation
             session.context['system_prompt'] = CODER_PROMPT
-            await cls._service.session_store.update_session(session, user_id)
+            await service.session_store.update_session(session, user_name)
 
             content = await cls._build_content(
                 text=f"Write code according to the following instruction:\n{architecture_buffer}",
@@ -106,7 +100,7 @@ class CodingHandlers:
             )
 
             code_buffer = ""
-            async for chunk in cls._service.gen_text_stream(
+            async for chunk in service.gen_text_stream(
                 session_id=session.session_id,
                 content=content
             ):

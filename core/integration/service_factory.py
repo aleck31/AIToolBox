@@ -93,14 +93,14 @@ class ServiceFactory:
             return cls.create_default_llm_config(model_id=model_id)
 
     @classmethod
-    def create_gen_service(cls, module_name: str, enabled_tools=None) -> GenService:
+    def create_gen_service(cls, module_name: str, updated_tools=None) -> GenService:
         """Create and configure general service for modules"""
         try:
             llm_config = cls._get_llm_config_by_module(module_name)
             # Get module configuration for tools
-            # get_enabled_tools() function need to be implemented
-            if not enabled_tools:
-                enabled_tools = module_config.get_enabled_tools(module_name)
+
+            # Get tools from module configuration if there are no updated tools
+            enabled_tools = updated_tools or module_config.get_enabled_tools(module_name)
 
             return GenService(llm_config, enabled_tools=enabled_tools)
         except Exception as e:
@@ -108,15 +108,14 @@ class ServiceFactory:
             raise
 
     @classmethod
-    def create_chat_service(cls, module_name: str, enabled_tools=None) -> ChatService:
+    def create_chat_service(cls, module_name: str, updated_tools=None) -> ChatService:
         """Create and configure chat service"""
         try:
             # Get LLM configuration
             llm_config = cls._get_llm_config_by_module(module_name)
             
-            # Get module configuration for tools
-            if not enabled_tools:
-                enabled_tools = module_config.get_enabled_tools(module_name)
+            # Get tools from module configuration if there are no updated tools
+            enabled_tools = updated_tools or module_config.get_enabled_tools(module_name)
             
             # Create service with tool configuration
             return ChatService(llm_config, enabled_tools=enabled_tools)

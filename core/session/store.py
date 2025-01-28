@@ -48,9 +48,10 @@ class SessionStore:
 
     async def create_session(
         self,
-        user_id: str,
+        user_name: str,
         module_name: str,
-        session_name: Optional[str] = None
+        session_name: Optional[str] = None,
+        metadata: Optional[SessionMetadata] = None
     ) -> Session:
         """Create a new session"""
         try:
@@ -60,11 +61,8 @@ class SessionStore:
                 session_name=session_name or f"{module_name.title()} Session",
                 created_time=creation_time,
                 updated_time=creation_time,  # Initially same as created_time
-                user_id=user_id,
-                metadata=SessionMetadata(
-                    module_name=module_name,
-                    model_id=module_config.get_default_model(module_name)
-                )
+                user_name=user_name,
+                metadata=metadata or SessionMetadata(module_name=module_name)
             )
             
             # Store session with TTL
@@ -74,7 +72,7 @@ class SessionStore:
             }
             self.table.put_item(Item=item)
             
-            logger.debug(f"Created session {session.session_id} for user {user_id}")
+            logger.debug(f"Created session {session.session_id} for user {user_name}")
             return session
             
         except Exception as e:
@@ -87,13 +85,13 @@ class SessionStore:
     async def get_session(
         self, 
         session_id: str, 
-        user_id: Optional[str] = None
+        user_name: Optional[str] = None
     ) -> Session:
         """Get session with optional user validation
         
         Args:
             session_id: ID of session to retrieve
-            user_id: Optional user ID for ownership validation
+            user_name: Optional user ID for ownership validation
             
         Returns:
             Session object if found and valid
@@ -109,7 +107,7 @@ class SessionStore:
                     status_code=404,
                     detail=f"Session {session_id} not found"
                 )
-                
+
             item = response['Item']
             
             # Always validate TTL first
@@ -119,8 +117,8 @@ class SessionStore:
                     detail=f"Session {session_id} has expired"
                 )
                 
-            # Validate ownership if user_id provided
-            if user_id and item['user_id'] != user_id:
+            # Validate ownership if user_name provided
+            if user_name and item['user_name'] != user_name:
                 raise HTTPException(
                     status_code=403,
                     detail=f"Access denied to session {session_id}"
@@ -135,11 +133,11 @@ class SessionStore:
     async def update_session(
             self, 
             session: Session, 
-            user_id: Optional[str] = None
+            user_name: Optional[str] = None
         ) -> None:
-        """Update session with user validation"""
+        """Persist the current session data to database and refresh TTL value."""
         try:
-            if user_id and session.user_id != user_id:
+            if user_name and session.user_name != user_name:
                 raise HTTPException(
                     status_code=403,
                     detail=f"Access denied to session {session.session_id}"
@@ -156,11 +154,11 @@ class SessionStore:
             logger.error(f"Failed to update session: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e))
 
-    async def delete_session(self, session_id: str, user_id: str) -> bool:
-        """Delete session with user validation"""
+    async def delete_session(self, session_id: str, user_name: str) -> bool:
+        """Delete session from database by session id"""
         try:
             # Verify ownership first
-            await self.get_session(session_id, user_id)
+            await self.get_session(session_id, user_name)
             self.table.delete_item(Key={'session_id': session_id})
             logger.info(f"Deleted session {session_id}")
             return True
@@ -171,7 +169,7 @@ class SessionStore:
 
     async def list_sessions(
         self,
-        user_id: str,
+        user_name: str,
         module_name: Optional[str] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None
@@ -179,8 +177,8 @@ class SessionStore:
         """List sessions for a user with optional filters"""
         try:
             # Build filter expression
-            conditions = ["user_id = :uid"]
-            values = {":uid": user_id}
+            conditions = ["user_name = :uid"]
+            values = {":uid": user_name}
             
             if module_name:
                 conditions.append("metadata.module_name = :mod")

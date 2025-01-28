@@ -2,7 +2,7 @@ from fastapi import HTTPException
 from datetime import datetime
 from typing import Dict, List, Optional, AsyncIterator
 from core.logger import logger
-from core.session import Session, SessionStore
+from core.session import Session, SessionStore, SessionMetadata
 from llm.model_manager import model_manager
 from llm.api_providers.base import LLMConfig, Message, LLMAPIProvider
 
@@ -86,7 +86,7 @@ class GenService:
 
     async def get_or_create_session(
         self,
-        user_id: str,
+        user_name: str,
         module_name: str,
         session_name: Optional[str] = None
     ) -> Session:
@@ -94,7 +94,7 @@ class GenService:
         try:
             # Query existing sessions to prevent creating duplicate session for a module
             active_sessions = await self.session_store.list_sessions(
-                user_id=user_id,
+                user_name=user_name,
                 module_name=module_name
             )
 
@@ -102,21 +102,23 @@ class GenService:
                 session = active_sessions[0]
                 logger.debug(
                     f"Found existing {module_name} session {session.session_id} "
-                    f"for user {user_id} (created: {session.created_time})"
+                    f"for user {user_name} (created: {session.created_time})"
                 )
                 return session
 
             # Create new session if none active
             session_name = session_name or f"{module_name.title()} Session"
+            metadata = SessionMetadata(module_name=module_name)
             session = await self.session_store.create_session(
-                user_id=user_id,
+                user_name=user_name,
                 module_name=module_name,
-                session_name=session_name
+                session_name=session_name,
+                metadata=metadata
             )
 
             logger.debug(
                 f"Created new {module_name} session {session.session_id} "
-                f"for user {user_id} (created: {session.created_time})"
+                f"for user {user_name} (created: {session.created_time})"
             )
             
             return session
@@ -141,9 +143,8 @@ class GenService:
             str: Generated text
         """
         try:
-            # Get model ID from config
-            model_id = self.default_llm_config.model_id
-            llm = self._get_llm_provider(model_id)
+            # Always use current default model
+            llm = self._get_llm_provider(self.default_llm_config.model_id)
             
             # Debug input content
             logger.debug(f"Content received for stateless generation: {content}")
@@ -189,9 +190,10 @@ class GenService:
         try:
             # Get session without redundant validation
             session = await self.session_store.get_session(session_id)
-            
-            # Get model ID from session or config
-            model_id = session.metadata.model_id or self.default_llm_config.model_id
+
+            # Allow per-session model override with fallback to default model
+            model_id = session.metadata.model_id or self.default_model_config.model_id
+            # Get LLM provider
             llm = self._get_llm_provider(model_id)
             
             # Debug input content
@@ -221,7 +223,7 @@ class GenService:
                 })
                 
                 # Update session
-                await self.session_store.update_session(session, session.user_id)
+                await self.session_store.update_session(session, session.user_name)
 
                 return response.content.get('text')            
             else:
@@ -254,9 +256,8 @@ class GenService:
             # Get session
             session = await self.session_store.get_session(session_id)
             
-            # Get model ID from session or config
-            model_id = session.metadata.model_id or self.default_llm_config.model_id
-            llm = self._get_llm_provider(model_id)
+            # Always use current default model
+            llm = self._get_llm_provider(self.default_llm_config.model_id)
             
             # Debug input content
             logger.debug(f"Content received for session {session_id}: {content}")
@@ -299,7 +300,7 @@ class GenService:
                     "content": {"text": accumulated_text},
                     "metadata": chunk_metadata
                 })
-                await self.session_store.update_session(session, session.user_id)
+                await self.session_store.update_session(session, session.user_name)
                     
             except Exception as e:
                 logger.error(f"LLM error in session {session_id}: {str(e)}")

@@ -16,17 +16,11 @@ class SummaryHandlers:
     _service = None
     
     @classmethod
-    def initialize(cls):
-        """Initialize shared service if not already initialized"""
+    async def _get_service(cls):
+        """Get or initialize service lazily"""
         if cls._service is None:
             # Enable web_tools for URL handling
             cls._service = ServiceFactory.create_gen_service('summary')
-
-    @classmethod
-    async def _get_service(cls):
-        """Get or initialize service"""
-        if not cls._service:
-            cls.initialize()
         return cls._service
 
     @classmethod
@@ -41,7 +35,7 @@ class SummaryHandlers:
         Args:
             text: The text to summarize
             target_lang: Target language for the summary ('original', 'Chinese', or 'English')
-            user_id: User ID for session management
+            user_name: User ID for session management
             
         Yields:
             str: Chunks of the generated summary
@@ -51,23 +45,23 @@ class SummaryHandlers:
             return
 
         try:
-            # Initialize services if needed
-            cls.initialize()
+            # Get service (initializes lazily if needed)
+            service = await cls._get_service()
 
             # Get authenticated user from FastAPI session
-            user_id = request.session.get('user', {}).get('username')
+            user_name = request.session.get('user', {}).get('username')
 
             try:
                 # Get or create session
-                session = await cls._service.get_or_create_session(
-                    user_id=user_id,
+                session = await service.get_or_create_session(
+                    user_name=user_name,
                     module_name='summary'
                 )
 
                 # Update session with system prompt
                 session.context['system_prompt'] = SYSTEM_PROMPT
                 # Persist updated context
-                await cls._service.session_store.update_session(session, user_id)
+                await service.session_store.update_session(session, user_name)
 
                 # Build content with system prompt
                 content = {
@@ -77,7 +71,7 @@ class SummaryHandlers:
 
                 # Stream response with accumulated display
                 buffered_text = ""
-                async for chunk in cls._service.gen_text_stream(
+                async for chunk in service.gen_text_stream(
                     session_id=session.session_id,
                     content=content
                 ):

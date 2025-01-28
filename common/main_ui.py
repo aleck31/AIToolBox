@@ -31,7 +31,7 @@ def create_main_interface():
             tab_setting
         ],
         tab_names=[
-            "Claude 🤖", "Gemini 👾", "Text 📝", 
+            "Chatbot 🤖", "Gemini 👾", "Text 📝", 
             "Summary 📰", "Vision 👀", "OneShot 🎯",
             "Coding 💻", "Draw 🎨", 
             "Setting ⚙️"

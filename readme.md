@@ -2,6 +2,17 @@
 
 GenAI Toolbox is a Gen-AI application suite built with FastAPI and Gradio, offering a user-friendly interface for accessing various AI capabilities, such as chatbot, translation, summary, image&document recognition, coding and text-to-image etc.
 
+🎉 **What's New in v2.0**
+- Optimized performance and reliability
+- Enhanced Settings & Configuration
+- Improved session management 
+- Improved tool handling with better streaming responses
+- Integrated image generation directly in the chatbot
+- Improved chat history management with session loading
+- Optimized token usage by limiting context window
+- Enhanced multimodal message handling with descriptive placeholders
+- Added BedrockInvoke provider for image/video generation
+
 ## Overview
 The application integrates multiple AI models including Claude and Gemini, with secure authentication via Amazon Cognito and session management. 
 It provides a modular architecture that makes it easy to add new features and AI models.
@@ -16,6 +27,7 @@ Its user-friendly Gradio-based web interface provides an intuitive experience.
   - Support for text, images, and document inputs
   - Context-aware conversations
   - Tool use (function calling) integration
+  - Seamless handling of generated content
   - Supported formats:
     * Images: jpg/jpeg, png, gif, webp
     * Documents: pdf, csv, doc, docx, xls, xlsx, txt, md
@@ -68,6 +80,8 @@ Its user-friendly Gradio-based web interface provides an intuitive experience.
   - Efficient file processing and streaming
   - Automatic format detection and normalization
   - Tool use (function calling) support with extensible registry
+  - Enhanced tool result handling for generated content
+  - Optimized streaming responses for real-time updates
 
 ## Project Structure
 

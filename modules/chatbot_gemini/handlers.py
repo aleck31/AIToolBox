@@ -12,46 +12,43 @@ class GeminiChatHandlers:
     # Shared service instance
     chat_service = None
     
+    # Chat history limits
+    # MAX_DISPLAY_MSG = 30  # Number of messages to show in UI (N) - Shows last 15 conversation turns
+    # MAX_CONTEXT_MSG = 12  # Number of messages to send to LLM (M) - Provides the last 6 complete conversation turns
+
     @classmethod
     def initialize(cls):
         """Initialize shared services if not already initialized"""
         if cls.chat_service is None:
             cls.chat_service = ServiceFactory.create_chat_service('chatbot-gemini')
-    
+
     @classmethod
-    async def clear_history(
-        cls,
-        request: gr.Request
-    ) -> List[Dict[str, str]]:
-        """Clear chat history while preserving session"""
+    async def load_history(cls, request: gr.Request) -> tuple[List[Dict[str, str]], List[Dict[str, str]]]:
+        """Load chat history for current user
+        
+        Args:
+            request: Gradio request with session data
+            
+        Returns:
+            List of message dictionaries for both Gradio chatbot and chatbot_state
+        """
         try:
             # Initialize services if needed
             cls.initialize()
-            
-            # Get user info from FastAPI session
-            user_info = request.session.get('user', {})
-            user_id = user_info.get('username')
-            
-            if not user_id:
-                return []
-                
-            # Get current session
-            session = await cls.chat_service.get_or_create_session(
-                user_id=user_id,
-                module_name='chatbot-gemini'
-            )
-            
-            # Clear session history
-            await cls.chat_service.clear_chat_session(
-                session_id=session.session_id,
-                user_id=user_id
-            )
-            
-            return []
+
+            # Get authenticated user from FastAPI session
+            user_name = request.session.get('user', {}).get('username')
+            if not user_name:
+                return [], []
+
+            # Load latest chat history from service
+            latest_history = await cls.chat_service.load_chat_history(user_name, 'chatbot-gemini')
+
+            return latest_history, latest_history
             
         except Exception as e:
-            logger.error(f"Error clearing history: {str(e)}")
-            return []
+            logger.error(f"Error loading chat history: {str(e)}")
+            return [], []
 
     @classmethod
     async def send_message(
@@ -80,7 +77,10 @@ class GeminiChatHandlers:
             if not ui_input:
                 yield "Please provide a message or file."
                 return
-                        
+
+            logger.debug(f"Latest message from Gradio UI:\n {ui_input}")
+            logger.debug(f"Chat history from Gradio UI:\n {ui_history}")
+                       
             # Convert Gradio input to a unified dictionary format
             unified_input = (
                 # Text-only input (string)
@@ -98,15 +98,15 @@ class GeminiChatHandlers:
                 return
             
             # Get authenticated user from FastAPI session
-            user_id = request.session.get('user', {}).get('username')
-            if not user_id:
+            user_name = request.session.get('user', {}).get('username')
+            if not user_name:
                 yield "Authentication required. Please log in again."
                 return
 
             try:
                 # Get or create chat session
                 session = await cls.chat_service.get_or_create_session(
-                    user_id=user_id,
+                    user_name=user_name,
                     module_name='chatbot-gemini'
                 )
                 
@@ -117,7 +117,7 @@ class GeminiChatHandlers:
                 session.context['system_prompt'] = style_config["prompt"]
                 
                 # Persist updated context to session store
-                await cls.chat_service.session_store.update_session(session, user_id)
+                await cls.chat_service.session_store.update_session(session, user_name)
                 
                 # Prepare style-specific inference parameters
                 style_params = {k: v for k, v in style_config["options"].items() if v is not None}
