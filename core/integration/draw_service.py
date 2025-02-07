@@ -8,7 +8,6 @@ from fastapi import HTTPException
 from botocore.exceptions import ClientError
 from core.logger import logger
 from core.session import Session, SessionStore
-from core.module_config import module_config
 from llm.model_manager import model_manager
 from llm.api_providers.base import LLMConfig, Message, LLMAPIProvider
 
@@ -97,17 +96,16 @@ class DrawService:
             logger.error(f"Error in [get_or_create_session]: {str(e)}")
             raise e
 
-    async def gen_image(
+    async def text_to_image(
         self,
         prompt: str,
         negative_prompt: str,
         seed: int,
-        style: str = "",
-        steps: int = 50,
+        aspect_ratio: str,
         option_params: Optional[Dict[str, Any]] = None
     ) -> Image.Image:
         """Generate image using the configured model with synchronous API
-        
+
         Args:
             prompt: Text prompt for image generation
             negative_prompt: Negative prompt to guide what not to generate
@@ -124,35 +122,19 @@ class DrawService:
             model_id = self.default_llm_config.model_id
             llm = self._get_llm_provider(model_id)
 
-            # Get model parameters from module config
-            params = module_config.get_inference_params('draw') or {}
-
             # Prepare request body based on model type
-            if "stable-diffusion-xl" in model_id:
-                # Handle negative prompts as a single entry if present
-                text_prompts = [{"text": prompt, "weight": 1}]
-                if negative_prompt:
-                    text_prompts.append({"text": negative_prompt, "weight": -1})
-                
-                # Ensure correct parameter types for SDXL
+            if 'stability' not in model_id:
+                raise ValueError("Please use the Stability AI's SD text-to-image model.")
+            else:                
+                # Ensure correct parameter types for Stable Diffusion model
                 request_body = {
-                    "text_prompts": text_prompts,
-                    "seed": seed if seed is not None else 0,
-                    "steps": steps,
-                    # SDXL specific parameters
-                    'style_preset': style or 'enhance',
-                    "height": int(params.get("height", 1152)),
-                    "width": int(params.get("width", 896)),
-                    "cfg_scale": params.get("cfg_scale", 7.0)
-                }
-            else:
-                request_body = {
-                    "prompt": f"{prompt}, style preset: {style or 'enhance'}",
+                    "mode": "text-to-image",
+                    "prompt": prompt,
                     "negative_prompt": negative_prompt,
-                    "seed": seed if seed is not None else 0,
-                    # SD3 specific parameters
-                    "mode": params.get("mode", "text-to-image"),
-                    "aspect_ratio": params.get("aspect_ratio", "2:3")
+                    "seed": seed if seed else 0,  # pass 0 to use a random seed.
+                    # SD3.x specific parameters
+                    "aspect_ratio": aspect_ratio,
+                    "output_format": "png",  # explicitly set output image format (png/jpeg)
                 }
 
             # Update with any additional parameters
@@ -174,23 +156,15 @@ class DrawService:
                 if not response.content:
                     raise ValueError("No response received from model")
                     
-                response_body = response.content
-                logger.debug(f"[DrawService] Received response: {json.dumps(response_body, indent=2)}")
-                
+                response_body = response.content                
                 # Log generation metrics
-                if 'seeds' in response_body:
-                    logger.info(f"Seeds: {response_body['seeds']}")
-                if 'finish_reasons' in response_body:
-                    logger.info(f"Finish reason: {response_body['finish_reasons']}")
+                logger.info(f"Seeds: {response_body.get('seeds')}")
+                logger.info(f"Finish reason: {response_body.get('finish_reasons')}")
 
                 # Extract image from response based on model type
-                if "stable-diffusion-xl" in model_id:
-                    base64_img = response_body["artifacts"][0]["base64"]
-                else:
-                    base64_img = response_body["images"][0]
+                img_base64 = response_body["images"][0]
                     
-                image = Image.open(io.BytesIO(base64.b64decode(base64_img)))
-                return image
+                return Image.open(io.BytesIO(base64.b64decode(img_base64)))
 
             except ClientError as e:
                 logger.error(
@@ -200,7 +174,7 @@ class DrawService:
                 raise
 
         except Exception as e:
-            logger.error(f"Error in [gen_image]: {str(e)}")
+            logger.error(f"Error in [text_to_image]: {str(e)}")
             raise HTTPException(
                 status_code=500,
                 detail=f"Image generation failed: {str(e)}"

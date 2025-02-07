@@ -11,7 +11,7 @@ from .prompts import ARCHITECT_PROMPT, CODER_PROMPT
 DEV_LANGS = ["Python", "GoLang", "Rust", "Ruby", "Java", "Javascript", "Typescript", "HTML", "SQL", "Shell"]
 
 class CodingHandlers:
-    """Handlers for code generation and text formatting with streaming support"""
+    """Handlers for code generation with streaming support"""
     
     # Shared service instance
     _service = None
@@ -36,66 +36,82 @@ class CodingHandlers:
         }
 
     @classmethod
-    async def gen_code(
+    async def _init_session(cls, request: gr.Request):
+        """Initialize service and session"""
+        service = await cls._get_service()
+        user_name = request.session.get('user', {}).get('username')
+        
+        session = await service.get_or_create_session(
+            user_name=user_name,
+            module_name='coding'
+        )
+        
+        return service, session
+
+    @classmethod
+    async def design_arch(
         cls,
         requirement: str,
         language: str,
         request: gr.Request
-    ) -> AsyncIterator[tuple[str, str]]:
-        """Generate code based on requirements and language
+    ) -> AsyncIterator[str]:
+        """Generate architecture design
         
         Args:
-            requirement: User's requirements for code generation
+            requirement: User's requirements
             language: Target programming language
-            request: FastAPI request object containing session data
-            
-        Yields:
-            Dict: Chunks of the generated response
-                thinking: Architecture thinking content
-                response: Generated code with explanation
+            request: FastAPI request object
         """
         try:
-            # Get service (initializes lazily if needed)
-            service = await cls._get_service()
-
-            # Get authenticated user from FastAPI session if available
-            try:
-                user_name = request.session.get('user', {}).get('username')
-
-                # Get or create session
-                session = await service.get_or_create_session(
-                    user_name=user_name,
-                    module_name='coding'
-                )
-            except Exception as e:
-                logger.error(f"Failed to create session: {str(e)}")
-                yield ("Error initializing session", f"Error: {str(e)}")
-                return
-
-            # First phase: Architecture design
+            # Initialize session
+            service, session = await cls._init_session(request)
+            
+            # Phase 1: Architecture design
             session.context['system_prompt'] = ARCHITECT_PROMPT
-            await service.session_store.update_session(session, user_name)
-
+            await service.session_store.update_session(session)            
             content = await cls._build_content(
-                text=f"Provide {language} code framework architecture according to the following requirements:\n{requirement}",
+                text=f"Analyze and provide {language} architecture design for:\n{requirement}",
                 language=language
             )
 
-            architecture_buffer = ""
+            # Stream architecture content
+            arch_buffer = ""
             async for chunk in service.gen_text_stream(
                 session_id=session.session_id,
                 content=content
             ):
-                architecture_buffer += chunk
-                yield architecture_buffer, ""
+                arch_buffer += chunk
+                yield arch_buffer
                 await asyncio.sleep(0)
 
-            # Second phase: Code generation
-            session.context['system_prompt'] = CODER_PROMPT
-            await service.session_store.update_session(session, user_name)
+        except Exception as e:
+            logger.error(f"Error in [design_arch]: {str(e)}")
+            yield f"Error during processing: {str(e)}"
 
+    @classmethod
+    async def gen_code(
+        cls,
+        architecture: str,
+        language: str,
+        request: gr.Request
+    ) -> AsyncIterator[str]:
+        """Generate implementation code
+        
+        Args:
+            architecture: Architecture design to implement
+            language: Target programming language
+            request: FastAPI request object
+        """
+        try:
+            # Initialize session
+            service, session = await cls._init_session(request)
+            
+            # Phase 2: code generation
+            session.context['system_prompt'] = CODER_PROMPT
+            await service.session_store.update_session(session)
+            
             content = await cls._build_content(
-                text=f"Write code according to the following instruction:\n{architecture_buffer}",
+                text=f"Implement the solution based on this architecture:\n{architecture}",
                 language=language
             )
 
@@ -105,9 +121,9 @@ class CodingHandlers:
                 content=content
             ):
                 code_buffer += chunk
-                yield architecture_buffer, code_buffer
+                yield code_buffer
                 await asyncio.sleep(0)
 
         except Exception as e:
             logger.error(f"Error in [gen_code]: {str(e)}")
-            yield ("Error during processing", f"Error: {str(e)}")
+            yield f"Error during processing: {str(e)}"

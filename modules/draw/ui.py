@@ -1,8 +1,6 @@
 """Draw module UI interface"""
 import gradio as gr
-from core.module_config import AppConf
-from core.logger import logger
-from .handlers import DrawHandlers
+from .handlers import DrawHandlers, IMAGE_STYLES, IMAGE_RATIOS
 
 
 def create_interface() -> gr.Blocks:
@@ -16,11 +14,13 @@ def create_interface() -> gr.Blocks:
         with gr.Row():
             # Input column
             with gr.Column(scale=6):
-                input_prompt = gr.Textbox(
-                    label="Prompt:",
-                    lines=5,
-                    placeholder="Describe what you want to draw..."
-                )
+                with gr.Group():
+                    input_prompt = gr.Textbox(
+                        label="Prompt:",
+                        lines=3,
+                        placeholder="Describe what you want to draw..."
+                    )
+                    original_prompt = gr.State()  # Store original prompt
 
                 # Optional parameters
                 input_negative = gr.Text(
@@ -31,18 +31,16 @@ def create_interface() -> gr.Blocks:
                 with gr.Row():
                     # SDXL preset style
                     input_style = gr.Dropdown(
-                        choices=AppConf.PICSTYLES,
+                        choices=IMAGE_STYLES,
                         value='增强(enhance)',
                         label='Picture style:',
                         min_width=240,
                         scale=3
                     )
-                    input_step = gr.Slider(
-                        minimum=10,
-                        maximum=150,
-                        value=50,
-                        step=1,
-                        label='Step:',
+                    input_ratio = gr.Dropdown(
+                        choices=IMAGE_RATIOS,
+                        value='2:3',
+                        label='Aspect Ratio:',
                         min_width=240,
                         scale=3
                     )
@@ -62,7 +60,7 @@ def create_interface() -> gr.Blocks:
                 
                 with gr.Row():
                     btn_text_clean = gr.ClearButton(
-                        components=[input_prompt, input_negative],
+                        components=[input_prompt, original_prompt, input_negative],
                         value='🗑️ Clear'
                     )
                     btn_optimize = gr.Button(
@@ -81,10 +79,17 @@ def create_interface() -> gr.Blocks:
                     label="Generated Image"
                 )
         
+        # Save original prompt when input
+        input_prompt.input(
+            fn=lambda x: x,
+            inputs=[input_prompt],
+            outputs=[original_prompt]
+        )
+
         # Handle prompt optimization
         btn_optimize.click(
             fn=DrawHandlers.optimize_prompt,
-            inputs=[input_prompt],
+            inputs=[original_prompt, input_style],  # Use stored original prompt
             outputs=[input_prompt]
         )
 
@@ -94,8 +99,7 @@ def create_interface() -> gr.Blocks:
             inputs=[
                 input_prompt,
                 input_negative,
-                input_style,
-                input_step,
+                input_ratio,
                 input_seed,
                 seed_random
             ],

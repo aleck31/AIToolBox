@@ -25,8 +25,8 @@ def create_coding_interface() -> gr.Blocks:
                 )
                 
                 # Architecture Design output
-                with gr.Accordion(label="Architecture Design", open=False):
-                    output_thinking = gr.Markdown(
+                with gr.Accordion(label="Architecture Design"):
+                    arch_thinking = gr.Markdown(
                         label='Design',
                         show_label=False,
                         line_breaks=True,
@@ -35,8 +35,8 @@ def create_coding_interface() -> gr.Blocks:
                     )
                 
                 # Generated code output
-                with gr.Accordion(label="Generated Code", open=True):
-                    code_output = gr.Markdown(
+                with gr.Accordion(label="Generated Code"):
+                    output_code = gr.Markdown(
                         label='Code',
                         show_label=False,
                         line_breaks=True,
@@ -54,9 +54,9 @@ def create_coding_interface() -> gr.Blocks:
                     value="Python"
                 )
                 with gr.Row():
-                    btn_code_clear = gr.ClearButton(
+                    btn_clear = gr.ClearButton(
                         value="🗑️ Clear",
-                        components=[input_requirement, output_thinking, code_output]
+                        components=[input_requirement, arch_thinking, output_code]
                     )
                     btn_code_submit = gr.Button(
                         value="⌨️ Generate",
@@ -64,26 +64,33 @@ def create_coding_interface() -> gr.Blocks:
                     )
 
         # Event handler functions
-        def update_btn_immediate():
-            """Update button label immediately on click"""
-            return "💭 Thinking"
+        def update_btn_phase(phase: str):
+            """Update button label for current phase"""
+            labels = {
+                "arch": "🤔 Designing",
+                "code": "⌨️ Coding"
+            }
+            return labels.get(phase, "⌨️ Generate")
 
-        def update_btn_label(code):
-            """Update submit button label after response"""
-            return "🤔 Regenerate" if code else "⌨️ Generate"
-
-        # Event bindings
+        # Event bindings for two-phase generation
         btn_code_submit.click(
-            fn=update_btn_immediate,  # First update button
+            fn=lambda: update_btn_phase("arch"),
             outputs=btn_code_submit
         ).then(
-            fn=CodingHandlers.gen_code,  # Then generate code
+            fn=CodingHandlers.design_arch,
             inputs=[input_requirement, input_lang],
-            outputs=[output_thinking, code_output],
+            outputs=arch_thinking,
+            api_name="design_arch"
+        ).then(
+            fn=lambda: update_btn_phase("code"),
+            outputs=btn_code_submit
+        ).then(
+            fn=CodingHandlers.gen_code,
+            inputs=[arch_thinking, input_lang],
+            outputs=output_code,
             api_name="gen_code"
         ).then(
-            fn=update_btn_label,  # Update button based on result
-            inputs=code_output,
+            fn=lambda: update_btn_phase("done"),
             outputs=btn_code_submit
         )
         

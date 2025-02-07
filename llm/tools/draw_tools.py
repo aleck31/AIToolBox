@@ -1,6 +1,7 @@
 """Tools for image generation"""
+import time
 import random
-import tempfile
+from pathlib import Path
 from typing import Dict, Optional
 from core.logger import logger
 from core.integration.service_factory import ServiceFactory
@@ -9,9 +10,8 @@ from modules.draw.prompts import NEGATIVE_PROMPTS
 
 async def generate_image(
     prompt: str,
-    negative_prompt: str = "",
-    style: str = "enhance",
-    steps: int = 50,
+    negative_prompt: str = '',
+    aspect_ratio: str = '16:9',
     **kwargs  # Handle any additional parameters from the schema
 ) -> Dict:
     """Generate an image from text description
@@ -19,8 +19,7 @@ async def generate_image(
     Args:
         prompt: Text description of the image to generate
         negative_prompt: Optional text describing what to avoid
-        style: Style preset for generation
-        steps: Number of diffusion steps
+        aspect_ratio: The aspect ratio of the generated image
         
     Returns:
         Dict containing base64 encoded image and metadata
@@ -38,29 +37,31 @@ async def generate_image(
         if not prompt:
             raise ValueError("Prompt is required")
         
-        used_seed=random.randrange(1, 4294967295)
+        used_seed=random.randrange(0, 4294967295)
 
-        # Generate image
-        image = await draw_service.gen_image(
+        # Generate image with dimensions
+        image = await draw_service.text_to_image(
             prompt=prompt,
             negative_prompt="\n".join(negative_prompts),
             seed=used_seed,
-            style=style or "enhance",  # Use default if not provided
-            steps=min(max(steps or 50, 20), 50)  # Clamp between 20-50
+            aspect_ratio=aspect_ratio
         )
         
-        # Save image to a temporary file that Gradio can serve
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-        image.save(temp_file.name, format="PNG")
-        temp_file.close()
-        
+        # Create images directory if it doesn't exist
+        images_dir = Path("/tmp/generated_images")
+        images_dir.mkdir(parents=True, exist_ok=True)
+        # Save image to a file that Gradio can serve
+        timestamp = int(time.time())
+        file_path = images_dir / f"img_{timestamp}_{used_seed}.png"
+        image.save(file_path, format="PNG")
+
         # Return the file path for Gradio to serve
         return {
-            "file_path": temp_file.name,
+            "image": image,
             "metadata": {
                 "seed": used_seed,
-                "steps": steps,
-                "style": style
+                "aspect_ratio": aspect_ratio,
+                "file_path": str(file_path)
             }
         }
         
@@ -74,31 +75,24 @@ list_of_tools_specs = [
     {
         "toolSpec": {
             "name": "generate_image",
-            "description": "Generate an image from a text description using AI",
+            "description": "Generate image from a text description using Stable Diffusion model.",
             "inputSchema": {
                 "json": {
                     "type": "object",
                     "properties": {
                         "prompt": {
                             "type": "string",
-                            "description": "Text description written in English that explains the visual elements for the image to be generated"
+                            "description": "Stable Diffusion prompt written in English that specifies the content and style for the generated image."
                         },
                         "negative_prompt": {
                             "type": "string",
-                            "description": "Optional text describing what to avoid in the image",
+                            "description": "Optional keywords of what you do not wish to see in the output image",
                             "default": ""
                         },
-                        "style": {
+                        "aspect_ratio": {
                             "type": "string",
-                            "description": "Optional style preset (Enum: enhance, photographic, digital-art, 3d-model, analog-film, animé, cinematic, comic-book, fantasy-art, isometric, line-art, low-poly, modeling-compound, neon-punk, origami, pixel-art, tile-texture)",
-                            "default": "enhance"
-                        },
-                        "steps": {
-                            "type": "integer",
-                            "description": "Number of diffusion steps (20-50)",
-                            "default": 50,
-                            "minimum": 20,
-                            "maximum": 50
+                            "description": "Desired aspect ratio in 'width:height' format (e.g., '16:9', '5:4', '3:2', '21:9', '1:1', '2:3', '4:5', '9:16', '9:21'). If provided, height will be calculated based on the width.",
+                            "default": '16:9'
                         }
                     },
                     "required": ["prompt"]

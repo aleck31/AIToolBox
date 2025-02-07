@@ -79,7 +79,7 @@ class BedrockInvoke(LLMAPIProvider):
             
             # Invoke model
             logger.debug(f"[BedrockInvoke] Invoking model {self.config.model_id}")
-            response = self.client.invoke_model(
+            resp = self.client.invoke_model(
                 modelId=self.config.model_id,
                 body=body,
                 accept=accept,
@@ -87,12 +87,12 @@ class BedrockInvoke(LLMAPIProvider):
             )
             
             # Parse response
-            raw_response = response.get('body').read()
-            logger.debug(f"[BedrockInvoke] Raw response: {raw_response}")
-            parsed_response = json.loads(raw_response)
-            logger.debug(f"[BedrockInvoke] Parsed response: {parsed_response}")
+            raw_resp = resp.get('body').read()
+            # logger.debug(f"[BedrockInvoke] Raw response: {raw_response}")
+            parsed_resp = json.loads(raw_resp)
+            logger.debug(f"[BedrockInvoke] Parsed response: ('seeds': {parsed_resp['seeds']}, 'finish_reasons': {parsed_resp['finish_reasons']}, 'images': ['Place_holder'])")
             
-            return parsed_response
+            return parsed_resp
             
         except ClientError as e:
             logger.error(f"[BedrockInvoke] Client error response: {e.response}")

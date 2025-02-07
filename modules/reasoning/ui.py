@@ -1,16 +1,16 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
-from .handlers import OneshotHandlers
+from .handlers import ReasoningHandlers
 
 
-def create_oneshot_interface() -> gr.Blocks:
-    """Create oneshot interface with handlers"""
+def create_interface() -> gr.Blocks:
+    """Create Reasoning interface with handlers"""
     # Create interface without eager initialization
     interface = gr.Blocks(theme=gr.themes.Soft())
     
     with interface:
-        gr.Markdown("One-shot Response Generator (Powered by Claude 3.5 v2)")
+        gr.Markdown("I think, therefore I am. (Powered by Claude)")
         
         # Add state for conversation history (list of message dicts)
         history = gr.State(value=[])
@@ -20,18 +20,16 @@ def create_oneshot_interface() -> gr.Blocks:
                 with gr.Row():
                     input_box = gr.MultimodalTextbox(
                         show_label=False,
-                        file_types=['image', "video", "audio"],
+                        file_types=['image', 'video', 'audio', '.pdf'],
                         file_count='multiple',
                         placeholder="Type a message or upload image(s)",
-                        scale=13,
                         min_width=60,
-                        lines=8,
+                        lines=4,
                         submit_btn=None,
-                        max_plain_text_length=2500,
-                        container=False
+                        max_plain_text_length=2500
                     )
                 
-                with gr.Accordion(label='Thinking Process', open=False):
+                with gr.Accordion(label='Thinking', open=False):
                     output_thinking = gr.Markdown(
                         header_links=True,
                         show_label=False,
@@ -39,7 +37,7 @@ def create_oneshot_interface() -> gr.Blocks:
                         value=""
                     )
                     
-                with gr.Accordion(label='Response', open=True):
+                with gr.Accordion(label='Final Response:', open=True):
                     output_response = gr.Markdown(
                         header_links=True,
                         show_label=False,
@@ -75,10 +73,10 @@ def create_oneshot_interface() -> gr.Blocks:
             fn=update_btn_immediate,  # First update button
             outputs=submit_btn
         ).then(
-            fn=OneshotHandlers.gen_with_think,  # Then generate response
+            fn=ReasoningHandlers.gen_with_think,  # Then generate response
             inputs=[input_box, history],
             outputs=[output_thinking, output_response],
-            api_name="oneshot"
+            api_name="reasoning"
         ).then(
             fn=update_history,  # update history
             inputs=[input_box, history, output_response],
@@ -98,4 +96,4 @@ def create_oneshot_interface() -> gr.Blocks:
     return interface
 
 # Create interface
-tab_oneshot = create_oneshot_interface()
+tab_reasoning = create_interface()

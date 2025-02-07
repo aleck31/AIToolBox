@@ -7,7 +7,7 @@ from llm.model_manager import model_manager
 from llm.api_providers.base import LLMConfig, Message, LLMAPIProvider
 
 
-#  GenService will be used by multiple modules, including text, vison, summary, coding, oneshot
+#  GenService will be used by multiple modules, including text, vison, summary, coding, reasoning
 class GenService:
     """General content generation service"""
     

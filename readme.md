@@ -48,7 +48,7 @@ Its user-friendly Gradio-based web interface provides an intuitive experience.
 
 * **Advanced Features**
   - **Summary** 📰: Document and text summarization
-  - **OneShot** 🎯: Quick, single-turn responses
+  - **Reasoning** 🧠: Provide responses with comprehensive thinking
   - **Coding** 💻: Code generation and analysis
   - **Draw** 🎨: AI-powered image generation
   - **Settings** ⚙️: Customizable configurations
@@ -116,12 +116,12 @@ llm-toolbox/
 │   ├── setting/          # Module settings
 │   └── main_ui.py        # UI settings
 ├── modules/           # Feature modules
+│   ├── assistant/        # Smart Assistant powered by Bedrock 
 │   ├── chatbot/          # Basic chatbot implementation
-│   ├── chatbot_gemini/   # Gemini-specific chatbot
 │   ├── text/             # Text processing
 │   ├── summary/          # Text summarization
 │   ├── vision/           # Image analysis
-│   ├── oneshot/          # Single-shot responses
+│   ├── reasoning/        # thinking and response
 │   ├── coding/           # Code-related features
 │   └── draw/             # Image generation
 └── utils/             # Utility functions

@@ -78,7 +78,7 @@ class BedrockToolRegistry:
 # Map of tool names to their package names
 Tool_Packages = {
     'get_weather': 'weather_tools',
-    'get_location_coords': 'weather_tools',
+    # 'get_location_coords': 'weather_tools',
     'get_text_from_url': 'web_tools',
     'generate_image': 'draw_tools'
 }

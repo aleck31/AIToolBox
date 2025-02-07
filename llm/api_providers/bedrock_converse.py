@@ -1,3 +1,4 @@
+import io
 import json
 from typing import Dict, List, Optional, Iterator, AsyncIterator, Any
 from botocore.exceptions import ClientError
@@ -116,14 +117,14 @@ class BedrockConverse(LLMAPIProvider):
     def _handle_tool_result(
         self,
         tool_use: Dict,
-        result: Dict[str, Any],
+        exec_result: Dict[str, Any],
         is_error: bool = False
     ) -> Dict:
         """Format a tool result or error as a user message.
         
         Args:
             tool_use: The tool use information
-            result: The result or error message
+            exec_result: The result or error message
             is_error: Whether this is an error result
             
         Returns:
@@ -134,28 +135,36 @@ class BedrockConverse(LLMAPIProvider):
         }
         
         if is_error:
-            tool_result['content'] = [{'text': str(result)}]
+            tool_result['content'] = [{'text': str(exec_result)}]
             tool_result['status'] = 'error'
         else:
             # For successful results, handle different result types
-            if isinstance(result, dict) and 'base64_image' in result:
-                # Handle image results by adding both image and metadata
-                tool_result['content'] = [
-                    {
-                        'image': {
-                            'format': 'png',
-                            'source': {
-                                'bytes': result['base64_image'].encode()
-                            }
-                        }
-                    },
-                    {'json': result.get('metadata', {})}
-                ]
-            elif isinstance(result, dict):
-                tool_result['content'] = [{'json': result}]
+            tool_result.setdefault('content', [])  # Initialize content
+            if isinstance(exec_result, dict):
+                result = exec_result.copy()
+                # Handle text content
+                if text := result.pop('text', None):
+                    tool_result['content'].append({'text': text})
+                # Handle image content
+                if image := result.pop('image', None):
+                    # Handle image results by adding both image and metadata
+                    buffer = io.BytesIO()
+                    image.save(buffer, format='PNG')
+                    # Convert IPL.Image to bytes using BytesIO
+                    image_bytes = buffer.getvalue()
+                    tool_result['content'].extend([
+                        {'image': {'format': 'png', 'source': {'bytes': image_bytes} }},
+                        {'json': result.pop('metadata', {})}
+                    ])
+                # Handle video content (placeholder for future implementation)
+                if video := result.pop('video', None):
+                    pass
+                # Handle remaining content as JSON
+                if result:
+                    tool_result['content'].append({'json': result})
             else:
                 # Convert non-dict results to string and use text format
-                tool_result['content'] = [{'text': str(result)}]
+                tool_result['content'].append({'text': str(exec_result)})
         
         tool_result_message = {
             'role': 'user',
@@ -609,8 +618,8 @@ class BedrockConverse(LLMAPIProvider):
                         if text := response.get('content', {}).get('text'):
                             content['text'] = text
                         # Check for file_path in tool result
-                        if 'file_path' in tool_result:
-                            content['file_path'] = tool_result['file_path']
+                        if file_path := tool_result.get('metadata', {}).get('file_path'):
+                            content['file_path'] = file_path
 
                         if content:
                             yield {

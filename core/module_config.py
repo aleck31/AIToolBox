@@ -194,10 +194,10 @@ class ModuleConfig:
     def init_module_config(self, module_name: str) -> Optional[Dict]:
         """Initialize default configuration for a module"""
         default_configs = {
-            'chatbot': {
-                'setting_name': 'chatbot',
+            'assistant': {
+                'setting_name': 'assistant',
                 'type': 'module',
-                'description': 'Chatbot Module',
+                'description': 'Assistant Module',
                 'default_model': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
                 'system_prompt': 'You are a helpful AI assistant.',
                 'parameters': {
@@ -206,17 +206,16 @@ class ModuleConfig:
                 },
                 'enabled_tools': [
                     'get_weather',         # Weather information
-                    'get_location_coords',  # Location coordinates
                     'get_text_from_url',   # Get text content from webpage URL
                     'generate_image'       # AI image generation
                 ]
             },
-            'chatbot-gemini': {
-                'setting_name': 'chatbot-gemini',
+            'chatbot': {
+                'setting_name': 'chatbot',
                 'type': 'module',
-                'description': 'Chatbot(Genimi) Module Settings',
+                'description': 'Chatbot Module Settings',
                 'default_model': 'gemini-1.5-pro',
-                'system_prompt': 'You are a helpful AI assistant.',
+                'system_prompt': 'You are a friendly chatbot.',
                 'parameters': {
                     'temperature': Decimal('0.7'),
                     'max_tokens': 1000,
@@ -271,12 +270,12 @@ class ModuleConfig:
                     'max_tokens': 1000
                 }
             },
-            'oneshot': {
-                'setting_name': 'oneshot',
+            'reasoning': {
+                'setting_name': 'reasoning',
                 'type': 'module',
-                'description': 'OneShot Module',
+                'description': 'Reasoning Module',
                 'default_model': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-                'system_prompt': 'You are a one-shot response generator.',
+                'system_prompt': 'You are able to think before and during responding.',
                 'parameters': {
                     'temperature': Decimal('0.7'),
                     'max_tokens': 4096
@@ -294,8 +293,7 @@ class ModuleConfig:
                 'parameters': {
                     'height': 1152,
                     'width': 896,
-                    'cfg_scale': 7,
-                    'steps': 50
+                    'aspect_ratio': '9:16'
                 }
             },
             'creative': {

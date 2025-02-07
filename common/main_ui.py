@@ -1,13 +1,12 @@
 # UI module for Gradio components
 import gradio as gr
-from fastapi import Request
+from modules.assistant.ui import tab_assistant
 from modules.chatbot.ui import tab_chatbot
-from modules.chatbot_gemini.ui import tab_gemini
 from modules.text.ui import tab_text
 from modules.summary.ui import tab_summary
 from modules.vision.ui import tab_vision
 from modules.coding.ui import tab_coding
-from modules.oneshot.ui import tab_oneshot
+from modules.reasoning.ui import tab_reasoning
 from modules.draw.ui import tab_draw
 from common.setting.ui import tab_setting
 from core.logger import logger
@@ -25,14 +24,14 @@ def create_main_interface():
     
     interface = gr.TabbedInterface(
         [
-            tab_chatbot, tab_gemini, tab_text,
-            tab_summary, tab_vision, tab_oneshot,
+            tab_assistant, tab_chatbot, tab_text,
+            tab_summary, tab_vision, tab_reasoning,
             tab_coding, tab_draw, 
             tab_setting
         ],
         tab_names=[
-            "Chatbot 🤖", "Gemini 👾", "Text 📝", 
-            "Summary 📰", "Vision 👀", "OneShot 🎯",
+            "Assistant 🤖", "Chatbot 💬", "Text 📝", 
+            "Summary 📰", "Vision 👀", "Reasoning 🧠",
             "Coding 💻", "Draw 🎨", 
             "Setting ⚙️"
         ],
