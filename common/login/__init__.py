@@ -49,10 +49,9 @@ def get_user(request: Request):
         raise HTTPException(status_code=401, detail="Not authenticated")
         
     username = user.get('username')
-    logger.debug(f"Username extracted from session: {username}")
     # Log access token for debugging
     access_token = user.get('access_token')
-    logger.debug(f"Access token verified: {bool(access_token)}")
+    logger.debug(f"Access token for [{username}] verified: {bool(access_token)}")
     
     return username
 

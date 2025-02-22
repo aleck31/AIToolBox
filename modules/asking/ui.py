@@ -1,11 +1,11 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
-from .handlers import ReasoningHandlers
+from .handlers import AskingHandlers
 
 
 def create_interface() -> gr.Blocks:
-    """Create Reasoning interface with handlers"""
+    """Create Asking interface with handlers"""
     # Create interface without eager initialization
     interface = gr.Blocks(theme=gr.themes.Soft())
     
@@ -20,7 +20,7 @@ def create_interface() -> gr.Blocks:
                 with gr.Row():
                     input_box = gr.MultimodalTextbox(
                         show_label=False,
-                        file_types=['image', 'video', 'audio', '.pdf'],
+                        file_types=['text', 'image', 'video', 'audio', '.pdf'],
                         file_count='multiple',
                         placeholder="Type a message or upload image(s)",
                         min_width=60,
@@ -59,7 +59,7 @@ def create_interface() -> gr.Blocks:
 
         def update_btn_label(response):
             """Update submit button label after response"""
-            return "🤔 Ask further" if response else "✨ Go"
+            return "🙋 Ask further" if response else "✨ Go"
 
         def update_history(input_data, history, response):
             """Update conversation history with new interaction"""
@@ -73,10 +73,10 @@ def create_interface() -> gr.Blocks:
             fn=update_btn_immediate,  # First update button
             outputs=submit_btn
         ).then(
-            fn=ReasoningHandlers.gen_with_think,  # Then generate response
+            fn=AskingHandlers.gen_with_think,  # Then generate response
             inputs=[input_box, history],
             outputs=[output_thinking, output_response],
-            api_name="reasoning"
+            api_name="Asking"
         ).then(
             fn=update_history,  # update history
             inputs=[input_box, history, output_response],
@@ -96,4 +96,4 @@ def create_interface() -> gr.Blocks:
     return interface
 
 # Create interface
-tab_reasoning = create_interface()
+tab_asking = create_interface()

@@ -72,7 +72,7 @@ class GeminiProvider(LLMAPIProvider):
     def _handle_gemini_error(self, error: Exception) -> None:
         """Handle Gemini-specific errors"""
         error_message = str(error).lower()
-        
+        logger.error(f"[GeminiProvider] {error_message}")
         if "quota exceeded" in error_message:
             raise exceptions.ResourceExhausted(f"Rate limit exceeded: {error}")
         elif "unauthorized" in error_message:
@@ -80,12 +80,8 @@ class GeminiProvider(LLMAPIProvider):
         elif "invalid request" in error_message:
             raise exceptions.InvalidArgument(f"Invalid request: {error}")
         elif "dangerous_content" in error_message:
-            # Handle safety filter triggers by retrying with default settings
-            logger.warning("Safety filter triggered, retrying with default settings")
-            self.model = genai.GenerativeModel(
-                model_name=self.config.model_id,
-                generation_config=self._get_generation_config()
-            )
+            # Handle safety filter triggers
+            logger.warning("[GeminiProvider] Safety filter triggered, please try again.")
             return
         else:
             raise exceptions.Unknown(f"Gemini error: {error}")
@@ -253,7 +249,7 @@ class GeminiProvider(LLMAPIProvider):
             # Stream response chunks
             for chunk in response:
                 if hasattr(chunk, 'text'):
-                    yield {'text': chunk.text}
+                    yield {'content': {'text': chunk.text}}
                 
                 # Extract usage metadata if available
                 if hasattr(chunk, 'usage_metadata'):
@@ -294,7 +290,7 @@ class GeminiProvider(LLMAPIProvider):
     async def multi_turn_generate(
         self,
         message: Message,
-        history: Optional[List[Message]] = None,
+        history: Optional[List[Message]] = [],
         system_prompt: Optional[str] = None,
         **kwargs
     ) -> AsyncIterator[Dict]:
@@ -311,21 +307,19 @@ class GeminiProvider(LLMAPIProvider):
             - {"metadata": dict} for response metadata
         """
         try:
+            # Format history message
             if history:
-                logger.debug(f"Unconverted history messages: {history}")
-                llm_messages = self._convert_messages(history, system_prompt)
-            else:
-                llm_messages = self._convert_messages([], system_prompt)
-            logger.debug(f"Converted history messages: {llm_messages}")
+                logger.debug(f"[GeminiProvider] Unconverted history messages: {history}")
+                history_messages = self._convert_messages(history, system_prompt)
+                logger.debug(f"[GeminiProvider] Converted history messages: {history_messages}")
 
-            # Format and send current message
+            # Format current user message
             current_message = self._convert_message(message)
-            logger.debug(f"Converted Current message: {current_message}")
+            logger.debug(f"[GeminiProvider] Converted Current message: {current_message}")
 
             # Create chat session with history
-            chat = self.model.start_chat(history=llm_messages)
-            logger.info(f"Processing multi-turn chat with {len(llm_messages)+1} messages")
-
+            chat = self.model.start_chat(history=history_messages)
+            logger.debug(f"[GeminiProvider] Processing multi-turn chat with {len(history_messages)+1} messages")
 
             # Update model args if new system prompt provided
             model_args = {

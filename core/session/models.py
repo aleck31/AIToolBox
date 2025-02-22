@@ -24,7 +24,7 @@ class Session:
         session_name: str,
         created_time: datetime,
         updated_time: datetime,
-        user_name: str,   # change user_name to user_name
+        user_name: str,
         metadata: SessionMetadata,
         history: Optional[List[Dict]] = None
     ):
@@ -35,7 +35,8 @@ class Session:
         self.user_name = user_name
         self.metadata = metadata
         self.history = history or []
-        self.context = {
+        # Initialize context with standard fields
+        self.context: Dict[str, Any] = {
             'start_time': created_time.isoformat(),
             'total_interactions': 0,
             'system_prompt': None
@@ -72,18 +73,26 @@ class Session:
         }
 
     def add_interaction(self, message: Dict[str, Any]) -> None:
+        """Add an interaction to session history
+        
+        Args:
+            message: Message dictionary containing role and content
+            
+        Notes:
+            - Normalizes content format for consistency
+            - Updates session metadata and context
+            - Handles both text and multimodal content
         """
-            Add an interaction to session history,
-            For multimodal content just add as file path
-        """
-        # Normalize content format
+        
+        # Normalize content to dictionary format
         if isinstance(message.get('content'), str):
             message['content'] = {'text': message['content']}
             
-        # Ensure timestamp
+        # Add timestamp if not present
         if 'timestamp' not in message:
             message['timestamp'] = datetime.now().isoformat()
             
+        # Update session state
         self.history.append(message)
         self.updated_time = datetime.now()  # Store as datetime object
         self.context['total_interactions'] += 1

@@ -5,8 +5,8 @@ from typing import Dict, List, Optional, Any, Tuple
 from fastapi import HTTPException
 from core.logger import logger
 from .prompts import SYSTEM_PROMPTS, STYLES
-
 from core.integration.service_factory import ServiceFactory
+from core.integration.gen_service import GenService
 
 
 # Language options
@@ -44,14 +44,14 @@ class TextHandlers:
     """Handlers for text processing with style support"""
     
     # Shared service instance
-    _service = None
+    _service : Optional[GenService] = None
     
     @classmethod
-    async def _get_service(cls):
+    async def _get_service(cls) -> GenService:
         """Get or initialize service lazily"""
         if cls._service is None:
+            logger.info("[TextHandlers] Initializing service")
             cls._service = ServiceFactory.create_gen_service('text')
-            logger.debug(f"Created new text service with model: {cls._service.default_llm_config.model_id}")
         return cls._service
 
     @classmethod
@@ -60,7 +60,7 @@ class TextHandlers:
         target_lang = options.get('target_lang', 'en_US')
         system_prompt = SYSTEM_PROMPTS[operation].format(target_lang=target_lang)
         
-        tag = 'original_paragraph'
+        tag = 'original_text'
         if operation == 'rewrite':
             style_key = options.get('style', '正常')
             style_prompt = STYLES[style_key]['prompt']
@@ -101,15 +101,8 @@ class TextHandlers:
             service = await cls._get_service()
 
             # Get user info from FastAPI session
-            user_info = request.session.get('user', {})
-            user_name = user_info.get('username')
-            
-            if not user_name:
-                raise HTTPException(
-                    status_code=401,
-                    detail="Authentication required. Please log in again."
-                )
-            
+            user_name = request.session.get('user', {}).get('username')
+
             try:
                 # Get or create session
                 session = await service.get_or_create_session(
@@ -125,11 +118,11 @@ class TextHandlers:
                 # Update session with style-specific system prompt
                 session.context['system_prompt'] = content.pop('system_prompt')        
                 # Persist updated context to session store
-                await service.session_store.update_session(session, user_name)
+                await service.session_store.update_session(session)
 
                 # Generate response with session context
                 response = await service.gen_text(
-                    session_id=session.session_id,
+                    session=session,
                     content=content
                 )
                 
@@ -140,14 +133,14 @@ class TextHandlers:
                 return response
                 
             except Exception as e:
-                logger.error(f"Service error: {str(e)}")
+                logger.error(f"[TextHandlers] Service error: {str(e)}")
                 return f"Error: {str(e)}"
 
         except HTTPException as e:
             logger.error(f"Authentication error: {e.detail}")
             return str(e.detail)
         except Exception as e:
-            logger.error(f"Error in handle_request: {str(e)}")
+            logger.error(f"[handle_request]: {str(e)}")
             return "An error occurred while processing your text. Please try again."
 
     @classmethod

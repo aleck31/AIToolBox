@@ -8,5 +8,6 @@ google-generativeai
 uvicorn[standard]
 python-dotenv
 cachetools
+aiohttp
 # selectolax
 # pdf2image

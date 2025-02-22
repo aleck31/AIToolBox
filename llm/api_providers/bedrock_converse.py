@@ -6,9 +6,10 @@ from core.logger import logger
 from core.config import env_config
 from botocore import exceptions as boto_exceptions
 from utils.aws import get_aws_client
+from utils.file import get_file_name, get_file_type_and_format, read_file_bytes
 from llm import ResponseMetadata
+from llm.tools.bedrock_tools import tool_registry
 from .base import LLMAPIProvider, LLMConfig, Message, LLMResponse
-from ..tools.bedrock_tools import tool_registry
 
 
 class BedrockConverse(LLMAPIProvider):
@@ -37,11 +38,11 @@ class BedrockConverse(LLMAPIProvider):
                     else:
                         logger.warning(f"No specification found for tool: {tool_name}")
                 except Exception as e:
-                    logger.error(f"Error loading tool {tool_name}: {str(e)}")
+                    logger.error(f"[BRConverseProvider] Error loading tool {tool_name}: {str(e)}")
             
             # Store initialized tool specs
             self.tools = tool_specs
-            logger.debug(f"Initialized {len(tool_specs)} tools for Bedrock provider")
+            logger.debug(f"[BRConverseProvider] Initialized {len(tool_specs)} tools")
 
     def _validate_config(self) -> None:
         """Validate Bedrock-specific configuration"""
@@ -80,7 +81,7 @@ class BedrockConverse(LLMAPIProvider):
         error_code = error.response['Error']['Code']
         error_message = error.response['Error']['Message']
         
-        logger.error(f"[BedrockConverse] {error_message}")
+        logger.error(f"[BRConverseProvider] {error_code} - {error_message}")
         if error_code in ['ThrottlingException', 'TooManyRequestsException']:
             raise error  # Already a boto ClientError with proper error code
 
@@ -93,26 +94,6 @@ class BedrockConverse(LLMAPIProvider):
             "stopSequences": kwargs.get('stop_sequences', self.config.stop_sequences)
         }
         return {k: v for k, v in params.items() if v is not None}
-
-    def _get_file_type_and_format(self, file_path: str) -> tuple:
-        """Determine file type and format from file path"""
-        ext = file_path.lower().split('.')[-1]
-        
-        # Image formats - normalize to Bedrock supported formats
-        if ext in ['jpg', 'jpeg']:
-            return 'image', 'jpeg'
-        elif ext in ['png', 'gif', 'webp']:
-            return 'image', ext
-        
-        # Document formats    
-        if ext in ['pdf', 'csv', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'md']:
-            return 'document', ext
-            
-        # Video formats
-        if ext in ['mkv', 'mov', 'mp4', 'webm', 'flv', 'mpeg', 'mpg', 'wmv', '3gp']:
-            return 'video', ext
-            
-        return None, None
 
     def _handle_tool_result(
         self,
@@ -133,10 +114,11 @@ class BedrockConverse(LLMAPIProvider):
         tool_result = {
             'toolUseId': tool_use['toolUseId']
         }
-        
+        logger.debug(f"[BRConverseProvider] handle result for {tool_result}:")
         if is_error:
             tool_result['content'] = [{'text': str(exec_result)}]
             tool_result['status'] = 'error'
+            logger.debug(f"--- error content: {tool_result['content']}")
         else:
             # For successful results, handle different result types
             tool_result.setdefault('content', [])  # Initialize content
@@ -145,6 +127,7 @@ class BedrockConverse(LLMAPIProvider):
                 # Handle text content
                 if text := result.pop('text', None):
                     tool_result['content'].append({'text': text})
+                    logger.debug(f"--- text content: {tool_result['content']}")
                 # Handle image content
                 if image := result.pop('image', None):
                     # Handle image results by adding both image and metadata
@@ -152,10 +135,12 @@ class BedrockConverse(LLMAPIProvider):
                     image.save(buffer, format='PNG')
                     # Convert IPL.Image to bytes using BytesIO
                     image_bytes = buffer.getvalue()
+                    # Add image content and metadata
                     tool_result['content'].extend([
-                        {'image': {'format': 'png', 'source': {'bytes': image_bytes} }},
+                        {'image': {'format': 'png', 'source': {'bytes': image_bytes}}},
                         {'json': result.pop('metadata', {})}
                     ])
+                    logger.debug("--- image content w/metadata added successfully")
                 # Handle video content (placeholder for future implementation)
                 if video := result.pop('video', None):
                     pass
@@ -165,42 +150,11 @@ class BedrockConverse(LLMAPIProvider):
             else:
                 # Convert non-dict results to string and use text format
                 tool_result['content'].append({'text': str(exec_result)})
-        
-        tool_result_message = {
+                logger.debug(f"--- non-dict content: {tool_result['content']}")        
+        return {
             'role': 'user',
             'content': [{'toolResult': tool_result}]
         }
-        logger.debug(f"Formatted tool result: {tool_result_message}")
-
-        return tool_result_message
-
-    def _read_file_bytes(self, file_path: str) -> bytes:
-        """Read file bytes from file path"""
-        try:
-            with open(file_path, 'rb') as f:
-                return f.read()
-        except Exception as e:
-            logger.error(f"Error reading file {file_path}: {str(e)}")
-            raise boto_exceptions.ClientError(
-                error_response={
-                    'Error': {
-                        'Code': 'FileReadError',
-                        'Message': f"Failed to read file {file_path}: {str(e)}"
-                    }
-                },
-                operation_name='read_file'
-            )
-
-    def _convert_messages(self, messages: List[Message]) -> List[Dict]:
-        """Convert messages to Bedrock-specified format efficiently
-        
-        Args:
-            messages: List of messages to format
-            
-        Returns:
-            List of Converted messages for Bedrock API
-        """
-        return [self._convert_message(msg) for msg in messages]
 
     def _convert_message(self, message: Message) -> Dict:
         """Convert a single message for Bedrock API
@@ -215,7 +169,7 @@ class BedrockConverse(LLMAPIProvider):
 
         """
         content = []
-        
+
         # Handle context if present and not None
         context = getattr(message, 'context', None)
         if context and isinstance(context, dict):
@@ -244,18 +198,34 @@ class BedrockConverse(LLMAPIProvider):
             # Add files if present
             if files := message.content.get("files", []):
                 for file_path in files:
-                    file_type, format = self._get_file_type_and_format(file_path)
+                    file_type, format = get_file_type_and_format(file_path)
                     if file_type:
-                        content.append({
-                            file_type: {
-                                "format": format,
-                                "source": {
-                                    "bytes": self._read_file_bytes(file_path)
-                                }
+                        content_block = {
+                            "format": format,
+                            "source": {
+                                "bytes": read_file_bytes(file_path)
                             }
+                        }
+                        # Add name parameter only for document type
+                        if file_type == 'document':
+                            content_block["name"] = get_file_name(file_path)
+                        
+                        content.append({
+                            file_type: content_block
                         })
             
         return {"role": message.role, "content": content}
+
+    def _convert_messages(self, messages: List[Message]) -> List[Dict]:
+        """Convert messages to Bedrock-specified format efficiently
+        
+        Args:
+            messages: List of messages to format
+            
+        Returns:
+            List of Converted messages for Bedrock API
+        """
+        return [self._convert_message(msg) for msg in messages]
 
     def _converse_sync(
             self,
@@ -349,8 +319,7 @@ class BedrockConverse(LLMAPIProvider):
         """
         try:
             inference_params = self._prepare_inference_params(**kwargs)
-            logger.debug("Streaming messages with model: %s", self.config.model_id)
-
+            logger.debug(f"[BRConverseProvider] Stream using model: {self.config.model_id}")
             # Prepare request parameters
             request_params = {
                 "modelId": self.config.model_id,
@@ -368,7 +337,7 @@ class BedrockConverse(LLMAPIProvider):
                 request_params["toolConfig"] = {"tools": self.tools}
 
             # Get response stream
-            logger.debug(f"Request params for Bedrock: {request_params}")
+            # logger.debug(f"--- Request params: {request_params}")
             response = self.client.converse_stream(**request_params)
             
             # Initialize response tracking
@@ -550,7 +519,7 @@ class BedrockConverse(LLMAPIProvider):
         system_prompt: Optional[str] = None,
         **kwargs
     ) -> AsyncIterator[Dict]:
-        """Generate streaming response with tool use handling
+        """Generate streaming response with multi-turn tool use handling
         
         Args:
             messages: user messages
@@ -559,80 +528,87 @@ class BedrockConverse(LLMAPIProvider):
             
         Yields:
             Dict containing either:            
-            - {"content": dict} for content chunks
+            - {"content": dict} for content chunks (text, file_path)
             - {"metadata": dict} for response metadata
 
         Note:
-            Handles tool use by maintaining proper conversation flow:
-            Send Chat message to [Converse api] get streaming LLM response
-                If the tool_use field in response is empty: stream back the response directly
-                If the tool_use field in response is not empty:
-                    Execute the tool function
-                    Update Chat message with LLM response message and tool result 
-                    Send message to [Converse api] and stream back the response
+            Supports multi-turn tool use by:
+            1. Streaming initial LLM response
+            2. If tool use detected:
+                - Execute tool and add result to conversation
+                - Continue conversation with tool result
+                - Repeat if another tool use is detected
+            3. Stream final response with any generated content
         """
         try:
             # Format messages for Bedrock
             llm_messages = self._convert_messages(messages)
-            logger.debug(f"Converted messages: {llm_messages}")
-            
-            # Convert synchronous stream to async
-            for chunk in self._converse_stream_sync(
-                messages=llm_messages,
-                system_prompt=system_prompt,
-                **kwargs
-            ):
-                # Handle tool use if present
-                tool_use = chunk.get('tool_use', {})
-                if tool_use and isinstance(tool_use.get('input'), dict):
-                    logger.debug(f"Tool use: {tool_use}")
-                    # Add initial Assistant message to conversation with toolUse
-                    llm_messages.append({
-                        'role': chunk.get('role'),
-                        'content': [{'toolUse': tool_use}]
-                    })
-                    try:
-                        # Execute tool with unpacked input
-                        tool_result = await tool_registry.execute_tool(
-                            tool_use['name'],
-                            **tool_use['input']
-                        )
-                        message_with_result = self._handle_tool_result(tool_use, tool_result)
-                    except Exception as e:
-                        logger.error(f"Tool executing error: {str(e)}")
-                        message_with_result = self._handle_tool_result(
-                            tool_use, str(e), is_error=True
-                        )
-                        continue
-                    # Add tool result to conversation
-                    llm_messages.append(message_with_result)
+            logger.debug(f"[BRConverseProvider] Initial messages for Bedrock: {llm_messages}")
+
+            while True:  # Continue until no more tool uses
+                has_tool_use = False
+                accumulated_text = ""   # track and preserve the text content that comes before a tool use
+
+                # Convert synchronous stream to async
+                for chunk in self._converse_stream_sync(
+                    messages=llm_messages,
+                    system_prompt=system_prompt,
+                    **kwargs
+                ):
+                    # Handle tool use if present
+                    tool_use = chunk.get('tool_use', {})
+                    if tool_use and isinstance(tool_use.get('input'), dict):
+                        has_tool_use = True
+                        logger.debug(f"[BRConverseProvider] Tool use detected: {tool_use}")
                         
-                    # Get follow-on response
-                    for response in self._converse_stream_sync(
-                        messages=llm_messages,
-                        system_prompt=system_prompt,
-                        **kwargs
-                    ):
-                        content = {}
-                        # Add text if present
-                        if text := response.get('content', {}).get('text'):
-                            content['text'] = text
-                        # Check for file_path in tool result
-                        if file_path := tool_result.get('metadata', {}).get('file_path'):
-                            content['file_path'] = file_path
+                        # Add LLM message with both text and toolUse
+                        assistant_message = {
+                            'role': chunk.get('role'),
+                            'content': [
+                                {'text': accumulated_text} if accumulated_text else None,
+                                {'toolUse': tool_use}
+                            ]
+                        }
+                        llm_messages.append(assistant_message)
+                        logger.debug(f"[BRConverseProvider] Added LLM message: {assistant_message}")
+                        
+                        try:
+                            # Execute tool with unpacked input
+                            execute_result = await tool_registry.execute_tool(
+                                tool_use['name'],
+                                **tool_use['input']
+                            )
+                            message_with_result = self._handle_tool_result(tool_use, execute_result)
+                            
+                            # Track file paths from tool results after handling
+                            if isinstance(execute_result, dict):
+                                # Stream file_path in response if present
+                                if file_path := execute_result.get('metadata', {}).get('file_path'):
+                                    yield {'content': {'file_path': file_path}}
 
-                        if content:
-                            yield {
-                                'content': content,
-                                'metadata': response.get('metadata', {})
-                            }
+                        except Exception as e:
+                            logger.error(f"[BRConverseProvider] Tool executing error: {str(e)}")
+                            message_with_result = self._handle_tool_result(
+                                tool_use, str(e), is_error=True
+                            )
 
-                # Stream text content if present
-                elif text := chunk.get('content', {}).get('text'):
-                    yield {
-                        'content': {'text': text},
-                        'metadata': chunk.get('metadata', {})
-                    }
+                        # add tool execute result to conversation
+                        llm_messages.append(message_with_result)
+                        logger.debug(f"[BRConverseProvider] Added User message w/tool result: {message_with_result}")
+                        break  # Break inner loop to get next response with tool result
+
+                    # Stream text content if present
+                    elif text := chunk.get('content', {}).get('text'):
+                        accumulated_text += text
+                        yield {
+                            'content': {'text': text},
+                            'metadata': chunk.get('metadata', {})
+                        }
+
+                # Break outer loop if no tool use in this turn
+                if not has_tool_use:
+                    logger.debug("[BRConverseProvider] No more tool uses detected, ending loop")
+                    break
 
         except ClientError as e:
             self._handle_bedrock_error(e)
@@ -661,7 +637,6 @@ class BedrockConverse(LLMAPIProvider):
             # Prepare conversation messages
             messages = []
             if history:
-                logger.debug(f"Unconverted history messages: {history}")
                 messages.extend(history)   
             # Add current message
             messages.append(message)

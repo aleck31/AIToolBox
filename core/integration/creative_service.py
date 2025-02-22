@@ -1,22 +1,29 @@
-"""Service for AI image generation"""
-import io
-import json
-import base64
-from typing import Dict, List, Optional, Tuple, Any
-from PIL import Image
-from fastapi import HTTPException
-from botocore.exceptions import ClientError
-
+"""Service for creative content generation"""
+from typing import Dict, List, Optional, Any
 from core.logger import logger
-from core.session import Session, SessionStore
-from core.module_config import module_config
-from llm.model_manager import model_manager
-from llm.api_providers.base import LLMConfig, Message, LLMAPIProvider
+from core.session import Session
+from llm.api_providers.base import LLMConfig, Message
+from .base_service import BaseService
 
 
-class CreativeService:
+class CreativeService(BaseService):
     """Service for creative content (image, video) generation"""
+    
+    def __init__(
+        self,
+        llm_config: LLMConfig,
+        cache_ttl: int = 600  # 10 minutes default TTL
+    ):
+        """Initialize CreativeService with model configuration"""
+        super().__init__(cache_ttl=cache_ttl)  # No tools needed for image generation
+        self.default_llm_config = llm_config
 
+    def _prepare_message(self, content: Dict[str, str]) -> Message:
+        """Create standardized message format"""
+        return Message(
+            role="user",
+            content=content if isinstance(content, dict) else {"text": str(content)}
+        )
 
     async def generate_video_stateless(
         self,
@@ -32,6 +39,88 @@ class CreativeService:
             option_params: Optional parameters for LLM generation
             
         Returns:
-            str: Generated text
+            str: Generated video URL or path
         """
-        pass
+        try:
+            # Always use default model for stateless operations
+            llm = self._get_llm_provider(self.default_llm_config.model_id)
+            
+            logger.debug(f"[CreativeService] Content for stateless generation: {content}")
+            
+            # Create standardized message
+            messages = [self._prepare_message(content)]
+
+            # Generate response
+            response = await llm.generate_content(
+                messages=messages,
+                system_prompt=system_prompt,
+                **(option_params or {})
+            )
+            
+            if not response.content:
+                raise ValueError("Empty response from LLM")
+                
+            return response.content.get('video_url', '')
+
+        except Exception as e:
+            logger.error(f"[CreativeService] Failed to generate video stateless: {str(e)}")
+            return "I apologize, but I encountered an error. Please try again."
+
+    async def generate_video(
+        self,
+        session: Session,
+        content: Dict[str, str],
+        option_params: Optional[Dict[str, float]] = None
+    ) -> str:
+        """Generate video using the configured LLM with session context
+        
+        Args:
+            session: Session for context management
+            content: Dictionary containing text and optional image
+            option_params: Optional parameters for LLM generation
+            
+        Returns:
+            str: Generated video URL or path
+        """
+        try:
+            # Get model_id with fallback to module default
+            model_id = await self.get_session_model(session)
+
+            # Get LLM provider
+            llm = self._get_llm_provider(model_id)
+            
+            logger.debug(f"[CreativeService] Content for session {session.session_id}: {content}")
+            
+            # Create message with multimodal content support
+            message = self._prepare_message(content)
+
+            # Generate response
+            response = await llm.generate_content(
+                messages=[message],
+                system_prompt=session.context.get('system_prompt', ''),
+                **(option_params or {})
+            )
+
+            if not response.content:
+                raise ValueError("Empty response from LLM")
+                
+            # Add interactions to session
+            session.add_interaction({
+                "role": "user",
+                "content": content
+            })
+            
+            session.add_interaction({
+                "role": "assistant",
+                "content": response.content,
+                "metadata": getattr(response, 'metadata', None)
+            })
+            
+            # Update session
+            await self.session_store.update_session(session)
+
+            return response.content.get('video_url', '')
+
+        except Exception as e:
+            logger.error(f"[CreativeService] Failed to generate video in session {session.session_id}: {str(e)}")
+            return "I apologize, but I encountered an error. Please try again."

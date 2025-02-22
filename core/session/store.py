@@ -6,7 +6,6 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 from core.config import env_config
 from core.logger import logger
-from core.module_config import module_config
 from utils.aws import get_aws_resource
 from fastapi import HTTPException
 from .models import Session, SessionMetadata
@@ -82,67 +81,12 @@ class SessionStore:
                 detail=f"Session creation failed: {str(e)}"
             )
 
-    async def get_session(
-        self, 
-        session_id: str, 
-        user_name: Optional[str] = None
-    ) -> Session:
-        """Get session with optional user validation
-        
-        Args:
-            session_id: ID of session to retrieve
-            user_name: Optional user ID for ownership validation
-            
-        Returns:
-            Session object if found and valid
-            
-        Raises:
-            HTTPException: If session not found, expired, or access denied
-        """
-        try:
-            response = self.table.get_item(Key={'session_id': session_id})
-            
-            if 'Item' not in response:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Session {session_id} not found"
-                )
-
-            item = response['Item']
-            
-            # Always validate TTL first
-            if item.get('ttl', 0) < datetime.now().timestamp():
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Session {session_id} has expired"
-                )
-                
-            # Validate ownership if user_name provided
-            if user_name and item['user_name'] != user_name:
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Access denied to session {session_id}"
-                )
-                
-            return Session.from_dict(item)
-            
-        except Exception as e:
-            logger.error(f"Failed to get session: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
-
     async def update_session(
             self, 
-            session: Session, 
-            user_name: Optional[str] = None
+            session: Session
         ) -> None:
         """Persist the current session data to database and refresh TTL value."""
-        try:
-            if user_name and session.user_name != user_name:
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Access denied to session {session.session_id}"
-                )
-                
+        try:                
             item = {
                 **session.to_dict(),
                 'ttl': int(datetime.now().timestamp() + (self.ttl_days * 86400))
@@ -152,19 +96,6 @@ class SessionStore:
             
         except Exception as e:
             logger.error(f"Failed to update session: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
-
-    async def delete_session(self, session_id: str, user_name: str) -> bool:
-        """Delete session from database by session id"""
-        try:
-            # Verify ownership first
-            await self.get_session(session_id, user_name)
-            self.table.delete_item(Key={'session_id': session_id})
-            logger.info(f"Deleted session {session_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to delete session: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e))
 
     async def list_sessions(
@@ -208,4 +139,54 @@ class SessionStore:
             
         except Exception as e:
             logger.error(f"Failed to list sessions: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def get_session_by_id(self, session_id: str) -> Session:
+        """Get session with optional user validation
+        
+        Args:
+            session_id: ID of session to retrieve
+            user_name: Optional user ID for ownership validation
+            
+        Returns:
+            Session object if found and valid
+            
+        Raises:
+            HTTPException: If session not found, expired, or access denied
+        """
+        try:
+            response = self.table.get_item(Key={'session_id': session_id})
+            
+            if 'Item' not in response:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Session {session_id} not found"
+                )
+
+            item = response['Item']
+            
+            # Always validate TTL first
+            if item.get('ttl', 0) < datetime.now().timestamp():
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Session {session_id} has expired"
+                )
+                
+            return Session.from_dict(item)
+            
+        except Exception as e:
+            logger.error(f"Failed to get session: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def delete_session_by_id(self, session_id: str) -> bool:
+        """Delete session from database by session id"""
+        try:
+            # Verify ownership first
+            await self.get_session_by_id(session_id)
+            self.table.delete_item(Key={'session_id': session_id})
+            logger.info(f"Deleted session {session_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to delete session: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e))

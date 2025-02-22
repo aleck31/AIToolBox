@@ -3,9 +3,9 @@
 import asyncio
 import gradio as gr
 from typing import Dict, Optional, AsyncIterator
-from fastapi import HTTPException
 from core.logger import logger
 from core.integration.service_factory import ServiceFactory
+from core.integration.gen_service import GenService
 from .prompts import SYSTEM_PROMPT, build_user_prompt
 
 
@@ -13,13 +13,13 @@ class SummaryHandlers:
     """Handlers for text summarization with streaming support"""
     
     # Shared service instance
-    _service = None
+    _service : Optional[GenService] = None
     
     @classmethod
-    async def _get_service(cls):
+    async def _get_service(cls) -> GenService:
         """Get or initialize service lazily"""
-        if cls._service is None:
-            # Enable web_tools for URL handling
+        if cls._draw_service is None:
+            logger.info("[SummaryHandlers] Initializing service")
             cls._service = ServiceFactory.create_gen_service('summary')
         return cls._service
 
@@ -61,18 +61,18 @@ class SummaryHandlers:
                 # Update session with system prompt
                 session.context['system_prompt'] = SYSTEM_PROMPT
                 # Persist updated context
-                await service.session_store.update_session(session, user_name)
+                await service.session_store.update_session(session)
 
                 # Build content with system prompt
                 content = {
                     "text": build_user_prompt(text, target_lang)
                 }
-                logger.debug(f"Build content: {content}")
+                logger.debug(f"[SummaryHandlers] Build content: {content}")
 
                 # Stream response with accumulated display
                 buffered_text = ""
                 async for chunk in service.gen_text_stream(
-                    session_id=session.session_id,
+                    session=session,
                     content=content
                 ):
                     # Accumulate text for display while maintaining streaming
@@ -81,12 +81,9 @@ class SummaryHandlers:
                     await asyncio.sleep(0)  # Add sleep for Gradio UI streaming echo
 
             except Exception as e:
-                logger.error(f"Service error: {str(e)}")
+                logger.error(f"[SummaryHandlers] Service error: {str(e)}")
                 yield f"Error: {str(e)}"
 
-        except HTTPException as e:
-            logger.error(f"Authentication error: {e.detail}")
-            yield str(e.detail)
         except Exception as e:
-            logger.error(f"Error in [summarize_text]: {str(e)}")
-            yield "An error occurred while generating the summary. Please try again."
+            logger.error(f"[SummaryHandlers] Failed to summarize text: {str(e)}", exc_info=True)
+            yield f"An error occurred while summarize the text. \n str(e.detail)"

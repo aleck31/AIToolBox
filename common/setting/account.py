@@ -52,7 +52,7 @@ class AccountSetting:
         """Delete a specific session"""
         try:
             # Delete session
-            await self.session_store.delete_session(session_id, username)
+            await self.session_store.delete_session_by_id(session_id)
             gr.Info(f"Deleted session {session_id}")
             
             # Return updated sessions list
@@ -67,14 +67,14 @@ class AccountSetting:
         """Clear history for a specific session"""
         try:
 
-            session = await self.session_store.get_session(session_id, username)
+            session = await self.session_store.get_session_by_id(session_id, username)
             
             # Clear session history
             if hasattr(session, 'history'):
                 session.history = []
             
             # Update session
-            await self.session_store.update_session(session, username)
+            await self.session_store.update_session(session)
             gr.Info(f"Cleared history for session {session.session_name}")
             
             # Return updated sessions list

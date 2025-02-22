@@ -3,78 +3,142 @@ import gradio as gr
 from typing import List, Dict, Optional, AsyncGenerator, Union
 from core.logger import logger
 from core.integration.service_factory import ServiceFactory
+from core.integration.chat_service import ChatService
+from llm.model_manager import model_manager
 from .prompts import CHAT_STYLES
-
-
-def moc_chat(name, message, history):
-    history = history or []
-    message = message.lower()
-    salutation = "Good morning" if message else "Good evening"
-    greeting = f"{salutation} {name}. {message} degrees today"
-    return greeting
 
 
 class ChatHandlers:
     """Handlers for chat functionality with style support and session management"""
     
-    # Shared service instances
-    chat_service = None
-    
-    # Chat history limits
-    MAX_DISPLAY_MSG = 30  # Number of messages to show in UI (N) - Shows last 15 conversation turns
-    MAX_CONTEXT_MSG = 12  # Number of messages to send to LLM (M) - Provides the last 6 complete conversation turns
+    # Shared service instance
+    _service: Optional[ChatService] = None
+
+    # Message limits
+    MAX_DISPLAY_MSG = 30  # Number of messages to show in UI
+    MAX_CONTEXT_MSG = 12  # Number of messages to send to LLM
 
     @classmethod
-    def initialize(cls):
-        """Initialize or refresh chat service with current tool configuration"""
-        from core.module_config import module_config
-        
-        # Get current enabled tools from module config
-        current_tools = module_config.get_enabled_tools('assistant')
-        
-        # Initialize service if not exists or tools have changed
-        if cls.chat_service is None:
-            cls.chat_service = ServiceFactory.create_chat_service('assistant', updated_tools=current_tools)
-            logger.info(f"Chat service initialized with tools: {current_tools}")
-        elif set(current_tools) != set(cls.chat_service.enabled_tools):
-            # Tools have changed, create new service instance
-            cls.chat_service = ServiceFactory.create_chat_service('assistant', updated_tools=current_tools)
-            logger.info(f"Chat service refreshed with updated tools: {current_tools}")
+    def _get_service(cls) -> ChatService:
+        """Get or initialize shared service instance"""
+        if cls._service is None:
+            logger.info("Initializing Assistant service")
+            cls._service = ServiceFactory.create_chat_service(
+                module_name='assistant'
+            )
+        return cls._service
 
     @classmethod
-    async def load_history(cls, request: gr.Request) -> tuple[List[Dict[str, str]], List[Dict[str, str]]]:
-        """Load chat history for current user
+    def get_user_name(cls, request) -> Optional[str]:
+        """Get authenticated user from FastAPI request"""
+        return request.session.get('user', {}).get('username')
         
+    @classmethod
+    def get_available_models(cls):
+        """Get list of available models with id and names"""
+        try:
+            # Always fetch fresh models to avoid stale cache issues
+            if models := model_manager.get_models(filter={'api_provider': 'Bedrock'}):
+                # Sort models by name for consistent display
+                sorted_models = sorted(models, key=lambda m: m.name)
+                return [(f"{m.name}, {m.api_provider}", m.model_id) for m in sorted_models]
+            else:
+                logger.warning("No Bedrock models available")
+                return []
+        except Exception as e:
+            logger.error(f"Failed to fetch models: {str(e)}", exc_info=True)
+            return []
+
+    @classmethod
+    async def load_history_confs(cls, request: gr.Request) -> tuple[List[Dict[str, str]], List[Dict[str, str]], str]:
+        """Load chat history and configuration for current user
+
         Args:
             request: Gradio request with session data
-            
+
         Returns:
-            Tuple of (visual_history, context_history) for Gradio chatbot display and state
+            Tuple containing:
+            - List of message dictionaries for UI display
+            - List of message dictionaries for chat state
+            - Selected model_id for the dropdown
         """
         try:
-            # Initialize services if needed
-            cls.initialize()
-
-            # Get authenticated user from FastAPI session
             user_name = request.session.get('user', {}).get('username')
             if not user_name:
-                return [], []
+                logger.warning("No authenticated user found in session")
+                return [], [], None
 
-            # Load latest chat history from service
-            latest_history = await cls.chat_service.load_chat_history(user_name, 'assistant', cls.MAX_DISPLAY_MSG)
+            service = cls._get_service()
             
-            return latest_history, latest_history
+            # Get fresh session and load data
+            session = await service.get_or_create_session(
+                user_name=user_name,
+                module_name='assistant',
+                bypass_cache=True
+            )
             
+            # Load history and model in parallel for better performance
+            history_future = service.load_session_history(
+                session=session,
+                max_number=cls.MAX_DISPLAY_MSG
+            )
+            model_future = service.get_session_model(session)
+            
+            latest_history, session_model_id = await asyncio.gather(
+                history_future, model_future
+            )
+
+            # Return same history for both UI and state to maintain consistency
+            return latest_history, latest_history, session_model_id
+
         except Exception as e:
-            logger.error(f"Error loading chat history: {str(e)}")
-            return [], []
-    
+            logger.error(f"Failed to load history and configs: {str(e)}", exc_info=True)
+            return [], [], None
+
+    @classmethod
+    async def update_model_id(cls, model_id: str, request: gr.Request = None):
+        """Update session model when dropdown selection changes"""
+        try:
+            # Get authenticated user and service
+            user_name = cls.get_user_name(request)
+            if not user_name:
+                logger.warning("No authenticated user for model update")
+                return
+
+            service = cls._get_service()
+            # Get active session
+            session = await service.get_or_create_session(
+                user_name=user_name,
+                module_name='assistant'
+            )
+            
+            # Update model
+            await service.update_session_model(session, model_id)
+
+        except Exception as e:
+            logger.error(f"Failed updating session model: {str(e)}", exc_info=True)
+
+    @classmethod
+    def _normalize_input(cls, ui_input: Union[str, Dict]) -> Optional[Dict]:
+        """Normalize different input formats into unified dictionary"""
+        # Text-only input
+        if isinstance(ui_input, str):
+            return {"text": ui_input.strip()}
+        # Dict input with potential files
+        normalized = {
+            "text": ui_input.get("text", "").strip(),
+            "files": ui_input.get("files", [])
+        }        
+        # Remove empty values
+        return {k: v for k, v in normalized.items() if v}
+
     @classmethod
     async def send_message(
         cls,
         ui_input: Union[str, Dict],
         ui_history: List[Dict[str, str]],
         chat_style: str,
+        model_id: str,
         request: gr.Request
     ) -> AsyncGenerator[Dict[str, Union[str, List[str]]], None]:
         """Stream assistant's response to user input
@@ -86,83 +150,84 @@ class ChatHandlers:
             request: Gradio request with session data
             
         Yields:
-            Dict with 'text' and optional 'files' keys for Gradio chatbot
+            Dict with 'text' and optional 'files' keys for Gradio
         """
         try:
-            # Initialize services if needed
-            cls.initialize()
-            
-            # Validate and format user input
+            # Input validation and normalization
             if not ui_input:
                 yield {"text": "Please provide a message or file."}
                 return
+            logger.debug(f"[ChatHandlers] Latest message from Gradio UI: {ui_input}")
+            # logger.debug(f"Chat history from Gradio UI:\n {ui_history}")
 
-            logger.debug(f"Latest message from Gradio UI:\n {ui_input}")
-            logger.debug(f"Chat history from Gradio UI:\n {ui_history}")
+            if not model_id:
+                yield {"text": "Please select a model for Assistant module."}
+                return
 
             # Convert Gradio input to a unified dictionary format
-            if isinstance(ui_input, str):
-                # Text-only input
-                unified_input = {"text": ui_input}
-            else:
-                # Dict input with potential files
-                unified_input = {"text": ui_input.get("text", "")}
-                if files := ui_input.get("files"):
-                    unified_input["files"] = files
+            unified_input = cls._normalize_input(ui_input)
 
             # Require either text or files
             if not unified_input["text"] and not unified_input.get("files"):
-                yield {"text": "Please provide a message or file."}
+                yield {"text": "Please provide a text message or file."}
                 return
 
-            # Get authenticated user from FastAPI session
-            user_name = request.session.get('user', {}).get('username')
+            # Get authenticated user and service
+            user_name = cls.get_user_name(request)
             if not user_name:
                 yield {"text": "Authentication required. Please log in again."}
                 return
+            service = cls._get_service()
 
             try:
-                # Get or create chat session
-                session = await cls.chat_service.get_or_create_session(
+                # Get or create chat session with error handling
+                session = await service.get_or_create_session(
                     user_name=user_name,
                     module_name='assistant'
                 )
+                if not session:
+                    raise ValueError("Failed to create or retrieve session")
                 
-                # Apply chat style configuration
-                style_config = CHAT_STYLES[chat_style]
+                # Apply chat style configuration with fallback
+                style_config = CHAT_STYLES.get(chat_style) or CHAT_STYLES["正常"]
                 session.context['system_prompt'] = style_config["prompt"]
                 
                 # Get style-specific parameters
                 style_params = {k: v for k, v in style_config["options"].items() if v is not None}
-                
-                # Stream response with accumulated display
-                buffered_text = ""
 
-                async for chunk in cls.chat_service.streaming_reply(
-                    session_id=session.session_id,
+                # Stream response with optimized accumulated handling
+                accumulated_text = ""
+                accumulated_files = []
+
+                async for chunk in service.streaming_reply(
+                    session=session,
                     ui_input=unified_input,
-                    ui_history=ui_history,
-                    style_params=style_params,
-                    max_number=cls.MAX_CONTEXT_MSG
+                    ui_history=ui_history[-cls.MAX_CONTEXT_MSG:],  # Limit context window
+                    style_params=style_params
                 ):
-                    # we need to ensure the streaming_reply() method also correctly returns the file_path to the handler .
-                    # Accumulate text for display while maintaining streaming
+                    # Handle streaming chunks for immediate UI updates
                     if isinstance(chunk, dict):
-                        if 'file_path' in chunk:
-                            # For file path content (from generate_image tool)
+                        # For file path content (from generate_image tool)
+                        if file_path := chunk.get('file_path', ''):
+                            accumulated_files.append(file_path)
                             yield {
-                                "text": buffered_text,
-                                "files": [chunk['file_path']]
+                                "text": accumulated_text,
+                                "files": accumulated_files
                             }
+                        # For text content
+                        elif text := chunk.get('text', ''):
+                            accumulated_text += text
+                            yield {"text": accumulated_text}
                     else:
-                        # For text content, accumulate and yield
-                        buffered_text += chunk
-                        yield {"text": buffered_text}
+                        # For legacy text only content
+                        accumulated_text += chunk
+                        yield {"text": accumulated_text}
                     await asyncio.sleep(0)  # Add sleep for Gradio UI streaming echo
+                logger.debug(f"[ChatHandlers] Service response text: {accumulated_text} \n files: {accumulated_files}")
             except Exception as e:
-                logger.error(f"Unexpected error in chat service: {str(e)}")
+                logger.error(f"[ChatHandlers] Unexpected error in chat service: {str(e)}", exc_info=True)
                 yield {"text": "An unexpected error occurred. Please try again."}
 
         except Exception as e:
-            logger.error(f"Error in chat handler: {str(e)}")
+            logger.error(f"[ChatHandlers] Failed to send message: {str(e)}", exc_info=True)
             yield {"text": "I apologize, but I encountered an error. Please try again."}

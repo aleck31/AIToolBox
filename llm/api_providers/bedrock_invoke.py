@@ -50,7 +50,7 @@ class BedrockInvoke(LLMAPIProvider):
         error_code = error.response['Error']['Code']
         error_message = error.response['Error']['Message']
         
-        logger.error(f"[BedrockInvoke] {error_message}")
+        logger.error(f"[BRInvokeProvider] {error_code} - {error_message}")
         if error_code in ['ThrottlingException', 'TooManyRequestsException']:
             raise error
 
@@ -75,10 +75,10 @@ class BedrockInvoke(LLMAPIProvider):
         try:
             # Prepare request body
             body = json.dumps(request_body)
-            logger.debug(f"[BedrockInvoke] Request body: {body}")
-            
+
             # Invoke model
-            logger.debug(f"[BedrockInvoke] Invoking model {self.config.model_id}")
+            logger.debug(f"[BRInvokeProvider] Invoking model {self.config.model_id}")
+            logger.debug(f"--- Request body: {body}")
             resp = self.client.invoke_model(
                 modelId=self.config.model_id,
                 body=body,
@@ -88,14 +88,11 @@ class BedrockInvoke(LLMAPIProvider):
             
             # Parse response
             raw_resp = resp.get('body').read()
-            # logger.debug(f"[BedrockInvoke] Raw response: {raw_response}")
-            parsed_resp = json.loads(raw_resp)
-            logger.debug(f"[BedrockInvoke] Parsed response: ('seeds': {parsed_resp['seeds']}, 'finish_reasons': {parsed_resp['finish_reasons']}, 'images': ['Place_holder'])")
-            
-            return parsed_resp
+            # logger.debug(f"[BRInvokeProvider] Raw response: {raw_resp}")
+            return json.loads(raw_resp)
             
         except ClientError as e:
-            logger.error(f"[BedrockInvoke] Client error response: {e.response}")
+            logger.error(f"[BRInvokeProvider] Client error response: {e.response}")
             self._handle_bedrock_error(e)
     
     def _invoke_model_stream_sync(

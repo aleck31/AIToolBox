@@ -64,6 +64,8 @@ class LLMModel:
     model_id: str
     api_provider: str
     modality: str
+    # input: str
+    # output: str
     vendor: str = ""      # Optional
     description: str = "" # Optional
 

@@ -14,19 +14,27 @@ from . import LLMModel
 # Default model configurations
 DEFAULT_MODELS = [
     LLMModel(
-        name='claude3.5-sonnet-v2',
+        name='claude3.6-sonnet',
         model_id='anthropic.claude-3-5-sonnet-20241022-v2:0',
         api_provider='Bedrock',
         modality='vision',
-        description='Claude 3.5 Sonnet model for general use',
+        description='Claude 3.5 Sonnet v2 model for general use',
         vendor='Anthropic'
     ),
     LLMModel(
-        name='gemini-pro',
+        name='gemini pro',
         model_id='gemini-1.5-pro',
         api_provider='Gemini',
         modality='vision',
         description='Gemini Pro model for text and vision',
+        vendor='Google'
+    ),
+    LLMModel(
+        name='gemini flash',
+        model_id='gemini-2.0-flash',
+        api_provider='Gemini',
+        modality='vision',
+        description='Gemini Flash model for text and vision',
         vendor='Google'
     ),
     LLMModel(
@@ -131,7 +139,7 @@ class ModelManager:
             return None
 
     def get_models(self, filter: Optional[Dict] = None) -> List[LLMModel]:
-        """Get configured LLM models with optional filtering
+        """Get configured models from Database with optional filtering
 
         Args:
             filter: Optional dictionary of model properties to filter by.

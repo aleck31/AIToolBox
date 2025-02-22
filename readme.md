@@ -48,7 +48,7 @@ Its user-friendly Gradio-based web interface provides an intuitive experience.
 
 * **Advanced Features**
   - **Summary** 📰: Document and text summarization
-  - **Reasoning** 🧠: Provide responses with comprehensive thinking
+  - **Asking** 🧠: Provide responses with comprehensive thinking
   - **Coding** 💻: Code generation and analysis
   - **Draw** 🎨: AI-powered image generation
   - **Settings** ⚙️: Customizable configurations
@@ -66,22 +66,27 @@ Its user-friendly Gradio-based web interface provides an intuitive experience.
 
 ## Technical Features
 
-* **Session Management**
-  - Modular architecture with clear separation of concerns:
-    * Models: Standardized session data structures
-    * Store: Pluggable storage backends (DynamoDB implementation)
-  - Standardized session format with metadata and context
-  - DynamoDB TTL-based automatic cleanup
-  - Efficient session reuse with AWS Cognito token validation
+* **Service Architecture**
+  - Layered design with base service abstraction:
+    * BaseService: Common session and LLM provider management
+    * Specialized services for chat, drawing, and general content
+    * Unified service factory with efficient instantiation
+  - Modular session management:
+    * Standardized session data structures
+    * Pluggable storage backends (DynamoDB implementation)
+    * Efficient caching with TTL-based cleanup
+    * Session metadata for model and context tracking
 
 * **LLM Integration**
-  - Bedrock converse_stream API for real-time responses
-  - Multimodal message support with proper format handling
-  - Efficient file processing and streaming
-  - Automatic format detection and normalization
-  - Tool use (function calling) support with extensible registry
-  - Enhanced tool result handling for generated content
-  - Optimized streaming responses for real-time updates
+  - Flexible provider management:
+    * Unified LLM configuration handling
+    * Provider-specific parameter optimization
+    * Efficient provider caching and reuse
+  - Advanced streaming capabilities:
+    * Real-time response streaming
+    * Multimodal content support
+    * Tool use (function calling) integration with extensible registry
+    * Optimized content handling and normalization
 
 ## Project Structure
 
@@ -97,8 +102,10 @@ llm-toolbox/
 │   ├── module_config.py    # Module configuration
 │   ├── integration/   # Service integration
 │   │   ├── service_factory.py  # Service creation factory
-│   │   ├── chat_service.py     # Chat service orchestration
-│   │   └── gen_service.py      # General generation service
+│   │   ├── base_service.py     # Base service with common functionality
+│   │   ├── chat_service.py     # Chat service implementation
+│   │   ├── draw_service.py     # Image generation service
+│   │   └── gen_service.py      # General content generation service
 │   └── session/       # Session management
 │       ├── models.py         # Data models for Session
 │       └── store.py          # DynamoDB-based session storage
@@ -121,7 +128,7 @@ llm-toolbox/
 │   ├── text/             # Text processing
 │   ├── summary/          # Text summarization
 │   ├── vision/           # Image analysis
-│   ├── reasoning/        # thinking and response
+│   ├── asking/           # Q&A with thinking
 │   ├── coding/           # Code-related features
 │   └── draw/             # Image generation
 └── utils/             # Utility functions

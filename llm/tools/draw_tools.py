@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict, Optional
 from core.logger import logger
 from core.integration.service_factory import ServiceFactory
+from core.module_config import module_config
 from modules.draw.prompts import NEGATIVE_PROMPTS
 
 
@@ -25,9 +26,13 @@ async def generate_image(
         Dict containing base64 encoded image and metadata
     """
     try:
-        # Get draw service instance
-        draw_service = ServiceFactory.create_draw_service('draw')
-        
+        # Initialize draw service
+        draw_service = ServiceFactory.create_draw_service(
+            module_name = 'draw', 
+            # use draw module's default model
+            model_id = module_config.get_default_model('draw')
+        )
+
         # Add negative prompt to defaults
         negative_prompts = NEGATIVE_PROMPTS.copy()
         if negative_prompt:
@@ -40,7 +45,7 @@ async def generate_image(
         used_seed=random.randrange(0, 4294967295)
 
         # Generate image with dimensions
-        image = await draw_service.text_to_image(
+        image = await draw_service.text_to_image_stateless(
             prompt=prompt,
             negative_prompt="\n".join(negative_prompts),
             seed=used_seed,

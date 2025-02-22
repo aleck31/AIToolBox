@@ -11,9 +11,7 @@ def create_interface() -> gr.Blocks:
     Returns:
         gr.Blocks: The configured Gradio interface
     """
-    # Get available models and default choice
-    model_names, _ = VisionHandlers.get_available_models()
-    default_model = model_names[0] if model_names else None
+
     # Create interface
     interface = gr.Blocks()
     
@@ -56,8 +54,7 @@ def create_interface() -> gr.Blocks:
                     input_model = gr.Dropdown(
                         info="Select vision model",
                         show_label=False,
-                        choices=model_names,
-                        value=default_model,
+                        choices=VisionHandlers.get_available_models(),
                         interactive=True,
                         min_width=120
                     )

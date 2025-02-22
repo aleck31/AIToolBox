@@ -1,130 +1,29 @@
-from fastapi import HTTPException
-from datetime import datetime
 from typing import Dict, List, Optional, AsyncIterator
 from core.logger import logger
-from core.session import Session, SessionStore, SessionMetadata
-from llm.model_manager import model_manager
-from llm.api_providers.base import LLMConfig, Message, LLMAPIProvider
+from core.session import Session
+from llm.api_providers.base import LLMConfig, Message
+from .base_service import BaseService
 
 
-#  GenService will be used by multiple modules, including text, vison, summary, coding, reasoning
-class GenService:
+class GenService(BaseService):
     """General content generation service"""
     
     def __init__(
         self,
         llm_config: LLMConfig,
-        enabled_tools: Optional[List[str]] = None
+        enabled_tools: Optional[List[str]] = None,
+        cache_ttl: int = 600  # 10 minutes default TTL
     ):
-        """Initialize text service with model configuration
-        
-        Args:
-            llm_config: LLM configuration containing model ID and parameters
-            enabled_tools: Optional list of tool module names to enable
-        """
-        self.session_store = SessionStore.get_instance()
-        self._llm_providers: Dict[str, LLMAPIProvider] = {}
-        self.enabled_tools = enabled_tools or []
-        
-        # Validate model exists and config matches
-        model = model_manager.get_model_by_id(llm_config.model_id)
-        if not model:
-            raise ValueError(f"Model not found: {llm_config.model_id}")
-        
+        """Initialize GenService with model configuration"""
+        super().__init__(enabled_tools=enabled_tools, cache_ttl=cache_ttl)
         self.default_llm_config = llm_config
 
-    def _get_llm_provider(self, model_id: str) -> LLMAPIProvider:
-        """Get or create LLM API provider for given model
-        
-        Args:
-            model_id: ID of the model to get provider for
-            
-        Returns:
-            LLMAPIProvider: Cached or newly created provider
-            
-        Raises:
-            ValueError: If model not found or provider not supported
-        """
-        # Return cached provider if exists
-        if model_id in self._llm_providers:
-            return self._llm_providers[model_id]
-            
-        # Get model info
-        model = model_manager.get_model_by_id(model_id)
-        if not model:
-            raise ValueError(f"Model not found: {model_id}")
-            
-        # Create config using model info and default parameters
-        config = LLMConfig(
-            api_provider=model.api_provider,
-            model_id=model_id,
-            max_tokens=self.default_llm_config.max_tokens,
-            temperature=self.default_llm_config.temperature,
-            top_p=self.default_llm_config.top_p,
-            stop_sequences=self.default_llm_config.stop_sequences
-        )
-        
-        # Create provider using factory method with enabled tools
-        provider = LLMAPIProvider.create(config, self.enabled_tools)
-        self._llm_providers[model_id] = provider
-        return provider
-
     def _prepare_message(self, content: Dict[str, str]) -> Message:
-        """Create standardized message format
-        
-        Args:
-            content: Dictionary containing text and optional files
-            
-        Returns:
-            Message: Standardized message object
-        """
+        """Create standardized message format"""
         return Message(
             role="user",
             content=content if isinstance(content, dict) else {"text": str(content)}
-            # context={"current_time": datetime.now().isoformat() }
         )
-
-    async def get_or_create_session(
-        self,
-        user_name: str,
-        module_name: str,
-        session_name: Optional[str] = None
-    ) -> Session:
-        """Get existing active session or Create new session for stateful generation"""
-        try:
-            # Query existing sessions to prevent creating duplicate session for a module
-            active_sessions = await self.session_store.list_sessions(
-                user_name=user_name,
-                module_name=module_name
-            )
-
-            if active_sessions:
-                session = active_sessions[0]
-                logger.debug(
-                    f"Found existing {module_name} session {session.session_id} "
-                    f"for user {user_name} (created: {session.created_time})"
-                )
-                return session
-
-            # Create new session if none active
-            session_name = session_name or f"{module_name.title()} Session"
-            metadata = SessionMetadata(module_name=module_name)
-            session = await self.session_store.create_session(
-                user_name=user_name,
-                module_name=module_name,
-                session_name=session_name,
-                metadata=metadata
-            )
-
-            logger.debug(
-                f"Created new {module_name} session {session.session_id} "
-                f"for user {user_name} (created: {session.created_time})"
-            )
-            
-            return session
-        except HTTPException as e:
-            logger.error(f"Error in [get_or_create_session]: {str(e)}")
-            raise e
 
     async def gen_text_stateless(
         self,
@@ -143,11 +42,10 @@ class GenService:
             str: Generated text
         """
         try:
-            # Always use current default model
+            # Always use the default model for stateless operations
             llm = self._get_llm_provider(self.default_llm_config.model_id)
             
-            # Debug input content
-            logger.debug(f"Content received for stateless generation: {content}")
+            logger.debug(f"[GenService] Content for stateless generation: {content}")
             
             # Create standardized message
             messages = [self._prepare_message(content)]
@@ -159,28 +57,25 @@ class GenService:
                 **(option_params or {})
             )
             
-            if response.content:
-                return response.content.get('text')
-            else:
-                raise ValueError("Empty response from LLM")           
+            if not response.content:
+                raise ValueError("Empty response from LLM")
+                
+            return response.content.get('text', '')
 
         except Exception as e:
-            logger.error(f"Error in [generate_text_stateless]: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Generation failed: {str(e)}"
-            )
+            logger.error(f"[GenService] Failed to generate text stateless: {str(e)}")
+            return "I apologize, but I encountered an error. Please try again."
 
     async def gen_text(
         self,
-        session_id: str,
+        session: Session,
         content: Dict[str, str],
         option_params: Optional[Dict[str, float]] = None
     ) -> str:
         """Generate text using the configured LLM with session context
         
         Args:
-            session_id: Session ID for context management
+            session: Session for context management
             content: Dictionary containing text and optional files
             option_params: Optional parameters for LLM generation
             
@@ -188,16 +83,13 @@ class GenService:
             str: Generated text
         """
         try:
-            # Get session without redundant validation
-            session = await self.session_store.get_session(session_id)
+            # Get model_id with fallback to module default
+            model_id = await self.get_session_model(session)
 
-            # Allow per-session model override with fallback to default model
-            model_id = session.metadata.model_id or self.default_model_config.model_id
             # Get LLM provider
             llm = self._get_llm_provider(model_id)
             
-            # Debug input content
-            logger.debug(f"Content received for session {session_id}: {content}")
+            logger.debug(f"[GenService] Content for session {session.session_id}: {content}")
             
             # Create message with multimodal content support
             message = self._prepare_message(content)
@@ -209,72 +101,62 @@ class GenService:
                 **(option_params or {})
             )
 
-            if response.content:
-                # Add interactions to session
-                session.add_interaction({
-                    "role": "user",
-                    "content": content
-                })
+            if not response.content:
+                raise ValueError("Empty response from LLM")
                 
-                session.add_interaction({
-                    "role": "assistant",
-                    "content": response.content,
-                    "metadata": response.metadata if hasattr(response, 'metadata') else None
-                })
-                
-                # Update session
-                await self.session_store.update_session(session, session.user_name)
+            # Add interactions to session
+            session.add_interaction({
+                "role": "user",
+                "content": content
+            })
+            
+            session.add_interaction({
+                "role": "assistant",
+                "content": response.content,
+                "metadata": getattr(response, 'metadata', None)
+            })
+            
+            # Update session
+            await self.session_store.update_session(session)
 
-                return response.content.get('text')            
-            else:
-                raise ValueError("Empty response from LLM")                
+            return response.content.get('text', '')
 
         except Exception as e:
-            logger.error(f"Error in [generate_text]: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Generation failed: {str(e)}"
-            )
+            logger.error(f"[GenService] Failed to generate text in session {session.session_id}: {str(e)}")
+            return "I apologize, but I encountered an error. Please try again."
 
     async def gen_text_stream(
         self,
-        session_id: str,
+        session: Session,
         content: Dict[str, str],
         option_params: Optional[Dict[str, float]] = None
     ) -> AsyncIterator[str]:
         """Generate text with streaming response and session context
         
         Args:
-            session_id: Session ID for context management
+            session: Session for context management
             content: Dictionary containing text and optional files
             option_params: Optional parameters for LLM generation
             
         Yields:
             str: Generated text chunks in streaming fashion
         """
-        try:
-            # Get session
-            session = await self.session_store.get_session(session_id)
-            
-            # Always use current default model
-            llm = self._get_llm_provider(self.default_llm_config.model_id)
-            
-            # Debug input content
-            logger.debug(f"Content received for session {session_id}: {content}")
-            
-            # Add user message to session
-            session.add_interaction({
-                "role": "user",
-                "content": content
-            })
-            
+        try:            
+            # Get model_id with fallback to module default
+            model_id = await self.get_session_model(session)
+
+            # Get LLM provider
+            llm = self._get_llm_provider(model_id)
+
+            logger.debug(f"[GenService] Content for session {session.session_name}: {content}")
+
             # Create message for generation
             message = self._prepare_message(content)
-            
-            # Stream response
-            accumulated_text = ''
-            chunk_metadata = None
-            
+
+            # Track response state
+            accumulated_text = []
+            response_metadata = {}
+
             try:
                 async for chunk in llm.generate_stream(
                     messages=[message],
@@ -282,30 +164,37 @@ class GenService:
                     **(option_params or {})
                 ):
                     if not isinstance(chunk, dict):
-                        logger.warning(f"Unexpected chunk type: {type(chunk)}")
+                        logger.warning(f"[GenService] Unexpected chunk type: {type(chunk)}")
                         continue
 
-                    # Extract metadata if present
-                    if 'metadata' in chunk:
-                        chunk_metadata = chunk['metadata']
+                    # Update metadata
+                    if metadata := chunk.get('metadata'):
+                        response_metadata.update(metadata)
                     
-                    # Try to get text content, even if empty
-                    if chunk_text := chunk.get('content', {}).get('text'):
-                        accumulated_text += chunk_text
-                        yield chunk_text
+                    # Process text content
+                    if text := chunk.get('content', {}).get('text', ''):
+                        accumulated_text.append(text)
+                        yield text
 
-                # Add assistant message to session after streaming completes
-                session.add_interaction({
-                    "role": "assistant",
-                    "content": {"text": accumulated_text},
-                    "metadata": chunk_metadata
-                })
-                await self.session_store.update_session(session, session.user_name)
-                    
+                # Add complete interaction to session
+                if accumulated_text:
+                    # Add messages in order
+                    session.add_interaction({
+                        "role": "user",
+                        "content": content
+                    })
+                    session.add_interaction({
+                        "role": "assistant",
+                        "content": {"text": ''.join(accumulated_text)},
+                        "metadata": response_metadata or None
+                    })
+                    # Persist to session store
+                    await self.session_store.update_session(session)
+
             except Exception as e:
-                logger.error(f"LLM error in session {session_id}: {str(e)}")
+                logger.error(f"[GenService] Failed to get response from LLM: {str(e)}")
                 yield "I apologize, but I encountered an error while generating the response."
-                
+
         except Exception as e:
-            logger.error(f"Error in [generate_text_stream]: {str(e)}")
+            logger.error(f"[GenService] Failed to generate text stream in session {session.session_id}: {str(e)}")
             yield "I apologize, but I encountered an error. Please try again."

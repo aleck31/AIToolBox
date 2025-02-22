@@ -270,10 +270,10 @@ class ModuleConfig:
                     'max_tokens': 1000
                 }
             },
-            'reasoning': {
-                'setting_name': 'reasoning',
+            'asking': {
+                'setting_name': 'asking',
                 'type': 'module',
-                'description': 'Reasoning Module',
+                'description': 'Asking Module',
                 'default_model': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
                 'system_prompt': 'You are able to think before and during responding.',
                 'parameters': {

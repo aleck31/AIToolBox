@@ -21,8 +21,7 @@ class ServiceFactory:
             # Initialize default models if none exist
             models = model_manager.get_models()
             if not models:
-                model_manager.init_default_models()
-                models = model_manager.get_models()
+                models = model_manager.init_default_models()
 
             # Get model configuration
             if model_id:
@@ -70,14 +69,15 @@ class ServiceFactory:
             raise
 
     @classmethod
-    def _get_llm_config_by_module(cls, module_name: str) -> LLMConfig:
+    def _get_llm_config_by_module(cls, module_name: str, model_id: str = None) -> LLMConfig:
         """Create LLM configuration for a module"""
-        # Get model configuration from module config
-        model_id = module_config.get_default_model(module_name)       
+        # Get model_id from module configuration if there are no model_id
+        model_id = model_id or module_config.get_default_model(module_name)
         llm_model = model_manager.get_model_by_id(model_id)
         if not llm_model:
             raise ValueError(f"Model not found: {model_id}")
-
+        
+        # Get model configuration from module config    
         params = module_config.get_inference_params(module_name) or {}
         if params:                        
             # Create LLM config with module parameters
@@ -93,52 +93,43 @@ class ServiceFactory:
             return cls.create_default_llm_config(model_id=model_id)
 
     @classmethod
-    def create_gen_service(cls, module_name: str, updated_tools=None) -> GenService:
-        """Create and configure general service for modules"""
-        try:
-            llm_config = cls._get_llm_config_by_module(module_name)
-            # Get module configuration for tools
-
-            # Get tools from module configuration if there are no updated tools
-            enabled_tools = updated_tools or module_config.get_enabled_tools(module_name)
-
-            return GenService(llm_config, enabled_tools=enabled_tools)
-        except Exception as e:
-            logger.error(f"Failed to create service for {module_name}: {str(e)}")
-            raise
-
-    @classmethod
-    def create_chat_service(cls, module_name: str, updated_tools=None) -> ChatService:
-        """Create and configure chat service"""
-        try:
-            # Get LLM configuration
-            llm_config = cls._get_llm_config_by_module(module_name)
-            
-            # Get tools from module configuration if there are no updated tools
-            enabled_tools = updated_tools or module_config.get_enabled_tools(module_name)
-            
-            # Create service with tool configuration
-            return ChatService(llm_config, enabled_tools=enabled_tools)
-        except Exception as e:
-            logger.error(f"Failed to create service for {module_name}: {str(e)}")
-            raise
-
-    @classmethod
-    def create_draw_service(cls, module_name: str = 'draw') -> DrawService:
-        """Create and configure draw service
+    def _create_service(cls, service_class, module_name: str, model_id=None, updated_tools=None):
+        """Generic service creation method
         
         Args:
-            module_name: Name of the module (defaults to 'draw')
+            service_class: The service class to instantiate
+            module_name: Name of the module requesting service
+            model_id: Optional model ID to use as default
+            updated_tools: Optional list of tool names to enable
             
         Returns:
-            DrawService: Configured draw service instance
+            Configured service instance
         """
         try:
-            # Get LLM configuration for draw module
-            llm_config = cls._get_llm_config_by_module(module_name)
+            # Get LLM configuration if model_id provided
+            llm_config = cls._get_llm_config_by_module(module_name, model_id) if model_id else None
+            kwargs = {'llm_config': llm_config}
+
+            # Get tools from module configuration if no updated tools provided
+            if enabled_tools := updated_tools or module_config.get_enabled_tools(module_name):
+                kwargs['enabled_tools'] = enabled_tools
             
-            # Create service (no tools needed for image generation)
-            return DrawService(llm_config)
+            return service_class(**kwargs)
         except Exception as e:
-            logger.error(f"Failed to create draw service: {str(e)}")
+            logger.error(f"Failed to create {service_class.__name__} for {module_name}: {str(e)}")
             raise
+
+    @classmethod
+    def create_gen_service(cls, module_name: str, model_id=None, updated_tools=None) -> GenService:
+        """Create and configure general service"""
+        return cls._create_service(GenService, module_name, model_id, updated_tools)
+
+    @classmethod
+    def create_chat_service(cls, module_name: str, model_id=None, updated_tools=None) -> ChatService:
+        """Create and configure chat service"""
+        return cls._create_service(ChatService, module_name, model_id, updated_tools)
+
+    @classmethod
+    def create_draw_service(cls, module_name: str = 'draw', model_id=None, updated_tools=None) -> DrawService:
+        """Create and configure draw service"""
+        return cls._create_service(DrawService, module_name, model_id, updated_tools)
