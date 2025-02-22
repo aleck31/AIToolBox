@@ -207,23 +207,26 @@ class ChatHandlers:
                 ):
                     # Handle streaming chunks for immediate UI updates
                     if isinstance(chunk, dict):
-                        # For file path content (from generate_image tool)
+                        # Handle streaming chunks with state preservation
+                        if text := chunk.get('text', ''):
+                            accumulated_text += text
                         if file_path := chunk.get('file_path', ''):
                             accumulated_files.append(file_path)
-                            yield {
+
+                        # Always yield both text and files together to maintain state
+                        yield {
+                            "role": "assistant",
+                            "content": {
                                 "text": accumulated_text,
                                 "files": accumulated_files
                             }
-                        # For text content
-                        elif text := chunk.get('text', ''):
-                            accumulated_text += text
-                            yield {"text": accumulated_text}
+                        }
                     else:
                         # For legacy text only content
                         accumulated_text += chunk
                         yield {"text": accumulated_text}
                     await asyncio.sleep(0)  # Add sleep for Gradio UI streaming echo
-                logger.debug(f"[ChatHandlers] Service response text: {accumulated_text} \n files: {accumulated_files}")
+
             except Exception as e:
                 logger.error(f"[ChatHandlers] Unexpected error in chat service: {str(e)}", exc_info=True)
                 yield {"text": "An unexpected error occurred. Please try again."}

@@ -547,7 +547,7 @@ class BedrockConverse(LLMAPIProvider):
 
             while True:  # Continue until no more tool uses
                 has_tool_use = False
-                accumulated_text = ""   # track and preserve the text content that comes before a tool use
+                # accumulated_text = ""   # track and preserve the text content that comes before a tool use
 
                 # Convert synchronous stream to async
                 for chunk in self._converse_stream_sync(
@@ -555,19 +555,23 @@ class BedrockConverse(LLMAPIProvider):
                     system_prompt=system_prompt,
                     **kwargs
                 ):
+                    # Stream text content immediately if present
+                    if text := chunk.get('content', {}).get('text'):
+                        yield {
+                            'content': {'text': text},
+                            'metadata': chunk.get('metadata', {})
+                        }
+
                     # Handle tool use if present
                     tool_use = chunk.get('tool_use', {})
                     if tool_use and isinstance(tool_use.get('input'), dict):
                         has_tool_use = True
                         logger.debug(f"[BRConverseProvider] Tool use detected: {tool_use}")
                         
-                        # Add LLM message with both text and toolUse
+                        # Add LLM message with toolUse
                         assistant_message = {
                             'role': chunk.get('role'),
-                            'content': [
-                                {'text': accumulated_text} if accumulated_text else None,
-                                {'toolUse': tool_use}
-                            ]
+                            'content': [{'toolUse': tool_use}]  # not including preceding text content
                         }
                         llm_messages.append(assistant_message)
                         logger.debug(f"[BRConverseProvider] Added LLM message: {assistant_message}")
@@ -580,9 +584,8 @@ class BedrockConverse(LLMAPIProvider):
                             )
                             message_with_result = self._handle_tool_result(tool_use, execute_result)
                             
-                            # Track file paths from tool results after handling
+                            # Stream file_path immediately if present
                             if isinstance(execute_result, dict):
-                                # Stream file_path in response if present
                                 if file_path := execute_result.get('metadata', {}).get('file_path'):
                                     yield {'content': {'file_path': file_path}}
 
@@ -592,18 +595,10 @@ class BedrockConverse(LLMAPIProvider):
                                 tool_use, str(e), is_error=True
                             )
 
-                        # add tool execute result to conversation
+                        # Add tool execute result to conversation
                         llm_messages.append(message_with_result)
-                        logger.debug(f"[BRConverseProvider] Added User message w/tool result: {message_with_result}")
+                        logger.debug(f"[BRConverseProvider] Added User message w/tool result: <content omitted>")
                         break  # Break inner loop to get next response with tool result
-
-                    # Stream text content if present
-                    elif text := chunk.get('content', {}).get('text'):
-                        accumulated_text += text
-                        yield {
-                            'content': {'text': text},
-                            'metadata': chunk.get('metadata', {})
-                        }
 
                 # Break outer loop if no tool use in this turn
                 if not has_tool_use:
