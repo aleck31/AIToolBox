@@ -33,13 +33,13 @@ def log_unauth_access(request: Request, details: str = None):
 
 
 # Dependency to get the current user or raises exception
-def get_user(request: Request):
-    """Get current user from session"""
+def get_auth_user(request: Request):
+    """Get current authorized user"""
     # Log full session data at DEBUG level
     # logger.debug(f"Full request session data: {dict(request.session)}")
-    
+
     user = request.session.get('user')
-    
+
     if not user:
         # Log unauthorized access attempt
         log_unauth_access(
@@ -47,12 +47,13 @@ def get_user(request: Request):
             details='Attempted to access protected route without valid session'
         )
         raise HTTPException(status_code=401, detail="Not authenticated")
-        
+        #ToDo: Redirect users to the homepage instead of showing a 401 error, improving user experience.
+
     username = user.get('username')
     # Log access token for debugging
     access_token = user.get('access_token')
     logger.debug(f"Access token for [{username}] verified: {bool(access_token)}")
-    
+
     return username
 
 
@@ -79,13 +80,13 @@ async def auth(request: Request, username: str = Form(...), password: str = Form
         # Create response with redirect
         response = RedirectResponse(url='/main', status_code=303)
         return response
-    
+
     # Log failed authentication attempt
     log_unauth_access(
         request=request,
         details=f'Failed authentication attempt for user: {username}'
     )
-    
+
     # Redirect back to login with error
     return RedirectResponse(
         url=f'/login?error=Invalid username or password',
@@ -102,7 +103,7 @@ async def logout(request: Request):
         logger.debug(f"Session data before clear: {dict(request.session)}")
         request.session.clear()
         logger.debug("Session cleared during logout")
-        
+
         # Create response with redirect
         response = RedirectResponse(url='/login')
         return response

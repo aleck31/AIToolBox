@@ -5,7 +5,7 @@ from core.logger import logger
 from core.module_config import module_config
 
 # List of available modules
-MODULE_LIST = ['assistant', 'chatbot', 'text', 'summary', 'vision', 'coding', 'asking', 'draw']
+MODULE_LIST = ['assistant', 'chatbot', 'text', 'summary', 'vision', 'asking', 'coding', 'draw']
 
 def format_paras_json(parameters):
     """Format module parameters as JSON text for UI display"""

@@ -67,7 +67,7 @@ class AccountSetting:
         """Clear history for a specific session"""
         try:
 
-            session = await self.session_store.get_session_by_id(session_id, username)
+            session = await self.session_store.get_session_by_id(session_id)
             
             # Clear session history
             if hasattr(session, 'history'):

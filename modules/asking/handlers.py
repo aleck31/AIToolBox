@@ -91,7 +91,7 @@ class AskingHandlers:
                 in_thinking_mode = True  # Always starts with thinking
                 
                 async for chunk in service.gen_text_stream(
-                    session_id=session.session_id,
+                    session=session,
                     content=content
                 ):
                     if in_thinking_mode:

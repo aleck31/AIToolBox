@@ -10,7 +10,7 @@ import gradio as gr
 
 from core.config import app_config  # Fixed import path
 from llm.model_manager import model_manager
-from common.login import router as login_router, get_user
+from common.login import router as login_router, get_auth_user
 from common.main_ui import create_main_interface
 from core.logger import logger
 
@@ -69,7 +69,7 @@ def public(request: Request):
     """Root route handler"""
     logger.debug("Accessing root path")
     try:
-        get_user(request)
+        get_auth_user(request)
         logger.debug("User found, redirecting to main")
         return RedirectResponse(url='/main')
     except HTTPException:
@@ -89,7 +89,7 @@ app = gr.mount_gradio_app(
     app, 
     main_ui, 
     path="/main",
-    auth_dependency=get_user
+    auth_dependency=get_auth_user
 )
 
 if __name__ == "__main__":

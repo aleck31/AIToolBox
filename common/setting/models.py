@@ -2,6 +2,7 @@
 import gradio as gr
 from llm.model_manager import model_manager, LLMModel
 
+
 def get_model_choices():
     """Get list of available models for dropdown"""
     models = model_manager.get_models()
@@ -33,6 +34,7 @@ def add_model(name, model_id, api_provider, vendor, modality, description):
         gr.Info(f"Added new model: {name}", duration=3)
         
         return refresh_models()
+
     except Exception as e:
         gr.Error(str(e))
         return None
@@ -56,6 +58,7 @@ def update_model(name, model_id, api_provider, vendor, modality, description):
         gr.Info(f"Updated model: {name}", duration=3)
         
         return refresh_models()
+
     except Exception as e:
         gr.Error(str(e))
         return None
@@ -70,6 +73,7 @@ def delete_model(model_id):
         gr.Info(f"Deleted model: {model_id}", duration=3)
         
         return refresh_models()
+
     except Exception as e:
         gr.Error(str(e))
         return None

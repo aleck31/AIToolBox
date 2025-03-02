@@ -142,15 +142,12 @@ class BaseService:
             # Return existing model_id if set
             if model_id := session.metadata.model_id:
                 return model_id
-                
-            # Get default model from module config
-            if default_model := module_config.get_default_model(session.metadata.module_name):
-                # Update session with default model
-                session.metadata.model_id = default_model
-                await self.session_store.update_session(session)
-                logger.debug(f"[BaseService] Updated session with default model: {default_model}")    
-                return default_model
-                
+
+            # Falls back to module config default model
+            if model_id := module_config.get_default_model(session.metadata.module_name):
+                logger.debug(f"[BaseService] Falls back to module default model: {model_id}")
+                return model_id
+
             logger.warning(f"[BaseService] No model ID found for {session.metadata.module_name}")
             return None
 

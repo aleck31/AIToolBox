@@ -18,7 +18,7 @@ class SummaryHandlers:
     @classmethod
     async def _get_service(cls) -> GenService:
         """Get or initialize service lazily"""
-        if cls._draw_service is None:
+        if cls._service is None:
             logger.info("[SummaryHandlers] Initializing service")
             cls._service = ServiceFactory.create_gen_service('summary')
         return cls._service

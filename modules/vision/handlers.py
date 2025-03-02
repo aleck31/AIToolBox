@@ -38,8 +38,7 @@ class VisionHandlers:
         if cls._cached_models is None:
             try:
                 if models := model_manager.get_models(filter={'modality': 'vision'}):
-                    # Sort models by name for consistent display
-                    cls._cached_models = sorted(models, key=lambda m: m.name)
+                    cls._cached_models = models
                     # logger.debug(f"Cached available multimodal models: {cls._cached_models}")              
                 else:
                     logger.warning("No vision models available")

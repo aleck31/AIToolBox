@@ -147,7 +147,7 @@ class ModelManager:
                    Supported properties: name, model_id, api_provider, modality, vendor
 
         Returns:
-            List of LLMModel instances matching the filter criteria
+            List of LLMModel instances matching the filter criteria          
         """
         try:
             # Get all models from DynamoDB
@@ -164,11 +164,13 @@ class ModelManager:
             # Convert stored data to LLMModel instances
             models_data = self._decimal_to_float(response['Item'].get('models', []))
             models = [LLMModel.from_dict(model_data) for model_data in models_data]
+            # Sort models by name for consistent display
+            sorted_models =  sorted(models, key=lambda m: m.name)            
             
             # Apply filters if provided
             if filter:
                 filtered_models = []
-                for model in models:
+                for model in sorted_models:
                     matches = True
                     for key, value in filter.items():
                         if not hasattr(model, key) or getattr(model, key) != value:
@@ -177,8 +179,8 @@ class ModelManager:
                     if matches:
                         filtered_models.append(model)
                 return filtered_models
-                
-            return models
+
+            return sorted_models
             
         except ClientError as e:
             logger.error(f"Error getting LLM models: {str(e)}")

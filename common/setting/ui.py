@@ -3,7 +3,7 @@
 import gradio as gr
 from fastapi import HTTPException
 from llm import VALID_MODALITY
-from llm.tools.bedrock_tools import tool_registry
+from llm.tools.tool_registry import br_registry
 from core.logger import logger
 from .account import account
 from .models import (
@@ -22,8 +22,7 @@ from .modules import (
 
 # Update tools interactivity based on model selection
 def set_tools_visible(model_id):
-    # tobefix: 
-    if model_id and model_id.startswith("anthropic"):
+    if model_id and "claude" in model_id.lower():
         return gr.CheckboxGroup(visible=True)
     else:
         return gr.CheckboxGroup(visible=False)
@@ -129,7 +128,7 @@ with gr.Blocks() as tab_setting:
                 module_tools = {}
                 module_save_btns = {}
                 # Tools List from registry
-                available_tools = list(tool_registry.tools.keys())
+                available_tools = list(br_registry.tools.keys())
 
                 for module_name in MODULE_LIST:
                     with gr.Group():
@@ -146,7 +145,6 @@ with gr.Blocks() as tab_setting:
                                     choices=[],  # Will be populated from state
                                     interactive=True
                                 )
-
                                 # Tools config
                                 module_tools[module_name] = gr.CheckboxGroup(
                                     label="Enabled Tools",
@@ -253,12 +251,12 @@ with gr.Blocks() as tab_setting:
                     row = models.iloc[evt.index[0]]
                 return {
                     form_title: gr.Markdown("| **Edit Model**"),
-                    model_name: row[0],
-                    model_id: gr.Textbox(value=row[1], interactive=False),
-                    model_provider: row[2],
-                    model_vendor: row[3],
-                    model_modality: row[4],
-                    model_desc: row[5],
+                    model_name: row.iloc[0],
+                    model_id: gr.Textbox(value=row.iloc[1], interactive=False),
+                    model_provider: row.iloc[2],
+                    model_vendor: row.iloc[3],
+                    model_modality: row.iloc[4],
+                    model_desc: row.iloc[5],
                     btn_submit: gr.Button(value="Update Model", variant="primary"),
                     btn_delete: gr.Button(visible=True),
                     btn_cancel: gr.Button(visible=True)

@@ -77,7 +77,7 @@ class CodingHandlers:
             # Stream architecture content
             arch_buffer = ""
             async for chunk in service.gen_text_stream(
-                session_id=session.session_id,
+                session=session,
                 content=content
             ):
                 arch_buffer += chunk
@@ -117,7 +117,7 @@ class CodingHandlers:
 
             code_buffer = ""
             async for chunk in service.gen_text_stream(
-                session_id=session.session_id,
+                session=session,
                 content=content
             ):
                 code_buffer += chunk
