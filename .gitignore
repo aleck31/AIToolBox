@@ -13,16 +13,17 @@ develop-eggs/
 dist/
 node_modules
 
+# vscode
+.vscode
+.idea
+.DS_Store
+
 # Environments
 .env
 .venv
 env/
 venv/
-
-# vscode
-.vscode
-.idea
-.DS_Store
+.pid
 
 flagged
 *.log
@@ -30,4 +31,4 @@ logs/
 demo*
 tmp/*
 config.json
-.pid
+assets/generated/

@@ -2,7 +2,7 @@
 import time
 import random
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 from core.logger import logger
 from core.integration.service_factory import ServiceFactory
 from core.module_config import module_config
@@ -37,12 +37,13 @@ async def generate_image(
         negative_prompts = NEGATIVE_PROMPTS.copy()
         if negative_prompt:
             negative_prompts.append(negative_prompt)
-        
-        # Ensure English prompt
+
+        # Validate prompt
         if not prompt:
             raise ValueError("Prompt is required")
-        
-        used_seed=random.randrange(0, 4294967295)
+
+        # Generate a random seed for reproducibility
+        used_seed = random.randrange(0, 4294967295)
 
         # Generate image with dimensions
         image = await draw_service.text_to_image_stateless(
@@ -51,13 +52,17 @@ async def generate_image(
             seed=used_seed,
             aspect_ratio=aspect_ratio
         )
-        
-        # Create images directory if it doesn't exist
-        images_dir = Path("/tmp/generated_images")
+
+        # Save to project's assets directory
+        images_dir = Path("assets/generated/images")
         images_dir.mkdir(parents=True, exist_ok=True)
-        # Save image to a file that Gradio can serve
+
+        # Create a unique filename with timestamp and seed
         timestamp = int(time.time())
-        file_path = images_dir / f"img_{timestamp}_{used_seed}.png"
+        filename = f"img_{timestamp}_{used_seed}.png"
+        file_path = images_dir / filename
+
+        # Save the image
         image.save(file_path, format="PNG")
 
         # Return the file path for Gradio to serve
@@ -70,9 +75,18 @@ async def generate_image(
             }
         }
         
+    except ValueError as e:
+        logger.error(f"[Tool] Validation error in generate_image tool: {str(e)}")
+        return {"error": f"Validation error: {str(e)}"}
+    except TypeError as e:
+        logger.error(f"[Tool] Type error in generate_image tool: {str(e)}")
+        return {"error": f"Type error: {str(e)}"}
+    except IOError as e:
+        logger.error(f"[Tool] I/O error in generate_image tool: {str(e)}")
+        return {"error": f"Failed to save image: {str(e)}"}
     except Exception as e:
-        logger.error(f"Error in generate_image tool: {str(e)}")
-        return {"error": str(e)}
+        logger.error(f"[Tool] Unexpected error in generate_image tool: {str(e)}")
+        return {"error": f"An unexpected error occurred: {str(e)}"}
 
 
 # Tool specifications in Bedrock format

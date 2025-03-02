@@ -7,13 +7,13 @@ from urllib.parse import urlparse
 from core.logger import logger
 
 # Constants
-MAX_CONTENT_LENGTH = 2048 * 1024  # 2MB
-TIMEOUT_SECONDS = 15
 CACHE_TTL = 86400  # Cache for 1 day
 CACHE_MAX_SIZE = 1000  # Maximum number of cached responses
+MAX_CONTENT_LENGTH = 2048 * 1024  # 2MB
+TIMEOUT_SECONDS = 15
 
-# Create cache for responses
-response_cache = TTLCache(maxsize=CACHE_MAX_SIZE, ttl=CACHE_TTL)
+# Create caches for responses
+url_cache = TTLCache(maxsize=CACHE_MAX_SIZE, ttl=CACHE_TTL)
 
 UserAgents = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36",
@@ -57,22 +57,18 @@ async def fetch_content(url: str, service: str, session) -> dict:
         'User-Agent': UserAgents[rd.randint(0, len(UserAgents)-1)],
         'Accept': 'text/plain',
         'Accept-Encoding': 'gzip, deflate',
-        'Connection': 'keep-alive',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
+        'Connection': 'keep-alive'
     }
 
     try:
         if service == 'jina':
             req_url = f"https://r.jina.ai/{url}"
-        elif service == 'urltomarkdown':
+        else: # 'urltomarkdown':
             req_url = f"https://urltomarkdown.herokuapp.com/?url={url}"
-        else:  # markdowner
-            req_url = f"https://md.dhr.wtf/?url={url}"
 
         async with session.get(req_url, headers=headers, timeout=TIMEOUT_SECONDS) as resp:
             resp.raise_for_status()
-            
+
             # Check content length
             if resp.headers.get('content-length'):
                 content_length = int(resp.headers['content-length'])
@@ -81,18 +77,15 @@ async def fetch_content(url: str, service: str, session) -> dict:
 
             # Return plain text response in Markdown format
             try:
-                content = await resp.text()
-                
-                if not content:
+                if content := await resp.text():
+                    return {
+                        "content": content,
+                        "url": url,
+                        "timestamp": time.time()
+                    }
+                else:
                     return {"error": "No content found", "service": service}
-                    
-                return {
-                    "content": content,
-                    "url": url,
-                    "service": service,
-                    "timestamp": time.time()
-                }
-                
+
             except ValueError:
                 return {"error": "Invalid response format", "service": service}
     
@@ -118,36 +111,27 @@ async def get_text_from_url_with_cache(url: str):
         return {"error": error}
 
     async with aiohttp.ClientSession() as session:
-        # Fetch from both services concurrently
-        tasks = [
-            fetch_content(url, 'jina', session),
-            fetch_content(url, 'urltomarkdown', session)
-        ]
+        # Use only the reliable 'jina' service
+        result = await fetch_content(url, 'jina', session)
         
-        # Wait for the first successful response or all failures
-        results = []
-        for task in asyncio.as_completed(tasks):
-            result = await task
-            if "error" not in result:
-                # Cache successful response
-                response_cache[url] = result
-                return result
-            results.append(result)
+        if "error" not in result:
+            # Cache successful response
+            url_cache[url] = result
+            return result
         
-        # If we get here, both services failed
-        # Return the most informative error
-        errors = [r["error"] for r in results]
-        return {"error": f"All services failed: {'; '.join(errors)}"}
+        # If jina service failed, return the error
+        return {"error": f"Service failed: {result['error']}"}
 
 async def get_text_from_url(url: str):
     """Cached wrapper for get_text_from_url_with_cache"""
     # Check cache first
-    if url in response_cache:
-        cached_result = response_cache[url]
+    if url in url_cache:
+        cached_result = url_cache[url]
         cached_result["cached"] = True
         return cached_result
         
     return await get_text_from_url_with_cache(url)
+
 
 # Tool specification in Bedrock format
 list_of_tools_specs = [

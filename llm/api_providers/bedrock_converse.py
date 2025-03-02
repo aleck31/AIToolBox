@@ -8,7 +8,7 @@ from botocore import exceptions as boto_exceptions
 from utils.aws import get_aws_client
 from utils.file import get_file_name, get_file_type_and_format, read_file_bytes
 from llm import ResponseMetadata
-from llm.tools.bedrock_tools import tool_registry
+from llm.tools.tool_registry import br_registry
 from .base import LLMAPIProvider, LLMConfig, Message, LLMResponse
 
 
@@ -31,7 +31,7 @@ class BedrockConverse(LLMAPIProvider):
             tool_specs = []
             for tool_name in tools:
                 try:
-                    tool_spec = tool_registry.get_tool_spec(tool_name)
+                    tool_spec = br_registry.get_tool_spec(tool_name)
                     if tool_spec:
                         tool_specs.append(tool_spec)
                         logger.info(f"Loaded tool specification for {tool_name}")
@@ -475,7 +475,7 @@ class BedrockConverse(LLMAPIProvider):
   
                 try:
                     # Execute tool
-                    result = await tool_registry.execute_tool(
+                    result = await br_registry.execute_tool(
                         tool_use['name'],
                         **tool_use['input']
                     )
@@ -578,7 +578,7 @@ class BedrockConverse(LLMAPIProvider):
                         
                         try:
                             # Execute tool with unpacked input
-                            execute_result = await tool_registry.execute_tool(
+                            execute_result = await br_registry.execute_tool(
                                 tool_use['name'],
                                 **tool_use['input']
                             )

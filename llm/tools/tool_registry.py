@@ -80,12 +80,14 @@ Tool_Packages = {
     'get_weather': 'weather_tools',
     # 'get_location_coords': 'weather_tools',
     'get_text_from_url': 'web_tools',
+    'search_wikipedia': 'search_tools',
+    'search_internet': 'search_tools',
     'generate_image': 'draw_tools'
 }
 
 # Create global registry instance
-tool_registry = BedrockToolRegistry()
+br_registry = BedrockToolRegistry()
 
 # Initialize default tools
 for tool_name, package in Tool_Packages.items():
-    tool_registry.load_tool(package, tool_name)
+    br_registry.load_tool(package, tool_name)

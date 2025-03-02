@@ -7,7 +7,7 @@ from botocore import exceptions as boto_exceptions
 from utils.aws import get_aws_client
 from llm import ResponseMetadata
 from .base import LLMAPIProvider, LLMConfig, Message, LLMResponse
-from ..tools.bedrock_tools import tool_registry
+from ..tools.tool_registry import br_registry
 
 
 class BedrockInvoke(LLMAPIProvider):

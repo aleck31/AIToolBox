@@ -117,7 +117,7 @@ llm-toolbox/
 │   │   ├── aws_bedrock.py      # AWS Bedrock integration
 │   │   └── google_gemini.py    # Google Gemini integration
 │   └── tools/         # LLM tools implementations
-│       └── bedrock_tools.py  # Tool registry for Bedrock
+│       └── tool_registry.py  # Tool registry for Bedrock
 ├── common/            # Common modules
 │   ├── login/            # Authentication UI
 │   ├── setting/          # Module settings

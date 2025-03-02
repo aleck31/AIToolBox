@@ -9,5 +9,7 @@ uvicorn[standard]
 python-dotenv
 cachetools
 aiohttp
+wikipedia
+googlesearch-python
 # selectolax
 # pdf2image
