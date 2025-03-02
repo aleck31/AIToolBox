@@ -1,6 +1,5 @@
 import gradio as gr
 from .handlers import ChatHandlers
-from .prompts import CHAT_STYLES
 
 
 def create_interface() -> gr.Blocks:
@@ -8,8 +7,7 @@ def create_interface() -> gr.Blocks:
 
     # Supported file types with specific extensions
     SUPPORTED_FILES = [
-        'text', 
-        'image',
+        'text', 'image',
         '.pdf', '.doc', '.docx', '.md'  # Additional document types
     ]
 
@@ -26,29 +24,20 @@ def create_interface() -> gr.Blocks:
     chatbot = gr.Chatbot(
         type='messages',
         show_copy_button=True,
-        min_height=560,
+        min_height='60vh',
+        max_height='80vh',
         avatar_images=(None, "modules/assistant/avata_bot.png"),
-        render=False,
-        height=600,  # Fixed height for better performance
-    )
-
-    input_style = gr.Radio(
-        label="Chat Style:", 
-        show_label=False,
-        choices=list(CHAT_STYLES.keys()),
-        value="正常",
-        info="Select conversation style",
-        render=False,
-        container=False  # Reduce container overhead
+        render=False
     )
 
     # Initialize model dropdown
     input_model = gr.Dropdown(
         label="Chat Model:", 
         show_label=False,
-        info="Select chat model",
+        info="Select foundation model",
         choices=ChatHandlers.get_available_models(),
-        interactive=True
+        interactive=True,
+        render=False
     )
 
     with gr.Blocks() as chat_interface:
@@ -68,7 +57,8 @@ def create_interface() -> gr.Blocks:
                 open=False,
                 render=False
             ),
-            additional_inputs=[input_style, input_model]
+            fill_width=True,
+            additional_inputs=[input_model]
         )
 
         chat.load(

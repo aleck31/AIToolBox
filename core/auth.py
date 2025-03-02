@@ -44,12 +44,12 @@ class CognitoAuth:
                     'PASSWORD': password
                 }
             )
-            
+
             # Store tokens and user info
             if 'AuthenticationResult' in response:
                 self.refresh_tokens[username] = response['AuthenticationResult'].get('RefreshToken')
                 self.access_tokens[username] = response['AuthenticationResult'].get('AccessToken')
-                
+
                 # Get and store user info
                 user_info = self.client.get_user(
                     AccessToken=response['AuthenticationResult']['AccessToken']
@@ -58,7 +58,7 @@ class CognitoAuth:
                     'username': user_info['Username'],
                     'attributes': {attr['Name']: attr['Value'] for attr in user_info['UserAttributes']}
                 }
-                
+
                 logger.info(f"User [{username}] authenticated successfully")
                 return {
                     'success': True,
@@ -72,7 +72,7 @@ class CognitoAuth:
                     'tokens': None,
                     'error': 'Authentication failed'
                 }
-            
+
         except self.client.exceptions.NotAuthorizedException:
             logger.warning(f"Invalid credentials for user [{username}]")
             return {
@@ -80,7 +80,7 @@ class CognitoAuth:
                 'tokens': None,
                 'error': 'Invalid username or password'
             }
-            
+
         except self.client.exceptions.UserNotFoundException:
             logger.warning(f"User [{username}] not found")
             return {

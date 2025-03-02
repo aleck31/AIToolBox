@@ -5,7 +5,7 @@ from core.logger import logger
 from core.integration.service_factory import ServiceFactory
 from core.integration.chat_service import ChatService
 from llm.model_manager import model_manager
-from .prompts import CHAT_STYLES
+from .prompts import ASSISTANT_PROMPT
 
 
 class ChatHandlers:
@@ -39,9 +39,7 @@ class ChatHandlers:
         try:
             # Always fetch fresh models to avoid stale cache issues
             if models := model_manager.get_models(filter={'api_provider': 'Bedrock'}):
-                # Sort models by name for consistent display
-                sorted_models = sorted(models, key=lambda m: m.name)
-                return [(f"{m.name}, {m.api_provider}", m.model_id) for m in sorted_models]
+                return [(f"{m.name}, {m.api_provider}", m.model_id) for m in models]
             else:
                 logger.warning("No Bedrock models available")
                 return []
@@ -137,7 +135,6 @@ class ChatHandlers:
         cls,
         ui_input: Union[str, Dict],
         ui_history: List[Dict[str, str]],
-        chat_style: str,
         model_id: str,
         request: gr.Request
     ) -> AsyncGenerator[Dict[str, Union[str, List[str]]], None]:
@@ -154,23 +151,18 @@ class ChatHandlers:
         """
         try:
             # Input validation and normalization
-            if not ui_input:
-                yield {"text": "Please provide a message or file."}
-                return
-            logger.debug(f"[ChatHandlers] Latest message from Gradio UI: {ui_input}")
-            # logger.debug(f"Chat history from Gradio UI:\n {ui_history}")
-
             if not model_id:
                 yield {"text": "Please select a model for Assistant module."}
                 return
 
             # Convert Gradio input to a unified dictionary format
             unified_input = cls._normalize_input(ui_input)
-
             # Require either text or files
-            if not unified_input["text"] and not unified_input.get("files"):
+            if not unified_input.get("text") and not unified_input.get("files"):
                 yield {"text": "Please provide a text message or file."}
                 return
+            logger.debug(f"[ChatHandlers] Latest message from Gradio UI: {ui_input}")
+            # logger.debug(f"Chat history from Gradio UI:\n {ui_history}")
 
             # Get authenticated user and service
             user_name = cls.get_user_name(request)
@@ -188,12 +180,8 @@ class ChatHandlers:
                 if not session:
                     raise ValueError("Failed to create or retrieve session")
                 
-                # Apply chat style configuration with fallback
-                style_config = CHAT_STYLES.get(chat_style) or CHAT_STYLES["正常"]
-                session.context['system_prompt'] = style_config["prompt"]
-                
-                # Get style-specific parameters
-                style_params = {k: v for k, v in style_config["options"].items() if v is not None}
+                # Apply assistant prompt
+                session.context['system_prompt'] = ASSISTANT_PROMPT
 
                 # Stream response with optimized accumulated handling
                 accumulated_text = ""
@@ -202,8 +190,7 @@ class ChatHandlers:
                 async for chunk in service.streaming_reply(
                     session=session,
                     ui_input=unified_input,
-                    ui_history=ui_history[-cls.MAX_CONTEXT_MSG:],  # Limit context window
-                    style_params=style_params
+                    ui_history=ui_history[-cls.MAX_CONTEXT_MSG:]  # Limit context window
                 ):
                     # Handle streaming chunks for immediate UI updates
                     if isinstance(chunk, dict):
@@ -212,14 +199,10 @@ class ChatHandlers:
                             accumulated_text += text
                         if file_path := chunk.get('file_path', ''):
                             accumulated_files.append(file_path)
-
                         # Always yield both text and files together to maintain state
                         yield {
-                            "role": "assistant",
-                            "content": {
-                                "text": accumulated_text,
-                                "files": accumulated_files
-                            }
+                            "text": accumulated_text, 
+                            "files": accumulated_files
                         }
                     else:
                         # For legacy text only content

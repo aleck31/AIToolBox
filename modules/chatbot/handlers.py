@@ -5,7 +5,7 @@ from core.logger import logger
 from core.integration.service_factory import ServiceFactory
 from core.integration.chat_service import ChatService
 from llm.model_manager import model_manager
-from .prompts import GEMINI_CHAT_STYLES
+from .prompts import CHATBOT_STYLES
 
 
 class ChatbotHandlers:
@@ -37,9 +37,7 @@ class ChatbotHandlers:
         try:
             # Always fetch fresh models to avoid stale cache issues
             if models := model_manager.get_models(filter={'modality': 'vision'}):
-                # Sort models by name for consistent display
-                sorted_models = sorted(models, key=lambda m: m.name)
-                return [(f"{m.name}, {m.api_provider}", m.model_id) for m in sorted_models]
+                return [(f"{m.name}, {m.api_provider}", m.model_id) for m in models]
             else:
                 logger.warning("No vision models available")
                 return []
@@ -148,11 +146,6 @@ class ChatbotHandlers:
         """
         try:
             # Input validation and normalization
-            if not ui_input:
-                yield {"text": "Please provide a message or file."}
-                return
-            logger.debug(f"[ChatbotHandlers] Latest message from Gradio UI: {ui_input}")
-
             if not model_id:
                 yield {"text": "Please select a model for Chatbot module."}
                 return
@@ -164,12 +157,10 @@ class ChatbotHandlers:
             if not unified_input["text"] and not unified_input.get("files"):
                 yield {"text": "Please provide a message or file."}
                 return
+            logger.debug(f"[ChatbotHandlers] Latest message from Gradio UI: {ui_input}")
 
             # Get authenticated user and service
             user_name = cls.get_user_name(request)
-            if not user_name:
-                yield {"text": "Authentication required. Please log in again."}
-                return
             service = cls._get_service()
 
             try:
@@ -182,8 +173,10 @@ class ChatbotHandlers:
                     raise ValueError("Failed to create or retrieve session")
                 
                 # Apply chat style configuration with fallback
-                style_config = GEMINI_CHAT_STYLES.get(chat_style) or GEMINI_CHAT_STYLES['default']
+                style_config = CHATBOT_STYLES.get(chat_style) or CHATBOT_STYLES['default']
+                logger.debug(f"[ChatbotHandlers] Using style-specific configuration: {style_config}")
                 session.context['system_prompt'] = style_config["prompt"]
+                # Get style-specific parameters
                 style_params = {k: v for k, v in style_config["options"].items() if v is not None}
 
                 # Stream response with optimized display handling

@@ -1,16 +1,19 @@
 import gradio as gr
 from .handlers import ChatbotHandlers
-from .prompts import GEMINI_CHAT_STYLES
+from .prompts import CHATBOT_STYLES
 
 
 def create_interface() -> gr.Blocks:
     """Create chat interface with handlers"""
 
-    # State to store current model choices
-    model_choices_state = gr.State()
+    # Supported file types with specific extensions
+    SUPPORTED_FILES = [
+        'text', 'image', 'audio', 'video'
+        '.pdf', '.doc', '.docx', '.md'  # Additional document types
+    ]
 
     mtextbox=gr.MultimodalTextbox(
-                file_types=['text', 'image', '.pdf', 'audio', 'video'],
+                file_types=SUPPORTED_FILES,
                 file_count='multiple',
                 placeholder="Type a message or upload image(s)",
                 stop_btn=True,
@@ -23,7 +26,8 @@ def create_interface() -> gr.Blocks:
     chatbot=gr.Chatbot(
         type='messages',
         show_copy_button=True,
-        min_height=560,
+        min_height='60vh',
+        max_height='80vh',
         avatar_images=(None, "modules/chatbot/avata_bot.png"),
         render=False
     )
@@ -33,15 +37,25 @@ def create_interface() -> gr.Blocks:
         show_label=False,
         info="Select chat model",
         choices=ChatbotHandlers.get_available_models(),
-        interactive=True
+        interactive=True,
+        render=False
     )
 
-    input_style = gr.Dropdown(
+    # input_style = gr.Dropdown(
+    #     label="Chat Style:", 
+    #     show_label=False,
+    #     info="Select conversation style",
+    #     choices={k: v["name"] for k, v in CHATBOT_STYLES.items()},
+    #     value="default",
+    #     render=False
+    # )
+    input_style = gr.Radio(
         label="Chat Style:", 
         show_label=False,
+        choices=[(v['display_name'], k) for k, v in CHATBOT_STYLES.items()],
+        value="default",
         info="Select conversation style",
-        choices={k: v["name"] for k, v in GEMINI_CHAT_STYLES.items()},
-        value="default"
+        render=False
     )
 
     with gr.Blocks(analytics_enabled=False) as chat_interface:
