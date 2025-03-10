@@ -86,30 +86,40 @@ class AskingHandlers:
                 logger.debug(f"Build content: {content}")
 
                 # Generate response with streaming
-                thinking_buffer = "```thinking"
+                thinking_buffer = "```thinking\n"
                 response_buffer = ""
-                in_thinking_mode = True  # Always starts with thinking
+                in_thinking_mode = True  # Start in thinking mode
                 
                 async for chunk in service.gen_text_stream(
                     session=session,
                     content=content
                 ):
+                    # logger.debug(f"[AskingHandlers] Received chunk: {chunk}")
+                    # Process each chunk immediately
                     if in_thinking_mode:
+                        # Currently in thinking mode - look for closing tag
                         if "</thinking>" in chunk:
-                            # Split chunk at </thinking> tag
+                            # Split chunk at closing tag
                             parts = chunk.split("</thinking>", 1)
-                            # Add content before </thinking> to thinking buffer (removing <thinking> if present)
-                            thinking_buffer += parts[0].replace("<thinking>", "")
-                            # Add content after </thinking> to response buffer
-                            if len(parts) > 1:
-                                response_buffer += parts[1]
-                            in_thinking_mode = False
+                            thinking_buffer += parts[0]  # Add content before closing tag to thinking
+                            response_buffer += parts[1]  # Add content after closing to response
+                            in_thinking_mode = False  # Switch to response mode
+                        elif "<" in chunk:
+                            pass
                         else:
-                            # Add chunk to thinking buffer (removing <thinking> if present)
+                            # No closing tag found, all content goes to thinking (removing <thinking> if present)
                             thinking_buffer += chunk.replace("<thinking>", "")
                     else:
-                        # After thinking mode, everything goes to response
-                        response_buffer += chunk
+                        # Currently in response mode - look for opening tag
+                        if "<thinking>" in chunk:
+                            # Split chunk at opening tag
+                            parts = chunk.split("<thinking>", 1)
+                            response_buffer += parts[0]  # Add content before opening tag to response
+                            thinking_buffer += parts[1]  # Add content after opening tag to thinking
+                            in_thinking_mode = True  # Switch to thinking mode
+                        else:
+                            # No opening tag found, all content goes to response
+                            response_buffer += chunk.replace("</thinking>", "\n```")
 
                     # Yield current state of both buffers
                     yield thinking_buffer.strip(), response_buffer.strip()
