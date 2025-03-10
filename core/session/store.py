@@ -15,7 +15,7 @@ class SessionStore:
     
     # Singleton instance
     _instance = None
-    
+
     @classmethod
     def get_instance(cls) -> 'SessionStore':
         """Get or create singleton instance"""
@@ -23,10 +23,10 @@ class SessionStore:
             try:
                 cls._instance = cls()
             except Exception as e:
-                logger.error(f"Failed to create session store: {str(e)}")
+                logger.error(f"[SessionStore] Failed to create session store: {str(e)}")
                 raise
         return cls._instance
-    
+
     def __init__(
         self,
         table_name: str = env_config.database_config['session_table'],
@@ -37,13 +37,17 @@ class SessionStore:
         try:
             self.table = get_aws_resource('dynamodb', region_name=region_name).Table(table_name)
             self.ttl_days = ttl_days
-            logger.debug(f"Initialized session store with table: {table_name}")
+            logger.debug(f"[SessionStore] Initialized session store with table: {table_name}")
         except Exception as e:
-            logger.error(f"Failed to initialize session store: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Store initialization failed: {str(e)}"
-            )
+            self._handle_error(e, 'Store initialization failed')
+
+    def _handle_error(self, error: Exception, message: str):
+        """Handle errors for SessionStore"""
+        logger.error(f"[SessionStore] {message}: {str(error)}")
+        raise HTTPException(
+            status_code=500,
+            detail=str(error)
+        )
 
     async def create_session(
         self,
@@ -71,15 +75,11 @@ class SessionStore:
             }
             self.table.put_item(Item=item)
             
-            logger.debug(f"Created session {session.session_id} for user {user_name}")
+            logger.debug(f"[SessionStore] Created session {session.session_id} for user {user_name}")
             return session
             
         except Exception as e:
-            logger.error(f"Failed to create session: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Session creation failed: {str(e)}"
-            )
+            self._handle_error(e, 'Failed to create session')
 
     async def update_session(
             self, 
@@ -92,11 +92,10 @@ class SessionStore:
                 'ttl': int(datetime.now().timestamp() + (self.ttl_days * 86400))
             }
             self.table.put_item(Item=item)
-            logger.debug(f"Updated session {session.session_id}")
+            logger.debug(f"[SessionStore] Updated session {session.session_id}")
             
         except Exception as e:
-            logger.error(f"Failed to update session: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
+            self._handle_error(e, 'Failed to update session')
 
     async def list_sessions(
         self,
@@ -138,8 +137,7 @@ class SessionStore:
             return sessions
             
         except Exception as e:
-            logger.error(f"Failed to list sessions: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
+            self._handle_error(e, 'Failed to list sessions')
 
     async def get_session_by_id(self, session_id: str) -> Session:
         """Get session with optional user validation
@@ -175,8 +173,7 @@ class SessionStore:
             return Session.from_dict(item)
             
         except Exception as e:
-            logger.error(f"Failed to get session: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
+            self._handle_error(e, 'Failed to get session')
 
     async def delete_session_by_id(self, session_id: str) -> bool:
         """Delete session from database by session id"""
@@ -184,9 +181,8 @@ class SessionStore:
             # Verify ownership first
             await self.get_session_by_id(session_id)
             self.table.delete_item(Key={'session_id': session_id})
-            logger.info(f"Deleted session {session_id}")
+            logger.info(f"[SessionStore] Deleted session {session_id}")
             return True
             
         except Exception as e:
-            logger.error(f"Failed to delete session: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
+            self._handle_error(e, 'Failed to delete session')

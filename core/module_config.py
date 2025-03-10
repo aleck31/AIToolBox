@@ -202,25 +202,29 @@ class ModuleConfig:
                 'system_prompt': 'You are a helpful AI assistant.',
                 'parameters': {
                     'temperature': Decimal('0.7'),
-                    'max_tokens': 2049,
+                    'max_tokens': 4096,
+                    'top_k': 200,
+                    'top_p': 0.9
                 },
                 'enabled_tools': [
                     'get_weather',         # Weather information
                     'get_text_from_url',   # Get text content from webpage URL
                     'generate_image'       # AI image generation
+                    'search_wikipedia',
+                    'search_internet'
                 ]
             },
             'chatbot': {
                 'setting_name': 'chatbot',
                 'type': 'module',
                 'description': 'Chatbot Module Settings',
-                'default_model': 'gemini-1.5-pro',
+                'default_model': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
                 'system_prompt': 'You are a friendly chatbot.',
                 'parameters': {
                     'temperature': Decimal('0.7'),
                     'max_tokens': 1000,
                     'top_p': Decimal('0.99'),
-                    'top_k': 200  # Integer for Gemini compatibility                    
+                    'top_k': 200
                 }
             },
             'coding': {

@@ -40,29 +40,33 @@ class BaseService:
         try:
             # Use cached provider if available and no custom params
             if not inference_params and model_id in self._llm_providers:
+                logger.debug(f"[BaseService] Using cached provider for model {model_id}")
                 return self._llm_providers[model_id]
-                
+
             # Get model info
             model = model_manager.get_model_by_id(model_id)
             if not model:
                 raise ValueError(f"Model not found: {model_id}")
-                
+            logger.debug(f"[BaseService] Found model: {model.name} ({model.api_provider})")
+
             # Create config with model info and optional params
             config = LLMConfig(
                 api_provider=model.api_provider,
                 model_id=model_id,
                 **(inference_params or {})
             )
-            
+            logger.debug(f"[BaseService] Created LLM config for {model_id} with params: {inference_params}")
+
             # Create provider with enabled tools
             provider = LLMAPIProvider.create(config, tools=self.enabled_tools)
-            
+            logger.debug(f"[BaseService] Created provider {provider.__class__.__name__} with tools: {self.enabled_tools}")
+
             # Cache provider if using default params
             if not inference_params:
                 self._llm_providers[model_id] = provider
-                
+
             return provider
-            
+
         except Exception as e:
             logger.error(f"[BaseService] Failed to get LLM provider for {model_id}: {str(e)}")
             raise
@@ -168,7 +172,7 @@ class BaseService:
                 await self.session_store.update_session(session)
                 logger.debug(f"[BaseService] Updated model to {model_id} in session {session.session_id}")
         except Exception as e:
-            logger.error(f"[BaseService] Failed to update session model: {str(e)}")
+            logger.error(f"[BaseService] Failed to update model_id in session: {str(e)}")
             raise
 
     async def load_session_history(

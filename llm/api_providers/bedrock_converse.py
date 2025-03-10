@@ -1,10 +1,9 @@
 import io
 import json
 from typing import Dict, List, Optional, Iterator, AsyncIterator, Any
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, ParamValidationError
 from core.logger import logger
 from core.config import env_config
-from botocore import exceptions as boto_exceptions
 from utils.aws import get_aws_client
 from utils.file import get_file_name, get_file_type_and_format, read_file_bytes
 from llm import ResponseMetadata
@@ -45,13 +44,17 @@ class BedrockConverse(LLMAPIProvider):
             logger.debug(f"[BRConverseProvider] Initialized {len(tool_specs)} tools")
 
     def _validate_config(self) -> None:
-        """Validate Bedrock-specific configuration"""
+        """Validate Bedrock-specific configuration
+        
+        Raises:
+            ParamValidationError: If configuration is invalid
+        """
         if not self.config.model_id:
-            raise boto_exceptions.ParamValidationError(
+            raise ParamValidationError(
                 report="Model ID must be specified for Bedrock"
             )
         if self.config.api_provider.upper() != 'BEDROCK':
-            raise boto_exceptions.ParamValidationError(
+            raise ParamValidationError(
                 report=f"Invalid API provider: {self.config.api_provider}"
             )
 
@@ -60,13 +63,13 @@ class BedrockConverse(LLMAPIProvider):
             # Get region from env_config
             region = env_config.bedrock_config['default_region']
             if not region:
-                raise boto_exceptions.ParamValidationError(
+                raise ParamValidationError(
                     report="AWS region must be configured for Bedrock"
                 )
                 
             self.client = get_aws_client('bedrock-runtime', region_name=region)
         except Exception as e:
-            raise boto_exceptions.ClientError(
+            raise ClientError(
                 error_response={
                     'Error': {
                         'Code': 'InitializationError',
@@ -76,24 +79,73 @@ class BedrockConverse(LLMAPIProvider):
                 operation_name='initialize_client'
             )
 
-    def _handle_bedrock_error(self, error: ClientError) -> None:
-        """Handle Bedrock-specific errors"""
-        error_code = error.response['Error']['Code']
-        error_message = error.response['Error']['Message']
+    def _handle_bedrock_error(self, error: ClientError) -> Dict:
+        """Handle Bedrock-specific errors and return structured error response
         
-        logger.error(f"[BRConverseProvider] {error_code} - {error_message}")
-        if error_code in ['ThrottlingException', 'TooManyRequestsException']:
-            raise error  # Already a boto ClientError with proper error code
+        Args:
+            error: ClientError exception that occurred during Bedrock API calls
+            
+        Returns:
+            Dict containing error response in standard format
+        """
+        # Extract error details from ClientError
+        error_code = error.response.get('Error', {}).get('Code', 'UnknownError')
+        error_message = error.response.get('Error', {}).get('Message', str(error))
+        logger.error(f"[BRConverseProvider] ClientError: {error_code} - {error_message}")
 
-    def _prepare_inference_params(self, **kwargs) -> Dict:
-        """Prepare model-specific inference parameters"""
-        params = {
+        # Map error codes to user-friendly messages using a dictionary
+        error_messages = {
+            'ThrottlingException': "Rate limit exceeded. Please try again later.",
+            'ServiceQuotaExceededException': "Service quota has been exceeded. Please try again later.",
+            'ValidationException': "There was an issue with the request format. Please try again with different input.",
+            'ModelTimeoutException': "The model took too long to respond. Please try with a shorter message.",
+            'ModelNotReadyException': "The model is currently initializing. Please try again in a moment.",
+            'ModelStreamErrorException': "Error in model stream. Please try again with different parameters.",
+            'ModelErrorException': "The model encountered an error processing your request. Please try again with different input."
+        }
+
+        # Get the appropriate message or use a default one
+        message = error_messages.get(error_code, f"AWS Bedrock error ({error_code}). Please try again.")
+
+        # Return consistent error response structure
+        return {
+            'content': {'text': f"I apologize, but {message}"},
+            'metadata': {
+                'error': True,
+                'error_code': error_code,
+                'error_message': error_message
+            }
+        }
+
+    def _prepare_inference_params(self, **kwargs) -> tuple[dict, Optional[dict]]:
+        """Prepare model-specific inference config and additional model request fields
+        
+        Args:
+            **kwargs: Keyword arguments containing model parameters
+            
+        Returns:
+        - inference_config: Standard inference parameters
+        - additional_fields: Model-specific parameters (if applicable)
+        """
+        # Prepare standard inference parameters
+        inference_config = {
             "maxTokens": kwargs.get('max_tokens', self.config.max_tokens),
             "temperature": kwargs.get('temperature', self.config.temperature),
             "topP": kwargs.get('top_p', self.config.top_p),
             "stopSequences": kwargs.get('stop_sequences', self.config.stop_sequences)
         }
-        return {k: v for k, v in params.items() if v is not None}
+        inference_config = {k: v for k, v in inference_config.items() if v is not None}
+        
+        # Prepare additional model request fields if needed
+        additional_fields = None
+        if top_k := kwargs.get('top_k', self.config.top_k):
+            if isinstance(top_k, (int, float)):  # Validate top_k
+                if 'nova' in self.config.model_id:
+                    additional_fields = {"inferenceConfig": {"topK": top_k}}
+                else:
+                    additional_fields = {'top_k': top_k}
+        
+        return inference_config, additional_fields
 
     def _handle_tool_result(
         self,
@@ -252,27 +304,28 @@ class BedrockConverse(LLMAPIProvider):
             Exception: For unexpected errors
         """
         try:
-            inference_params = self._prepare_inference_params(**kwargs)
+            inference_config, additional_fields = self._prepare_inference_params(**kwargs)
             
             # Prepare request parameters
             request_params = {
                 "modelId": self.config.model_id,
                 "messages": messages,
-                "inferenceConfig": inference_params
+                "inferenceConfig": inference_config
             }
+            # Add additional parameters if specified
+            if additional_fields:
+                request_params["additionalModelRequestFields"] = additional_fields
 
             # Add include system if prompt is provided and not empty
             if system_prompt and system_prompt.strip():
                 request_params["system"] = [{"text": system_prompt}]
-            # Add additional parameters if specified
-            if 'top_k' in kwargs:
-                request_params["additionalModelRequestFields"] = {'topK': kwargs['top_k']}
+
             # Add toolConfig if specified
             if self.tools and len(self.tools) > 0:
                 request_params["toolConfig"] = {"tools": self.tools}
 
-            # Get response stream
-            logger.debug(f"Request params for Bedrock: {request_params}")
+            # Get response
+            logger.debug(f"[BRConverseProvider] Request params: {request_params}")
             response = self.client.converse(**request_params)
             # logger.debug(f"Raw Bedrock response: {response}")
 
@@ -295,7 +348,8 @@ class BedrockConverse(LLMAPIProvider):
             }
             
         except ClientError as e:
-            self._handle_bedrock_error(e)
+            # Handle all exceptions with the common error handler
+            return LLMResponse(**self._handle_bedrock_error(e))
 
     def _converse_stream_sync(
             self,
@@ -318,26 +372,28 @@ class BedrockConverse(LLMAPIProvider):
             - metadata: Dict containing usage, metrics and stop reason
         """
         try:
-            inference_params = self._prepare_inference_params(**kwargs)
+            inference_config, additional_fields = self._prepare_inference_params(**kwargs)
             logger.debug(f"[BRConverseProvider] Stream using model: {self.config.model_id}")
             # Prepare request parameters
             request_params = {
                 "modelId": self.config.model_id,
                 "messages": messages,
-                "inferenceConfig": inference_params
-            }            
+                "inferenceConfig": inference_config
+            }
+            # Add additional parameters if specified
+            if additional_fields:
+                request_params["additionalModelRequestFields"] = additional_fields
+
             # Add include system if prompt is provided and not empty
             if system_prompt and system_prompt.strip():
                 request_params["system"] = [{"text": system_prompt}]
-            # Add additional parameters if specified
-            if 'top_k' in kwargs:
-                request_params["additionalModelRequestFields"] = {'topK': kwargs['top_k']}
+
             # Add toolConfig if specified
             if self.tools and len(self.tools) > 0:
                 request_params["toolConfig"] = {"tools": self.tools}
 
             # Get response stream
-            # logger.debug(f"--- Request params: {request_params}")
+            logger.debug(f"[BRConverseProvider] Request params: {request_params}")
             response = self.client.converse_stream(**request_params)
             
             # Initialize response tracking
@@ -427,7 +483,7 @@ class BedrockConverse(LLMAPIProvider):
                     }
 
         except ClientError as e:
-            self._handle_bedrock_error(e)
+            yield self._handle_bedrock_error(e)
 
     async def generate_content(
         self,
@@ -459,9 +515,8 @@ class BedrockConverse(LLMAPIProvider):
                 system_prompt=system_prompt,
                 **kwargs
             )
-            
-            # Get response content and tool use from response
 
+            # Get response content and tool use from response
             tool_use = response.pop('tool_use')
             
             # Handle tool use if present
@@ -511,7 +566,7 @@ class BedrockConverse(LLMAPIProvider):
             )
             
         except ClientError as e:
-            self._handle_bedrock_error(e)
+            return LLMResponse(**self._handle_bedrock_error(e))
 
     async def generate_stream(
         self,
@@ -606,7 +661,7 @@ class BedrockConverse(LLMAPIProvider):
                     break
 
         except ClientError as e:
-            self._handle_bedrock_error(e)
+            yield self._handle_bedrock_error(e)
 
     async def multi_turn_generate(
         self,
@@ -646,4 +701,4 @@ class BedrockConverse(LLMAPIProvider):
                 yield chunk
 
         except ClientError as e:
-            self._handle_bedrock_error(e)
+            yield self._handle_bedrock_error(e)

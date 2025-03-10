@@ -1,5 +1,5 @@
 import gradio as gr
-from .handlers import ChatHandlers
+from .handlers import AssistantHandlers
 
 
 def create_interface() -> gr.Blocks:
@@ -35,7 +35,7 @@ def create_interface() -> gr.Blocks:
         label="Chat Model:", 
         show_label=False,
         info="Select foundation model",
-        choices=ChatHandlers.get_available_models(),
+        choices=AssistantHandlers.get_available_models(),
         interactive=True,
         render=False
     )
@@ -46,7 +46,7 @@ def create_interface() -> gr.Blocks:
 
         # Create optimized chat interface
         chat = gr.ChatInterface(
-            fn=ChatHandlers.send_message,
+            fn=AssistantHandlers.send_message,
             type='messages',
             multimodal=True,
             chatbot=chatbot,
@@ -62,14 +62,14 @@ def create_interface() -> gr.Blocks:
         )
 
         chat.load(
-            fn=ChatHandlers.load_history_confs,
+            fn=AssistantHandlers.load_history_confs,
             inputs=[],
             outputs=[chat.chatbot, chat.chatbot_state, input_model] # The return value of load_history_confs does not match the outputs
         )
 
         # Add model selection change handler
         input_model.change(
-            fn=ChatHandlers.update_model_id,
+            fn=AssistantHandlers.update_model_id,
             inputs=[input_model],
             outputs=None,
             api_name=False

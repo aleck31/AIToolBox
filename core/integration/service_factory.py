@@ -77,10 +77,10 @@ class ServiceFactory:
         if not llm_model:
             raise ValueError(f"Model not found: {model_id}")
         
-        # Get model configuration from module config    
-        params = module_config.get_inference_params(module_name) or {}
-        if params:                        
+        # Get model configuration from module config
+        if params := module_config.get_inference_params(module_name):                        
             # Create LLM config with module parameters
+            logger.debug(f"[ServiceFactory] Creating LLM config for {module_name} with params: {params}")
             return LLMConfig(
                 api_provider=llm_model.api_provider,
                 model_id=model_id,
@@ -106,9 +106,12 @@ class ServiceFactory:
             Configured service instance
         """
         try:
+            logger.debug(f"[ServiceFactory] Creating {service_class.__name__} for {module_name} with model_id={model_id}")
+            
             # Get LLM configuration if model_id provided
             llm_config = cls._get_llm_config_by_module(module_name, model_id) if model_id else None
             kwargs = {'llm_config': llm_config}
+            logger.debug(f"[ServiceFactory] Created LLM config: {llm_config}")
 
             # Get tools from module configuration if no updated tools provided
             if enabled_tools := updated_tools or module_config.get_enabled_tools(module_name):

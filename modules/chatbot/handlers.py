@@ -22,8 +22,9 @@ class ChatbotHandlers:
     def _get_service(cls) -> ChatService:
         """Get or initialize shared service instance"""
         if cls._service is None:
-            logger.info("Initializing Chatbot service")
+            logger.debug("[ChatbotHandlers] Initializing chat service")
             cls._service = ServiceFactory.create_chat_service('chatbot')
+            logger.debug(f"[ChatbotHandlers] Chat service initialized: {cls._service}")
         return cls._service
 
     @classmethod
@@ -35,14 +36,14 @@ class ChatbotHandlers:
     def get_available_models(cls):
         """Get list of available models with id and names"""
         try:
-            # Always fetch fresh models to avoid stale cache issues
+            # Filter for models with vision capability
             if models := model_manager.get_models(filter={'modality': 'vision'}):
                 return [(f"{m.name}, {m.api_provider}", m.model_id) for m in models]
             else:
-                logger.warning("No vision models available")
+                logger.warning("[ChatbotHandlers] No vision-capable models available")
                 return []
         except Exception as e:
-            logger.error(f"Failed to fetch models: {str(e)}", exc_info=True)
+            logger.error(f"[ChatbotHandlers] Failed to fetch models: {str(e)}", exc_info=True)
             return []
 
     @classmethod
@@ -84,7 +85,7 @@ class ChatbotHandlers:
             return latest_history, latest_history, session_model_id
 
         except Exception as e:
-            logger.error(f"Failed to load history and configs: {str(e)}", exc_info=True)
+            logger.error(f"[ChatbotHandlers] Failed to load history and configs: {str(e)}", exc_info=True)
             return [], [], None
 
     @classmethod
@@ -94,7 +95,7 @@ class ChatbotHandlers:
             # Get authenticated user and service
             user_name = cls.get_user_name(request)
             if not user_name:
-                logger.warning("No authenticated user for model update")
+                logger.warning("[ChatbotHandlers] No authenticated user for model update")
                 return
 
             service = cls._get_service()
@@ -104,11 +105,12 @@ class ChatbotHandlers:
                 module_name='chatbot'
             )
             
-            # Update model
+            # Update model and log
+            logger.debug(f"[ChatbotHandlers] Updating session model to: {model_id}")
             await service.update_session_model(session, model_id)
 
         except Exception as e:
-            logger.error(f"Failed updating session model: {str(e)}", exc_info=True)
+            logger.error(f"[ChatbotHandlers] Failed updating session model: {str(e)}", exc_info=True)
 
     @classmethod
     def _normalize_input(cls, ui_input: Union[str, Dict]) -> Optional[Dict]:

@@ -8,7 +8,7 @@ from llm.model_manager import model_manager
 from .prompts import ASSISTANT_PROMPT
 
 
-class ChatHandlers:
+class AssistantHandlers:
     """Handlers for chat functionality with style support and session management"""
     
     # Shared service instance
@@ -161,7 +161,7 @@ class ChatHandlers:
             if not unified_input.get("text") and not unified_input.get("files"):
                 yield {"text": "Please provide a text message or file."}
                 return
-            logger.debug(f"[ChatHandlers] Latest message from Gradio UI: {ui_input}")
+            logger.debug(f"[AssistantHandlers] Latest message from Gradio UI: {ui_input}")
             # logger.debug(f"Chat history from Gradio UI:\n {ui_history}")
 
             # Get authenticated user and service
@@ -211,9 +211,9 @@ class ChatHandlers:
                     await asyncio.sleep(0)  # Add sleep for Gradio UI streaming echo
 
             except Exception as e:
-                logger.error(f"[ChatHandlers] Unexpected error in chat service: {str(e)}", exc_info=True)
+                logger.error(f"[AssistantHandlers] Unexpected error in chat service: {str(e)}", exc_info=True)
                 yield {"text": "An unexpected error occurred. Please try again."}
 
         except Exception as e:
-            logger.error(f"[ChatHandlers] Failed to send message: {str(e)}", exc_info=True)
+            logger.error(f"[AssistantHandlers] Failed to send message: {str(e)}", exc_info=True)
             yield {"text": "I apologize, but I encountered an error. Please try again."}

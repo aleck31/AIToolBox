@@ -69,22 +69,42 @@ class GeminiProvider(LLMAPIProvider):
             candidate_count=1
         )
 
-    def _handle_gemini_error(self, error: Exception) -> None:
-        """Handle Gemini-specific errors"""
-        error_message = str(error).lower()
-        logger.error(f"[GeminiProvider] {error_message}")
-        if "quota exceeded" in error_message:
-            raise exceptions.ResourceExhausted(f"Rate limit exceeded: {error}")
-        elif "unauthorized" in error_message:
-            raise exceptions.Unauthenticated(f"Authentication failed: {error}")
-        elif "invalid request" in error_message:
-            raise exceptions.InvalidArgument(f"Invalid request: {error}")
-        elif "dangerous_content" in error_message:
-            # Handle safety filter triggers
-            logger.warning("[GeminiProvider] Safety filter triggered, please try again.")
-            return
+    def _handle_gemini_error(self, error: Exception) -> Dict:
+        """Handle Gemini-specific errors and return structured error response
+        
+        Args:
+            error: Gemini API exception
+            
+        Returns:
+            Dict containing error response in standard format
+        """
+        error_code = type(error).__name__
+        error_message = str(error)
+        
+        logger.error(f"[GeminiProvider] {error_code} - {error_message}")
+        
+        # Format user-friendly message based on exception type
+        if isinstance(error, exceptions.ResourceExhausted):
+            message = "The service is currently experiencing high load. Please try again in a moment."
+        elif isinstance(error, exceptions.Unauthenticated):
+            message = "There was an authentication error. Please try again."
+        elif isinstance(error, exceptions.InvalidArgument):
+            message = "There was an issue with the request format. Please try again with different input."
+        elif isinstance(error, exceptions.FailedPrecondition):
+            message = "The request was blocked by safety filters. Please try again with different input."
+        elif isinstance(error, exceptions.DeadlineExceeded):
+            message = "The request took too long to process. Please try with a shorter message."
         else:
-            raise exceptions.Unknown(f"Gemini error: {error}")
+            message = "An unexpected error occurred. Please try again."
+            
+        return {
+            'content': {'text': f"I apologize, but {message}"},
+            'metadata': {
+                'error': True,
+                'error_code': error_code,
+                'error_message': error_message
+            }
+        }
 
     def _format_system_prompt(self, system_prompt: str) -> List[str]:
         """Format system prompt into list of instructions"""
@@ -221,7 +241,7 @@ class GeminiProvider(LLMAPIProvider):
             )
             
         except Exception as e:
-            self._handle_gemini_error(e)
+            return LLMResponse(**self._handle_gemini_error(e))
 
     def _generate_stream_sync(
         self,
@@ -265,8 +285,7 @@ class GeminiProvider(LLMAPIProvider):
                     }
                     
         except Exception as e:
-            logger.error(f"Streaming error: {str(e)}")
-            self._handle_gemini_error(e)
+            yield self._handle_gemini_error(e)
 
     async def generate_content(
         self,
@@ -351,5 +370,4 @@ class GeminiProvider(LLMAPIProvider):
                     }
                     
         except Exception as e:
-            logger.error(f"Multi turn Generate Error: {str(e)}")
-            self._handle_gemini_error(e)
+            yield self._handle_gemini_error(e)

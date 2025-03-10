@@ -128,6 +128,7 @@ class ChatService(BaseService):
             # Get LLM provider with model fallback
             model_id = await self.get_session_model(session)
             llm = self._get_llm_provider(model_id)
+            logger.debug(f"[ChatService] Using LLM provider: {llm.__class__.__name__}")
             
             # Track response state
             accumulated_text = []
@@ -136,6 +137,7 @@ class ChatService(BaseService):
             
             try:
                 # Stream from LLM
+                logger.debug(f"[ChatService] Streaming with model {model_id} and params: {style_params}")
                 async for chunk in llm.multi_turn_generate(
                     message=user_message,
                     history=history_messages,
