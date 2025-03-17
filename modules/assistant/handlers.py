@@ -39,12 +39,13 @@ class AssistantHandlers:
         try:
             # Always fetch fresh models to avoid stale cache issues
             if models := model_manager.get_models(filter={'api_provider': 'Bedrock'}):
+                logger.debug(f"[AssistantHandlers] Get {len(models)} available models")
                 return [(f"{m.name}, {m.api_provider}", m.model_id) for m in models]
             else:
                 logger.warning("No Bedrock models available")
                 return []
         except Exception as e:
-            logger.error(f"Failed to fetch models: {str(e)}", exc_info=True)
+            logger.error(f"[AssistantHandlers] Failed to fetch models: {str(e)}", exc_info=True)
             return []
 
     @classmethod
@@ -90,7 +91,7 @@ class AssistantHandlers:
             return latest_history, latest_history, session_model_id
 
         except Exception as e:
-            logger.error(f"Failed to load history and configs: {str(e)}", exc_info=True)
+            logger.error(f"[AssistantHandlers] Failed to load history and configs: {str(e)}", exc_info=True)
             return [], [], None
 
     @classmethod
@@ -114,7 +115,7 @@ class AssistantHandlers:
             await service.update_session_model(session, model_id)
 
         except Exception as e:
-            logger.error(f"Failed updating session model: {str(e)}", exc_info=True)
+            logger.error(f"[AssistantHandlers] Failed updating session model: {str(e)}", exc_info=True)
 
     @classmethod
     def _normalize_input(cls, ui_input: Union[str, Dict]) -> Optional[Dict]:

@@ -78,15 +78,11 @@ def create_interface() -> gr.Blocks:
         )
 
         # Load chat history and configuration on startup
-        chat.load(  # Update model choices state
-        #     fn=ChatbotHandlers.get_available_models,
-        #     inputs=[],
-        #     outputs=[model_choices_state]
-        # ).success(  # Update dropdown with choices
-        #     fn=lambda choices: gr.Dropdown(choices=choices),
-        #     inputs=[model_choices_state],
-        #     outputs=[input_model]
-        # ).then(  # Load chat history and selected model
+        chat.load(
+            fn=lambda: gr.Dropdown(choices=ChatbotHandlers.get_available_models()),  # Return new Dropdown with updated choices
+            inputs=[],
+            outputs=[input_model]
+        ).then(  # Load chat history and selected model
             fn=ChatbotHandlers.load_history_confs,
             inputs=[],
             outputs=[chat.chatbot, chat.chatbot_state, input_model]  # Update history and selected model

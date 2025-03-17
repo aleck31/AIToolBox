@@ -19,7 +19,7 @@ def create_interface() -> gr.Blocks:
         gr.Markdown("I can see 乛◡乛")
         
         saved_path = gr.State()
-        
+
         with gr.Row():
             with gr.Column(scale=6, min_width=450):
                 with gr.Row(min_height=350):
@@ -85,6 +85,25 @@ def create_interface() -> gr.Blocks:
             fn=lambda: ['', '', '', '', ''],
             inputs=None,
             outputs=[input_img, input_pdf, input_require, saved_path, output]
+        )
+
+        # Add model selection change handler
+        input_model.change(
+            fn=VisionHandlers.update_model_id,
+            inputs=[input_model],
+            outputs=None,
+            api_name=False
+        )
+
+        # Add model list refresh on load
+        interface.load(
+            fn=lambda: gr.Dropdown(choices=VisionHandlers.get_available_models()),
+            inputs=[],
+            outputs=[input_model]
+        ).then(  # set selected model 
+            fn=VisionHandlers.get_model_id,
+            inputs=[],
+            outputs=[input_model]  # Update selected model
         )
 
         return interface
