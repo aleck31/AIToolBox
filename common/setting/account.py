@@ -1,17 +1,25 @@
-"""Account settings tab implementation"""
+"""Handler implementation for Account settings tab"""
 import gradio as gr
-from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 from core.session.store import SessionStore
 from core.logger import logger
 
-class AccountSetting:
-    """Account settings and session management"""
-    
-    def __init__(self):
-        self.session_store = SessionStore.get_instance()
 
-    def get_display_username(self, request: gr.Request=None) -> str:
+class AccountHandlers:
+    """Handlers for Account settings and session management"""
+    
+    # Shared session store instance
+    _session_store: Optional[SessionStore] = None
+
+    @classmethod
+    def _get_session_store(cls) -> SessionStore:
+        """Get or initialize shared session store instance"""
+        if cls._session_store is None:
+            cls._session_store = SessionStore.get_instance()
+        return cls._session_store
+
+    @classmethod
+    def get_display_username(cls, request: gr.Request=None) -> str:
         """Get current logged in username for display in settings UI"""
         try:              
             user = request.session.get('user')
@@ -20,17 +28,18 @@ class AccountSetting:
             return username or "Not authenticated"
             
         except Exception as e:
-            logger.error(f"Error getting current user: {str(e)}")
+            logger.error(f"[AccountHandlers] Error getting current user: {str(e)}")
             return "Error getting user"
 
-    async def list_active_sessions(self, username: str) -> List[List]:
+    @classmethod
+    async def list_active_sessions(cls, username: str) -> List[List]:
         """List active sessions for current user"""
         try:
             if not username or username == "Not authenticated":
                 return []
             
             # Use username directly to list sessions
-            sessions = await self.session_store.list_sessions(username)
+            sessions = await cls._get_session_store().list_sessions(username)
             
             # Convert to list format for dataframe display with history length
             return [
@@ -44,46 +53,44 @@ class AccountSetting:
                 for s in sessions
             ]
         except Exception as e:
-            logger.error(f"Failed to list sessions: {str(e)}")
+            logger.error(f"[AccountHandlers] Failed to list sessions: {str(e)}")
             gr.Error(f"Failed to list sessions: {str(e)}")
             return []
 
-    async def delete_session(self, session_id: str, username: str) -> List[List]:
+    @classmethod
+    async def delete_session(cls, session_id: str, username: str) -> List[List]:
         """Delete a specific session"""
         try:
             # Delete session
-            await self.session_store.delete_session_by_id(session_id)
+            await cls._get_session_store().delete_session_by_id(session_id)
             gr.Info(f"Deleted session {session_id}")
             
             # Return updated sessions list
-            return await self.list_active_sessions(username)
+            return await cls.list_active_sessions(username)
             
         except Exception as e:
-            logger.error(f"Failed to delete session: {str(e)}")
+            logger.error(f"[AccountHandlers] Failed to delete session: {str(e)}")
             gr.Error(f"Failed to delete session: {str(e)}")
             return []
 
-    async def clear_session_history(self, session_id: str, username: str) -> List[List]:
+    @classmethod
+    async def clear_session_history(cls, session_id: str, username: str) -> List[List]:
         """Clear history for a specific session"""
         try:
-
-            session = await self.session_store.get_session_by_id(session_id)
+            session = await cls._get_session_store().get_session_by_id(session_id)
             
             # Clear session history
             if hasattr(session, 'history'):
                 session.history = []
             
             # Update session
-            await self.session_store.update_session(session)
+            await cls._get_session_store().update_session(session)
             gr.Info(f"Cleared history for session {session.session_name}")
-            
+
             # Return updated sessions list
-            return await self.list_active_sessions(username)
-            
+            return await cls.list_active_sessions(username)
+
         except Exception as e:
-            logger.error(f"Failed to clear session history: {str(e)}")
+            logger.error(f"[AccountHandlers] Failed to clear session history: {str(e)}")
             gr.Error(f"Failed to clear session history: {str(e)}")
             return []
-
-# Create singleton instance
-account = AccountSetting()
