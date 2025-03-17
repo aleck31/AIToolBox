@@ -1,8 +1,8 @@
 from typing import Dict, List, Optional, AsyncIterator
 from core.logger import logger
 from core.session import Session
-from llm.api_providers.base import LLMConfig, Message
-from .base_service import BaseService
+from llm.api_providers import LLMConfig, Message, LLMProviderError
+from . import BaseService
 
 
 class GenService(BaseService):
@@ -43,7 +43,7 @@ class GenService(BaseService):
         """
         try:
             # Always use the default model for stateless operations
-            llm = self._get_llm_provider(self.default_llm_config.model_id)
+            provider = self._get_llm_provider(self.default_llm_config.model_id)
             
             logger.debug(f"[GenService] Content for stateless generation: {content}")
             
@@ -51,20 +51,21 @@ class GenService(BaseService):
             messages = [self._prepare_message(content)]
 
             # Generate response
-            response = await llm.generate_content(
+            response = await provider.generate_content(
                 messages=messages,
                 system_prompt=system_prompt,
                 **(option_params or {})
             )
-            
+
             if not response.content:
-                raise ValueError("Empty response from LLM")
-                
+                raise ValueError("Empty response from LLM Provider")
+
             return response.content.get('text', '')
 
-        except Exception as e:
-            logger.error(f"[GenService] Failed to generate text stateless: {str(e)}")
-            return "I apologize, but I encountered an error. Please try again."
+        except LLMProviderError as e:
+            logger.error(f"[GenService] Failed to generate text stateless: {e.error_code}")
+            # Return user-friendly message from provider
+            return f"I apologize, {e.message}"
 
     async def gen_text(
         self,
@@ -87,7 +88,7 @@ class GenService(BaseService):
             model_id = await self.get_session_model(session)
 
             # Get LLM provider
-            llm = self._get_llm_provider(model_id)
+            provider = self._get_llm_provider(model_id)
             
             logger.debug(f"[GenService] Content for session {session.session_id}: {content}")
             
@@ -95,14 +96,14 @@ class GenService(BaseService):
             message = self._prepare_message(content)
 
             # Generate response
-            response = await llm.generate_content(
+            response = await provider.generate_content(
                 messages=[message],
                 system_prompt=session.context.get('system_prompt', ''),
                 **(option_params or {})
             )
 
             if not response.content:
-                raise ValueError("Empty response from LLM")
+                raise ValueError("Empty response from LLM Provider")
                 
             # Add interactions to session
             session.add_interaction({
@@ -121,9 +122,10 @@ class GenService(BaseService):
 
             return response.content.get('text', '')
 
-        except Exception as e:
-            logger.error(f"[GenService] Failed to generate text in session {session.session_id}: {str(e)}")
-            return "I apologize, but I encountered an error. Please try again."
+        except LLMProviderError as e:
+            logger.error(f"[GenService] Failed to generate text in session {session.session_id}: {e.error_code}")
+            # Return user-friendly message from provider
+            return f"I apologize, {e.message}"
 
     async def gen_text_stream(
         self,
@@ -146,7 +148,7 @@ class GenService(BaseService):
             model_id = await self.get_session_model(session)
 
             # Get LLM provider
-            llm = self._get_llm_provider(model_id)
+            provider = self._get_llm_provider(model_id)
 
             logger.debug(f"[GenService] Content for session {session.session_name}: {content}")
 
@@ -158,7 +160,7 @@ class GenService(BaseService):
             response_metadata = {}
 
             try:
-                async for chunk in llm.generate_stream(
+                async for chunk in provider.generate_stream(
                     messages=[message],
                     system_prompt=session.context.get('system_prompt', ''),
                     **(option_params or {})
@@ -191,9 +193,10 @@ class GenService(BaseService):
                     # Persist to session store
                     await self.session_store.update_session(session)
 
-            except Exception as e:
-                logger.error(f"[GenService] Failed to get response from LLM: {str(e)}")
-                yield "I apologize, but I encountered an error while generating the response."
+            except LLMProviderError as e:
+                logger.error(f"[GenService] Failed to get response from LLM Provider: {e.error_code}")
+                # Yield user-friendly message from provider
+                yield f"I apologize, {e.message}"
 
         except Exception as e:
             logger.error(f"[GenService] Failed to generate text stream in session {session.session_id}: {str(e)}")

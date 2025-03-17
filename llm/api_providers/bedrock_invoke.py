@@ -1,13 +1,11 @@
 import json
-from typing import Dict, List, Optional, Iterator, AsyncIterator, Any
+from typing import Dict, List, Optional, Iterator, AsyncIterator
 from botocore.exceptions import ClientError
 from core.logger import logger
 from core.config import env_config
 from botocore import exceptions as boto_exceptions
 from utils.aws import get_aws_client
-from llm import ResponseMetadata
-from .base import LLMAPIProvider, LLMConfig, Message, LLMResponse
-from ..tools.tool_registry import br_registry
+from . import LLMAPIProvider, LLMConfig, Message, LLMResponse, LLMProviderError
 
 
 class BedrockInvoke(LLMAPIProvider):
@@ -45,14 +43,36 @@ class BedrockInvoke(LLMAPIProvider):
                 operation_name='initialize_client'
             )
 
-    def _handle_bedrock_error(self, error: ClientError) -> None:
-        """Handle Bedrock-specific errors"""
-        error_code = error.response['Error']['Code']
-        error_message = error.response['Error']['Message']
+    def _handle_bedrock_error(self, error: ClientError):
+        """Handle Bedrock-specific errors by raising LLMProviderError
         
-        logger.error(f"[BRInvokeProvider] {error_code} - {error_message}")
-        if error_code in ['ThrottlingException', 'TooManyRequestsException']:
-            raise error
+        Args:
+            error: ClientError exception that occurred during Bedrock API calls
+            
+        Raises:
+            LLMProviderError with error code, user-friendly message, and technical details
+        """
+        # Extract error details from ClientError
+        error_code = error.response.get('Error', {}).get('Code', 'UnknownError')
+        error_detail = error.response.get('Error', {}).get('Message', str(error))
+        logger.error(f"[BRInvokeProvider] ClientError: {error_code} - {error_detail}")
+
+        # Map error codes to user-friendly messages
+        error_messages = {
+            'ThrottlingException': "Rate limit exceeded. Please try again later.",
+            'TooManyRequestsException': "Too many requests. Please try again later.",
+            'ValidationException': "There was an issue with the request format. Please try again with different input.",
+            'ModelTimeoutException': "The model took too long to respond. Please try with a shorter message.",
+            'ModelNotReadyException': "The model is currently initializing. Please try again in a moment.",
+            'ModelStreamErrorException': "Error in model stream. Please try again with different parameters.",
+            'ModelErrorException': "The model encountered an error processing your request. Please try again with different input."
+        }
+
+        # Get the appropriate message or use a default one
+        message = error_messages.get(error_code, f"AWS Bedrock error ({error_code}). Please try again.")
+        
+        # Raise LLMProviderError with error code, user-friendly message, and technical details
+        raise LLMProviderError(error_code, message, error_detail)
 
     def _invoke_model_sync(
         self,
@@ -92,7 +112,6 @@ class BedrockInvoke(LLMAPIProvider):
             return json.loads(raw_resp)
             
         except ClientError as e:
-            logger.error(f"[BRInvokeProvider] Client error response: {e.response}")
             self._handle_bedrock_error(e)
     
     def _invoke_model_stream_sync(

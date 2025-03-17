@@ -3,13 +3,14 @@ from itertools import groupby
 from typing import Dict, List, Optional, AsyncIterator
 from core.logger import logger
 from core.session import Session
-from llm.api_providers.base import Message, LLMConfig
-from .base_service import BaseService
+from llm.api_providers import Message, LLMConfig, LLMProviderError
+from llm import model_manager
+from . import BaseService
 
 
 class ChatService(BaseService):
     """Chat service implementation with streaming capabilities"""
-        
+
     def __init__(
         self,
         llm_config: LLMConfig,
@@ -20,13 +21,39 @@ class ChatService(BaseService):
         super().__init__(enabled_tools=enabled_tools, cache_ttl=cache_ttl)  # Tools needed for function calling
         self.default_llm_config = llm_config
 
-    def _prepare_chat_message(self, role: str, content: Dict, context: Optional[Dict] = None, metadata: Optional[Dict] = None) -> Message:
-        """Create standardized interaction entry.
+    # File type definitions
+    _FILE_TYPES = {
+        ('.png', '.jpg', '.jpeg', '.gif', '.webp'): ('image', '[User shared an image]', '[Generated an image in response]'),
+        ('.mp4', '.mov', '.webm'): ('video', '[User shared a video]', '[Generated a video in response]'),
+        ('.pdf', '.doc', '.docx'): ('document', '[User shared a document]', '[Generated a document in response]')
+    }
+
+    def _prepare_chat_message(
+        self, 
+        role: str, 
+        content: Dict, 
+        model_id: Optional[str] = None,
+        context: Optional[Dict] = None, 
+        metadata: Optional[Dict] = None
+    ) -> Message:
+        """Create standardized interaction entry with content filtering based on model capabilities.
         
         Note:
             Creates a Message instance with role and content.
+            Filters content based on model's supported input modalities.
             Optional context and metadata can be provided for additional information.
-        """            
+        """
+        # Get model capabilities if model_id provided
+        if model_id and isinstance(content, dict) and 'files' in content:
+            model = model_manager.get_model_by_id(model_id)
+            if model and model.capabilities:
+                supported_modalities = model.capabilities.input_modality
+                # Remove files for text-only models
+                if len(supported_modalities) == 1 and supported_modalities[0] == 'text':
+                    content.pop('files')
+                    content['text'] = (content.get('text', '') + 
+                        "\n[Note: Files were removed as they are not supported by the current model]").strip()
+
         return Message(
             role=role,
             content=content,
@@ -34,7 +61,7 @@ class ChatService(BaseService):
             metadata=metadata
         )
 
-    def _prepare_history(self, ui_history: List[Dict]) -> List[Message]:
+    def _prepare_history(self, ui_history: List[Dict], model_id: Optional[str] = None,) -> List[Message]:
         """Process history messages to chat Message format.
  
         Note:
@@ -70,13 +97,6 @@ class ChatService(BaseService):
                 
         return history_messages
 
-    # File type definitions
-    _FILE_TYPES = {
-        ('.png', '.jpg', '.jpeg', '.gif', '.webp'): ('image', '[User shared an image]', '[Generated an image in response]'),
-        ('.mp4', '.mov', '.webm'): ('video', '[User shared a video]', '[Generated a video in response]'),
-        ('.pdf', '.doc', '.docx'): ('document', '[User shared a document]', '[Generated a document in response]')
-    }
-
     def _get_file_desc(self, file_path: str, role: str) -> str:
         """Get standardized file description based on type and role.
         
@@ -109,11 +129,14 @@ class ChatService(BaseService):
             Message chunks for handler
         """
         try:
+            # Get LLM provider with model fallback
+            model_id = await self.get_session_model(session)
+
             # Convert new message to chat Message format
             user_message = self._prepare_chat_message(
                 role="user",
                 content=ui_input,
-                # Add custom context here that you want LLM to know
+                model_id=model_id,  # Pass model_id for content filtering
                 context={
                     'local_time': datetime.now().astimezone().isoformat(),
                     'user_name': session.user_name
@@ -125,20 +148,19 @@ class ChatService(BaseService):
             history_messages = self._prepare_history(ui_history)
             logger.debug(f"[ChatService] History messages sent to LLM Provider: {history_messages}")
 
-            # Get LLM provider with model fallback
-            model_id = await self.get_session_model(session)
-            llm = self._get_llm_provider(model_id)
-            logger.debug(f"[ChatService] Using LLM provider: {llm.__class__.__name__}")
-            
+            # Get LLM provider
+            provider = self._get_llm_provider(model_id)
+            logger.debug(f"[ChatService] Using LLM provider: {provider.__class__.__name__}")
+
             # Track response state
             accumulated_text = []
             accumulated_files = []
             response_metadata = {}
             
+            # Stream from LLM
+            logger.debug(f"[ChatService] Streaming with model {model_id} and params: {style_params}")
             try:
-                # Stream from LLM
-                logger.debug(f"[ChatService] Streaming with model {model_id} and params: {style_params}")
-                async for chunk in llm.multi_turn_generate(
+                async for chunk in provider.multi_turn_generate(
                     message=user_message,
                     history=history_messages,
                     system_prompt=session.context.get('system_prompt'),
@@ -179,10 +201,13 @@ class ChatService(BaseService):
                     # Persist to session store
                     await self.session_store.update_session(session)
 
-            except Exception as e:
-                logger.error(f"[ChatService] Failed to get response from LLM: {str(e)}")
-                yield {"text": "I apologize, but I encountered an error generating the response."}
+            except LLMProviderError as e:
+                # Log error with code and details
+                logger.error(f"[ChatService] LLM error in session {session.session_id}: {e.error_code}")
+                # Yield user-friendly message from provider
+                yield {"text": f"I apologize, {e.message}"}
 
         except Exception as e:
-            logger.error(f"[ChatService] Failed to streaming reply in session {session.session_id}: {str(e)}")
-            yield {"text": "I apologize, but I encountered an error. Please try again."}
+            # Log session-level errors
+            logger.error(f"[ChatService] Session error in {session.session_id}: {str(e)}")
+            yield {"text": "I apologize, but I encountered a session error. Please try again."}

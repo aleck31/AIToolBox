@@ -8,7 +8,7 @@ from botocore.exceptions import ClientError
 from core.config import env_config
 from core.logger import logger
 from utils.aws import get_aws_resource
-from . import LLMModel
+from . import LLMModel, MODEL_CAPABILITIES
 
 
 # Default model configurations
@@ -17,58 +17,112 @@ DEFAULT_MODELS = [
         name='claude3.6-sonnet',
         model_id='anthropic.claude-3-5-sonnet-20241022-v2:0',
         api_provider='Bedrock',
-        modality='vision',
+        category='vision',
         description='Claude 3.5 Sonnet v2 model for general use',
-        vendor='Anthropic'
+        vendor='Anthropic',
+        capabilities=MODEL_CAPABILITIES(
+            input_modality=['text', 'image', 'document'],
+            output_modality=['text'],
+            streaming=True,
+            tool_use=True,
+            context_window=200*1024
+        )
     ),
     LLMModel(
-        name='gemini pro',
+        name='gemini 1.5 pro',
         model_id='gemini-1.5-pro',
         api_provider='Gemini',
-        modality='vision',
+        category='vision',
         description='Gemini Pro model for text and vision',
-        vendor='Google'
+        vendor='Google',
+        capabilities=MODEL_CAPABILITIES(
+            input_modality=['text', 'image', 'document'],
+            output_modality=['text'],
+            streaming=True,
+            tool_use=True,
+            context_window=200*1024
+        )
     ),
     LLMModel(
-        name='gemini flash',
+        name='gemini 2.0 flash',
         model_id='gemini-2.0-flash',
         api_provider='Gemini',
-        modality='vision',
+        category='vision',
         description='Gemini Flash model for text and vision',
-        vendor='Google'
+        vendor='Google',
+        capabilities=MODEL_CAPABILITIES(
+            input_modality=['text', 'image', 'document'],
+            output_modality=['text'],
+            streaming=True,
+            tool_use=True,
+            context_window=1024*1024
+        )
     ),
     LLMModel(
-        modality= "vision",
+        name= "Nova Pro",
+        category='vision',
         api_provider= "Bedrock",
         description= "Nova Pro is a vision understanding foundation model. It is multilingual and can reason over text, images and videos.",
         model_id= "amazon.nova-pro-v1:0",
-        name= "Nova Pro",
-        vendor= "Amazon"
+        vendor= "Amazon",
+        capabilities=MODEL_CAPABILITIES(
+            input_modality=['text', 'image', 'document', 'video'],
+            output_modality=['text'],
+            streaming=True,
+            tool_use=True
+        )
     ),
     LLMModel(
-        modality= "image",
+        name= "Nova Canvas",
+        category='image',
         api_provider= "BedrockInvoke",
         description= "Nova image generation model. It generates images from text and allows users to upload and edit an existing image. ",
         model_id= "amazon.nova-canvas-v1:0",
-        name= "Nova Canvas",
-        vendor= "Amazon"
+        vendor= "Amazon",
+        capabilities=MODEL_CAPABILITIES(
+            input_modality=['text', 'image'],
+            output_modality=['image']
+        )
     ),
     LLMModel(
         name='stable-diffusion',
         model_id='stability.stable-image-ultra-v1:0',
         api_provider='BedrockInvoke',
-        modality='image',
+        category='image',
         description='Stable Diffusion Ultra for image generation',
-        vendor='Stability AI'
+        vendor='Stability AI',
+        capabilities=MODEL_CAPABILITIES(
+            input_modality=['text', 'image'],
+            output_modality=['image']
+        )
     ),
     LLMModel(
-        modality= "video",
+        name= "Nova Reel",
+        category='video',
         api_provider= "BedrockInvoke",
         description= "Nova video generation model. It generates short high-definition videos, up to 9 seconds long from input images or a natural language prompt.",
         model_id= "amazon.nova-reel-v1:0",
-        name= "Nova Reel",
-        vendor= "Amazon"       
-    ) 
+        vendor= "Amazon",
+        capabilities=MODEL_CAPABILITIES(
+            input_modality=['text', 'image'],
+            output_modality=['video']
+        )
+    ),
+    LLMModel(
+        name='DeepSeek-R1',
+        model_id='us.deepseek.r1-v1:0',
+        api_provider='Bedrock',
+        category='text',
+        description='DeepSeek R1 model for text generation',
+        vendor='DeepSeek',
+        capabilities=MODEL_CAPABILITIES(
+            input_modality=['text'],
+            output_modality=['text'],
+            streaming=True,
+            tool_use=True,
+            context_window=32*1024
+        )
+    )
 ]
 
 
@@ -81,6 +135,8 @@ class ModelManager:
             self.ensure_table_exists()
             self.table = self.dynamodb.Table(self.table_name)
             logger.debug(f"Initialized ModelManager with table: {self.table_name}")
+            # Cache for models
+            self._models_cache = None
             # Initialize default models if none exist
             self.init_default_models()
         except Exception as e:
@@ -122,6 +178,16 @@ class ModelManager:
             return float(obj)
         return obj
 
+    def _float_to_decimal(self, obj):
+        """Helper function to convert float values to Decimal in nested dictionaries and lists"""
+        if isinstance(obj, dict):
+            return {key: self._float_to_decimal(value) for key, value in obj.items()}
+        elif isinstance(obj, list):
+            return [self._float_to_decimal(item) for item in obj]
+        elif isinstance(obj, float):
+            return Decimal(str(obj))
+        return obj
+
     def get_model_by_id(self, model_id: str) -> Optional[LLMModel]:
         """Get a specific LLM model by its ID
         
@@ -138,17 +204,8 @@ class ModelManager:
             logger.error(f"Error getting model by ID {model_id}: {str(e)}")
             return None
 
-    def get_models(self, filter: Optional[Dict] = None) -> List[LLMModel]:
-        """Get configured models from Database with optional filtering
-
-        Args:
-            filter: Optional dictionary of model properties to filter by.
-                   Example: {'modality': 'vision'} returns only vision models
-                   Supported properties: name, model_id, api_provider, modality, vendor
-
-        Returns:
-            List of LLMModel instances matching the filter criteria          
-        """
+    def _load_models_from_db(self) -> List[LLMModel]:
+        """Load models from database and update cache"""
         try:
             # Get all models from DynamoDB
             response = self.table.get_item(
@@ -160,27 +217,72 @@ class ModelManager:
             
             if 'Item' not in response:
                 return []
-                
+
             # Convert stored data to LLMModel instances
             models_data = self._decimal_to_float(response['Item'].get('models', []))
             models = [LLMModel.from_dict(model_data) for model_data in models_data]
-            # Sort models by name for consistent display
-            sorted_models =  sorted(models, key=lambda m: m.name)            
+
+            # Update cache
+            self._models_cache = sorted(models, key=lambda m: m.name)
+            return self._models_cache
+        except Exception as e:
+            logger.error(f"Error loading models from database: {str(e)}")
+            return []
+
+    def flush_cache(self):
+        """Force flush models cache"""
+        logger.debug("Flushing models cache")
+        self._models_cache = None
+
+    def get_models(self, filter: Optional[Dict] = None) -> List[LLMModel]:
+        """Get configured models from cache/database with optional filtering
+
+        Args:
+            filter: Optional dictionary of model properties to filter by.
+                    Supported properties and capabilities: name, model_id, api_provider, vendor, input_modality, streaming etc.
+                    Example: {'input_modality': ['vision']} returns only vision models
+
+        Returns:
+            List of LLMModel instances matching the filter criteria          
+        """
+        try:
+            # Get models from cache or load from database
+            if self._models_cache is None:
+                models = self._load_models_from_db()
+            else:
+                models = self._models_cache
             
             # Apply filters if provided
             if filter:
                 filtered_models = []
-                for model in sorted_models:
+                for model in models:
                     matches = True
                     for key, value in filter.items():
-                        if not hasattr(model, key) or getattr(model, key) != value:
+                        # Handle capabilities filtering
+                        if key in ['input_modality', 'output_modality', 'streaming', 'tool_use', 'context_window']:
+                            if not model.capabilities:
+                                matches = False
+                                break
+                            cap_value = getattr(model.capabilities, key)
+                            # For modality lists, check if all required modalities are supported
+                            if key in ['input_modality', 'output_modality']:
+                                if not all(m in cap_value for m in value):
+                                    matches = False
+                                    break
+                            # For other capabilities, direct comparison
+                            elif cap_value != value:
+                                matches = False
+                                break
+                        # Handle regular model attributes filtering
+                        elif not hasattr(model, key) or getattr(model, key) != value:
                             matches = False
                             break
                     if matches:
                         filtered_models.append(model)
-                return filtered_models
+                models = filtered_models
 
-            return sorted_models
+            # Return sort models by name for consistent display
+            return sorted(models, key=lambda m: m.name) 
             
         except ClientError as e:
             logger.error(f"Error getting LLM models: {str(e)}")
@@ -199,11 +301,11 @@ class ModelManager:
                 if existing.model_id == model.model_id:
                     raise ValueError(f"Model with ID '{model.model_id}' already exists")
             
-            # Convert models to dict format for storage
-            models_data = [m.to_dict() for m in models]
-            models_data.append(model.to_dict())
+            # Convert models to dict format and ensure all numbers are Decimal
+            models_data = [self._float_to_decimal(m.to_dict()) for m in models]
+            models_data.append(self._float_to_decimal(model.to_dict()))
             
-            # Update table
+            # Update table and invalidate cache
             self.table.put_item(
                 Item={
                     'setting_name': 'model_manager',
@@ -211,6 +313,7 @@ class ModelManager:
                     'models': models_data
                 }
             )
+            self.flush_cache()
             logger.info(f"Added new LLM model: {model.name} ({model.model_id})")
             return True
         except Exception as e:
@@ -249,10 +352,10 @@ class ModelManager:
             if not model_exists:
                 raise ValueError(f"Model with ID '{model.model_id}' not found")
             
-            # Convert models to dict format for storage
-            models_data = [m.to_dict() for m in updated_models]
+            # Convert models to dict format and ensure all numbers are Decimal
+            models_data = [self._float_to_decimal(m.to_dict()) for m in updated_models]
             
-            # Update table
+            # Update table and invalidate cache
             self.table.put_item(
                 Item={
                     'setting_name': 'model_manager',
@@ -260,6 +363,7 @@ class ModelManager:
                     'models': models_data
                 }
             )
+            self.flush_cache()
             logger.info(f"Updated LLM model: {model.name} ({model.model_id})")
             return True
         except Exception as e:
@@ -282,10 +386,10 @@ class ModelManager:
             if len(filtered_models) == original_length:
                 raise ValueError(f"Model with ID '{model_id}' not found")
             
-            # Convert models to dict format for storage
-            models_data = [m.to_dict() for m in filtered_models]
+            # Convert models to dict format and ensure all numbers are Decimal
+            models_data = [self._float_to_decimal(m.to_dict()) for m in filtered_models]
             
-            # Update table
+            # Update table and invalidate cache
             self.table.put_item(
                 Item={
                     'setting_name': 'model_manager',
@@ -293,6 +397,7 @@ class ModelManager:
                     'models': models_data
                 }
             )
+            self.flush_cache()
             logger.info(f"Deleted LLM model with ID: {model_id}")
             return True
         except Exception as e:
@@ -304,7 +409,7 @@ class ModelManager:
         try:
             models = self.get_models()
             if not models:
-                models_data = [model.to_dict() for model in DEFAULT_MODELS]
+                models_data = [self._float_to_decimal(model.to_dict()) for model in DEFAULT_MODELS]
                 self.table.put_item(
                     Item={
                         'setting_name': 'model_manager',

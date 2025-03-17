@@ -5,7 +5,7 @@ from google.api_core import exceptions
 from core.logger import logger
 from core.config import env_config
 from utils.aws import get_secret
-from .base import LLMAPIProvider, LLMConfig, Message, LLMResponse
+from . import LLMAPIProvider, LLMConfig, Message, LLMResponse, LLMProviderError
 
 
 class GeminiProvider(LLMAPIProvider):
@@ -69,19 +69,19 @@ class GeminiProvider(LLMAPIProvider):
             candidate_count=1
         )
 
-    def _handle_gemini_error(self, error: Exception) -> Dict:
-        """Handle Gemini-specific errors and return structured error response
+    def _handle_gemini_error(self, error: Exception):
+        """Handle Gemini-specific errors by raising LLMProviderError
         
         Args:
             error: Gemini API exception
             
-        Returns:
-            Dict containing error response in standard format
+        Raises:
+            LLMProviderError with error code, user-friendly message, and technical details
         """
         error_code = type(error).__name__
-        error_message = str(error)
+        error_detail = str(error)
         
-        logger.error(f"[GeminiProvider] {error_code} - {error_message}")
+        logger.error(f"[GeminiProvider] {error_code} - {error_detail}")
         
         # Format user-friendly message based on exception type
         if isinstance(error, exceptions.ResourceExhausted):
@@ -97,14 +97,8 @@ class GeminiProvider(LLMAPIProvider):
         else:
             message = "An unexpected error occurred. Please try again."
             
-        return {
-            'content': {'text': f"I apologize, but {message}"},
-            'metadata': {
-                'error': True,
-                'error_code': error_code,
-                'error_message': error_message
-            }
-        }
+        # Raise LLMProviderError with error code, user-friendly message, and technical details
+        raise LLMProviderError(error_code, message, error_detail)
 
     def _format_system_prompt(self, system_prompt: str) -> List[str]:
         """Format system prompt into list of instructions"""
@@ -241,7 +235,7 @@ class GeminiProvider(LLMAPIProvider):
             )
             
         except Exception as e:
-            return LLMResponse(**self._handle_gemini_error(e))
+            self._handle_gemini_error(e)
 
     def _generate_stream_sync(
         self,
@@ -285,7 +279,7 @@ class GeminiProvider(LLMAPIProvider):
                     }
                     
         except Exception as e:
-            yield self._handle_gemini_error(e)
+            self._handle_gemini_error(e)
 
     async def generate_content(
         self,
@@ -370,4 +364,4 @@ class GeminiProvider(LLMAPIProvider):
                     }
                     
         except Exception as e:
-            yield self._handle_gemini_error(e)
+            self._handle_gemini_error(e)

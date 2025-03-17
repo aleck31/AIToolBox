@@ -58,7 +58,7 @@ def create_model_tab(model_choices_state):
                                 value="Bedrock"
                             )
                         with gr.Column():
-                            model_modality = gr.Dropdown(
+                            model_category = gr.Dropdown(
                                 label="Category",
                                 choices=VAILD_CATEGORY,
                                 value="text"
@@ -122,7 +122,7 @@ def create_model_tab(model_choices_state):
                     model_id: gr.Textbox(value=row.iloc[1], interactive=False),
                     model_provider: row.iloc[2],
                     model_vendor: row.iloc[3],
-                    model_modality: row.iloc[4],
+                    model_category: row.iloc[4],
                     input_modality: input_mods,
                     output_modality: output_mods,
                     streaming: row.iloc[7],
@@ -139,7 +139,7 @@ def create_model_tab(model_choices_state):
                 model_id: gr.Textbox(value="", interactive=True),
                 model_provider: "Bedrock",
                 model_vendor: "",
-                model_modality: "text",
+                model_category: "text",
                 model_desc: "",
                 input_modality: ["text"],
                 output_modality: ["text"],
@@ -160,7 +160,7 @@ def create_model_tab(model_choices_state):
                 model_id,
                 model_provider,
                 model_vendor,
-                model_modality,
+                model_category,
                 model_desc,
                 input_modality,
                 output_modality,
@@ -174,13 +174,13 @@ def create_model_tab(model_choices_state):
         )
 
         # Submit button handler for add/update
-        def handle_submit(name, id, provider, vendor, modality, desc, 
+        def handle_submit(name, id, provider, vendor, category, desc, 
                         input_mods, output_mods, stream, tools, context, btn_text):
             if btn_text == "Update Model":
-                ModelHandlers.update_model(name, id, provider, vendor, modality, desc,
+                ModelHandlers.update_model(name, id, provider, vendor, category, desc,
                                         input_mods, output_mods, stream, tools, context)
             else:
-                ModelHandlers.add_model(name, id, provider, vendor, modality, desc,
+                ModelHandlers.add_model(name, id, provider, vendor, category, desc,
                                       input_mods, output_mods, stream, tools, context)
             
             # Update models list and choices
@@ -195,7 +195,7 @@ def create_model_tab(model_choices_state):
                 model_id,
                 model_provider,
                 model_vendor,
-                model_modality,
+                model_category,
                 model_desc,
                 input_modality,
                 output_modality,
@@ -244,7 +244,7 @@ def create_model_tab(model_choices_state):
                 model_id,
                 model_provider,
                 model_vendor,
-                model_modality,
+                model_category,
                 model_desc,
                 input_modality,
                 output_modality,
@@ -282,7 +282,7 @@ def create_model_tab(model_choices_state):
                 model_id,
                 model_provider,
                 model_vendor,
-                model_modality,
+                model_category,
                 model_desc,
                 input_modality,
                 output_modality,

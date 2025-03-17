@@ -2,8 +2,8 @@
 from typing import Dict, List, Optional, Any
 from core.logger import logger
 from core.session import Session
-from llm.api_providers.base import LLMConfig, Message
-from .base_service import BaseService
+from llm.api_providers import LLMConfig, Message, LLMProviderError
+from . import BaseService
 
 
 class CreativeService(BaseService):
@@ -43,7 +43,7 @@ class CreativeService(BaseService):
         """
         try:
             # Always use default model for stateless operations
-            llm = self._get_llm_provider(self.default_llm_config.model_id)
+            provider = self._get_llm_provider(self.default_llm_config.model_id)
             
             logger.debug(f"[CreativeService] Content for stateless generation: {content}")
             
@@ -51,20 +51,21 @@ class CreativeService(BaseService):
             messages = [self._prepare_message(content)]
 
             # Generate response
-            response = await llm.generate_content(
+            response = await provider.generate_content(
                 messages=messages,
                 system_prompt=system_prompt,
                 **(option_params or {})
             )
             
             if not response.content:
-                raise ValueError("Empty response from LLM")
+                raise ValueError("Empty response from LLM Provider")
                 
             return response.content.get('video_url', '')
 
-        except Exception as e:
-            logger.error(f"[CreativeService] Failed to generate video stateless: {str(e)}")
-            return "I apologize, but I encountered an error. Please try again."
+        except LLMProviderError as e:
+            logger.error(f"[CreativeService] Failed to generate video stateless: {e.error_code}")
+            # Return user-friendly message from provider
+            return f"I apologize, {e.message}"
 
     async def generate_video(
         self,
@@ -87,7 +88,7 @@ class CreativeService(BaseService):
             model_id = await self.get_session_model(session)
 
             # Get LLM provider
-            llm = self._get_llm_provider(model_id)
+            provider = self._get_llm_provider(model_id)
             
             logger.debug(f"[CreativeService] Content for session {session.session_id}: {content}")
             
@@ -95,14 +96,14 @@ class CreativeService(BaseService):
             message = self._prepare_message(content)
 
             # Generate response
-            response = await llm.generate_content(
+            response = await provider.generate_content(
                 messages=[message],
                 system_prompt=session.context.get('system_prompt', ''),
                 **(option_params or {})
             )
 
             if not response.content:
-                raise ValueError("Empty response from LLM")
+                raise ValueError("Empty response from LLM Provider")
                 
             # Add interactions to session
             session.add_interaction({
@@ -121,6 +122,7 @@ class CreativeService(BaseService):
 
             return response.content.get('video_url', '')
 
-        except Exception as e:
-            logger.error(f"[CreativeService] Failed to generate video in session {session.session_id}: {str(e)}")
-            return "I apologize, but I encountered an error. Please try again."
+        except LLMProviderError as e:
+            logger.error(f"[CreativeService] Failed to generate video in session {session.session_id}: {e.error_code}")
+            # Return user-friendly message from provider
+            return f"I apologize, {e.message}"

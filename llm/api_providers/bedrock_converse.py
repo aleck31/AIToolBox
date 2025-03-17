@@ -8,11 +8,11 @@ from utils.aws import get_aws_client
 from utils.file import get_file_name, get_file_type_and_format, read_file_bytes
 from llm import ResponseMetadata
 from llm.tools.tool_registry import br_registry
-from .base import LLMAPIProvider, LLMConfig, Message, LLMResponse
+from . import LLMAPIProvider, LLMConfig, Message, LLMResponse, LLMProviderError
 
 
 class BedrockConverse(LLMAPIProvider):
-    """Amazon Bedrock LLM provider implemented with Converse API, featuring comprehensive tool support."""
+    """Amazon Bedrock LLM API provider implemented with Converse API, featuring comprehensive tool support."""
     
     def __init__(self, config: LLMConfig, tools: Optional[List[str]] = None):
         """Initialize provider with config and tools
@@ -49,6 +49,7 @@ class BedrockConverse(LLMAPIProvider):
         Raises:
             ParamValidationError: If configuration is invalid
         """
+        logger.debug(f"[BRConverseProvider] Model Configurations: {self.config}")
         if not self.config.model_id:
             raise ParamValidationError(
                 report="Model ID must be specified for Bedrock"
@@ -79,21 +80,21 @@ class BedrockConverse(LLMAPIProvider):
                 operation_name='initialize_client'
             )
 
-    def _handle_bedrock_error(self, error: ClientError) -> Dict:
-        """Handle Bedrock-specific errors and return structured error response
+    def _handle_bedrock_error(self, error: ClientError):
+        """Handle Bedrock-specific errors by raising exceptions with user-friendly messages
         
         Args:
             error: ClientError exception that occurred during Bedrock API calls
             
-        Returns:
-            Dict containing error response in standard format
+        Raises:
+            Exception with user-friendly message and original error details
         """
         # Extract error details from ClientError
         error_code = error.response.get('Error', {}).get('Code', 'UnknownError')
-        error_message = error.response.get('Error', {}).get('Message', str(error))
-        logger.error(f"[BRConverseProvider] ClientError: {error_code} - {error_message}")
+        error_detail = error.response.get('Error', {}).get('Message', str(error))
+        logger.error(f"[BRConverseProvider] ClientError: {error_code} - {error_detail}")
 
-        # Map error codes to user-friendly messages using a dictionary
+        # Map error codes to user-friendly messages
         error_messages = {
             'ThrottlingException': "Rate limit exceeded. Please try again later.",
             'ServiceQuotaExceededException': "Service quota has been exceeded. Please try again later.",
@@ -106,16 +107,9 @@ class BedrockConverse(LLMAPIProvider):
 
         # Get the appropriate message or use a default one
         message = error_messages.get(error_code, f"AWS Bedrock error ({error_code}). Please try again.")
-
-        # Return consistent error response structure
-        return {
-            'content': {'text': f"I apologize, but {message}"},
-            'metadata': {
-                'error': True,
-                'error_code': error_code,
-                'error_message': error_message
-            }
-        }
+        
+        # Raise LLMProviderError with error code, user-friendly message, and technical details
+        raise LLMProviderError(error_code, message, error_detail)
 
     def _prepare_inference_params(self, **kwargs) -> tuple[dict, Optional[dict]]:
         """Prepare model-specific inference config and additional model request fields
@@ -135,16 +129,18 @@ class BedrockConverse(LLMAPIProvider):
             "stopSequences": kwargs.get('stop_sequences', self.config.stop_sequences)
         }
         inference_config = {k: v for k, v in inference_config.items() if v is not None}
-        
+
         # Prepare additional model request fields if needed
         additional_fields = None
         if top_k := kwargs.get('top_k', self.config.top_k):
             if isinstance(top_k, (int, float)):  # Validate top_k
-                if 'nova' in self.config.model_id:
+                if 'deepseek' in self.config.model_id:
+                    additional_fields = None
+                elif 'nova' in self.config.model_id:
                     additional_fields = {"inferenceConfig": {"topK": top_k}}
                 else:
                     additional_fields = {'top_k': top_k}
-        
+
         return inference_config, additional_fields
 
     def _handle_tool_result(
@@ -210,7 +206,7 @@ class BedrockConverse(LLMAPIProvider):
 
     def _convert_message(self, message: Message) -> Dict:
         """Convert a single message for Bedrock API
-        
+
         Args:
             message: Message to format
             
@@ -246,7 +242,7 @@ class BedrockConverse(LLMAPIProvider):
             # Add text if present
             if text := message.content.get("text", "").strip():
                 content.append({"text": text})
-                
+
             # Add files if present
             if files := message.content.get("files", []):
                 for file_path in files:
@@ -286,7 +282,7 @@ class BedrockConverse(LLMAPIProvider):
             **kwargs
         ) -> Dict:
         """Send a request to Bedrock's converse API and handle the response
-        
+
         Args:
             messages: List of Converted messages
             system_prompt: Optional system instructions
@@ -346,10 +342,10 @@ class BedrockConverse(LLMAPIProvider):
                     'stop_reason':response.get('stopReason')
                 }
             }
-            
+
         except ClientError as e:
             # Handle all exceptions with the common error handler
-            return LLMResponse(**self._handle_bedrock_error(e))
+            self._handle_bedrock_error(e)
 
     def _converse_stream_sync(
             self,
@@ -447,7 +443,6 @@ class BedrockConverse(LLMAPIProvider):
                             'tool_use': {},
                             'metadata': {}
                         }
-                        
 
                 elif 'contentBlockStop' in chunk:
                     if tool_use:
@@ -483,7 +478,7 @@ class BedrockConverse(LLMAPIProvider):
                     }
 
         except ClientError as e:
-            yield self._handle_bedrock_error(e)
+            self._handle_bedrock_error(e)
 
     async def generate_content(
         self,
@@ -566,7 +561,7 @@ class BedrockConverse(LLMAPIProvider):
             )
             
         except ClientError as e:
-            return LLMResponse(**self._handle_bedrock_error(e))
+            self._handle_bedrock_error(e)
 
     async def generate_stream(
         self,
@@ -575,12 +570,12 @@ class BedrockConverse(LLMAPIProvider):
         **kwargs
     ) -> AsyncIterator[Dict]:
         """Generate streaming response with multi-turn tool use handling
-        
+
         Args:
             messages: user messages
             system_prompt: Optional system instructions
             **kwargs: Additional parameters for inference
-            
+
         Yields:
             Dict containing either:            
             - {"content": dict} for content chunks (text, file_path)
@@ -661,7 +656,7 @@ class BedrockConverse(LLMAPIProvider):
                     break
 
         except ClientError as e:
-            yield self._handle_bedrock_error(e)
+            self._handle_bedrock_error(e)
 
     async def multi_turn_generate(
         self,
@@ -671,13 +666,13 @@ class BedrockConverse(LLMAPIProvider):
         **kwargs
     ) -> AsyncIterator[Dict]:
         """Generate streaming response for multi-turn chat with tool use handling
-        
+
         Args:
             message: Current user message
             history: Optional chat history
             system_prompt: Optional system instructions
             **kwargs: Additional parameters for inference
-            
+
         Yields:
             Dict containing either:
             - {"content": dict} for content chunks
@@ -701,4 +696,4 @@ class BedrockConverse(LLMAPIProvider):
                 yield chunk
 
         except ClientError as e:
-            yield self._handle_bedrock_error(e)
+            self._handle_bedrock_error(e)

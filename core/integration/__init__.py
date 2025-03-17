@@ -4,7 +4,7 @@ from core.logger import logger
 from core.session import Session, SessionStore
 from core.module_config import module_config
 from llm.model_manager import model_manager
-from llm.api_providers.base import LLMConfig, LLMAPIProvider
+from llm.api_providers import LLMConfig, LLMAPIProvider, LLMProviderError
 
 
 class BaseService:
@@ -67,8 +67,8 @@ class BaseService:
 
             return provider
 
-        except Exception as e:
-            logger.error(f"[BaseService] Failed to get LLM provider for {model_id}: {str(e)}")
+        except LLMProviderError as e:
+            logger.error(f"[BaseService] Failed to get LLM provider for {model_id}: {e.error_code}")
             raise
 
     async def get_or_create_session(

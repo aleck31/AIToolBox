@@ -29,7 +29,7 @@ class VisionHandlers:
         """Get list of available models with id and names"""
         try:
             # Filter for models with vision capability
-            if models := model_manager.get_models(filter={'modality': 'vision'}):
+            if models := model_manager.get_models(filter={'category': 'vision'}):
                 logger.debug(f"[VisionHandlers] Get {len(models)} available models")
                 return [(f"{m.name}, {m.api_provider}", m.model_id) for m in models]
             else:

@@ -6,8 +6,8 @@ from typing import Dict, Optional, Any
 from PIL import Image
 from core.logger import logger
 from core.session import Session
-from llm.api_providers.base import LLMConfig
-from .base_service import BaseService
+from llm.api_providers import LLMConfig, LLMProviderError
+from . import BaseService
 
 
 class DrawService(BaseService):
@@ -44,7 +44,7 @@ class DrawService(BaseService):
         """
         try:
             # Always use the default model for stateless operations
-            llm = self._get_llm_provider(self.default_llm_config.model_id)
+            provider = self._get_llm_provider(self.default_llm_config.model_id)
             
             # Prepare request body
             request_body = {
@@ -65,7 +65,7 @@ class DrawService(BaseService):
             # logger.info(f"[DrawService] Generating image with model {model_id}")
             logger.debug(f"[DrawService] Request body: {json.dumps(request_body, indent=2)}")
 
-            response = await llm.generate_content(
+            response = await provider.generate_content(
                 request_body,
                 accept="application/json",
                 content_type="application/json"
@@ -85,8 +85,9 @@ class DrawService(BaseService):
             img_base64 = response_body["images"][0]
             return Image.open(io.BytesIO(base64.b64decode(img_base64)))
 
-        except Exception as e:
-            logger.error(f"[DrawService] Failed to generate image: {str(e)}")
+        except LLMProviderError as e:
+            # Log and re-raise LLM errors
+            logger.error(f"[DrawService] Failed to generate image: {e.error_code}")
             raise
 
     async def text_to_image(
@@ -118,7 +119,7 @@ class DrawService(BaseService):
                 raise ValueError("Please use Stability AI's SD text-to-image model")
 
             # Get LLM provider
-            llm = self._get_llm_provider(model_id)
+            provider = self._get_llm_provider(model_id)
             
             # Prepare request body
             request_body = {
@@ -139,7 +140,7 @@ class DrawService(BaseService):
             logger.info(f"[DrawService] Generating image with model {model_id}")
             logger.debug(f"[DrawService] Request body: {json.dumps(request_body, indent=2)}")
 
-            response = await llm.generate_content(
+            response = await provider.generate_content(
                 request_body,
                 accept="application/json",
                 content_type="application/json"
@@ -159,6 +160,7 @@ class DrawService(BaseService):
             img_base64 = response_body["images"][0]
             return Image.open(io.BytesIO(base64.b64decode(img_base64)))
 
-        except Exception as e:
-            logger.error(f"[DrawService] Failed to generate image: {str(e)}")
+        except LLMProviderError as e:
+            # Log and re-raise LLM errors
+            logger.error(f"[DrawService] Failed to generate image: {e.error_code}")
             raise

@@ -5,8 +5,24 @@ from typing import Dict, List, Optional, AsyncIterator
 from .. import LLMConfig, Message, LLMResponse
 
 
+class LLMProviderError(Exception):
+    """Custom exception for LLM API provider errors with error code and user-friendly message"""
+    def __init__(self, error_code: str, message: str, details: Optional[str] = None):
+        """Initialize LLMProviderError
+        
+        Args:
+            error_code: Error code (e.g. ThrottlingException, ValidationException)
+            message: User-friendly error message
+            details: Optional technical details for logging
+        """
+        self.error_code = error_code
+        self.message = message
+        self.details = details
+        super().__init__(message)
+
+
 class LLMAPIProvider(ABC):
-    """Base class for LLM providers"""
+    """Base class for LLM API providers"""
     
     def __init__(self, config: LLMConfig, tools):
         self.config = config

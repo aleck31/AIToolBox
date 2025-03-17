@@ -27,7 +27,7 @@ class ModelHandlers:
         try:
             models = cls._model_manager.get_models()
             return [[
-                m.name, m.model_id, m.api_provider, m.vendor, m.modality,
+                m.name, m.model_id, m.api_provider, m.vendor, m.category,
                 ", ".join(m.capabilities.input_modality),
                 ", ".join(m.capabilities.output_modality),
                 m.capabilities.streaming,
@@ -42,7 +42,7 @@ class ModelHandlers:
 
     @classmethod
     def _create_model(cls, name: str, model_id: str, api_provider: str,
-                     vendor: str, modality: str, description: str,
+                     vendor: str, category: str, description: str,
                      input_modality: List[str], output_modality: List[str],
                      streaming: bool, tool_use: bool, context_window: int) -> LLMModel:
         """Create a new LLM model instance with validation"""
@@ -62,19 +62,19 @@ class ModelHandlers:
             model_id=model_id,
             api_provider=api_provider,
             vendor=vendor,
-            modality=modality,
+            category=category,
             description=description,
             capabilities=capabilities
         )
 
     @classmethod
     def add_model(cls, name: str, model_id: str, api_provider: str,
-                  vendor: str, modality: str, description: str,
+                  vendor: str, category: str, description: str,
                   input_modality: List[str], output_modality: List[str],
                   streaming: bool, tool_use: bool, context_window: int) -> Optional[List[List]]:
         """Add a new LLM model"""
         try:
-            model = cls._create_model(name, model_id, api_provider, vendor, modality, description,
+            model = cls._create_model(name, model_id, api_provider, vendor, category, description,
                                     input_modality, output_modality, streaming, tool_use, context_window)
             cls._model_manager.add_model(model)
             gr.Info(f"Added new model: {name}", duration=3)
@@ -86,12 +86,12 @@ class ModelHandlers:
 
     @classmethod
     def update_model(cls, name: str, model_id: str, api_provider: str,
-                    vendor: str, modality: str, description: str,
+                    vendor: str, category: str, description: str,
                     input_modality: List[str], output_modality: List[str],
                     streaming: bool, tool_use: bool, context_window: int) -> Optional[List[List]]:
         """Update an existing LLM model"""
         try:
-            model = cls._create_model(name, model_id, api_provider, vendor, modality, description,
+            model = cls._create_model(name, model_id, api_provider, vendor, category, description,
                                     input_modality, output_modality, streaming, tool_use, context_window)
             cls._model_manager.update_model(model)
             gr.Info(f"Updated model: {name}", duration=3)
