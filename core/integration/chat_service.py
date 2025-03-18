@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, AsyncIterator
 from core.logger import logger
 from core.session import Session
 from llm.api_providers import Message, LLMConfig, LLMProviderError
-from llm import model_manager
+from llm.model_manager import model_manager
 from . import BaseService
 
 
@@ -52,7 +52,7 @@ class ChatService(BaseService):
                 if len(supported_modalities) == 1 and supported_modalities[0] == 'text':
                     content.pop('files')
                     content['text'] = (content.get('text', '') + 
-                        "\n[Note: Files were removed as they are not supported by the current model]").strip()
+                        "\n[Note: Files were removed as the current model does not support multimodal content.]").strip()
 
         return Message(
             role=role,
@@ -170,12 +170,10 @@ class ChatService(BaseService):
                         logger.warning(f"[ChatService] Unexpected chunk type: {type(chunk)}")
                         continue
 
-                    # Update metadata
-                    if metadata := chunk.get('metadata'):
-                        response_metadata.update(metadata)
-                        
-                    # Process content
-                    if content := chunk.get('content', {}):
+                    # Pass through thinking or content chunks
+                    if thinking := chunk.get('thinking'):
+                        yield {'thinking': thinking}
+                    elif content := chunk.get('content', {}):
                         # Handle text
                         if text := content.get('text'):
                             yield {'text': text}
@@ -184,6 +182,10 @@ class ChatService(BaseService):
                         elif file_path := content.get('file_path'):
                             yield {'file_path': file_path}
                             accumulated_files.append(file_path)
+
+                    # Only update metadata if it exists
+                    if metadata := chunk.get('metadata'):
+                        response_metadata.update(metadata)
 
                 # Add complete interaction to session after successful LLM response
                 if accumulated_text or accumulated_files:

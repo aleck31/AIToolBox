@@ -33,7 +33,8 @@ class Message:
 @dataclass
 class LLMResponse:
     """Basic LLM response structure"""
-    content: Dict # text, image, video
+    content: Dict # text, image, video, file_path
+    thinking: Optional[str] = None  # Thinking text from Reasoning models
     metadata: Optional[Dict] = None
 
 @dataclass

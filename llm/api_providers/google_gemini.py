@@ -23,6 +23,7 @@ class GeminiProvider(LLMAPIProvider):
     
     def _validate_config(self) -> None:
         """Validate Gemini-specific configuration"""
+        logger.debug(f"[GeminiProvider] Model Configurations: {self.config}")
         if not self.config.model_id:
             raise exceptions.InvalidArgument(
                 "Model ID must be specified for Gemini"
@@ -193,7 +194,43 @@ class GeminiProvider(LLMAPIProvider):
                         logger.error(f"Error uploading file {file_path}: {str(e)}")
                         continue
 
-        return {"role": message.role, "parts": parts}
+        # Special handling for flash-thinking model which expects 'model' instead of 'assistant'
+        role = message.role
+        if 'gemini-2.0-flash-thinking' in self.config.model_id and role == 'assistant':
+            role = 'model'
+
+        return {"role": role, "parts": parts}
+
+    def _process_resp_chunk(self, chunk) -> Optional[Dict]:
+        """Process a response chunk and return content dict
+        
+        Args:
+            chunk: Response chunk from Gemini
+            
+        Returns:
+            Dict containing response content or None if chunk cannot be processed
+        """
+        try:
+            if hasattr(chunk, 'candidates') and chunk.candidates:
+                return {'content': {'text': chunk.candidates[0].content.parts[0].text}}
+            return None
+        except (AttributeError, IndexError):
+            return None
+
+    def _extract_metadata(self, chunk) -> Optional[Dict]:
+        """Extract metadata from chunk if available"""
+        if hasattr(chunk, 'usage_metadata'):
+            return {
+                'metadata': {
+                    'model': self.config.model_id,
+                    'usage': {
+                        'prompt_tokens': chunk.usage_metadata.prompt_token_count,
+                        'completion_tokens': chunk.usage_metadata.candidates_token_count,
+                        'total_tokens': chunk.usage_metadata.total_token_count
+                    }
+                }
+            }
+        return None
 
     def _generate_content_sync(
         self,
@@ -219,19 +256,19 @@ class GeminiProvider(LLMAPIProvider):
 
             logger.debug(f"Raw Gemini response: {response}")
             
+            # Extract metadata using the same method as streaming
+            metadata = self._extract_metadata(response)
+            
+            # Add safety ratings if available
+            if hasattr(response, 'safety_ratings'):
+                metadata['metadata']['safety_ratings'] = [
+                    {r.category: r.probability}
+                    for r in response.safety_ratings
+                ]
+            
             return LLMResponse(
                 content=response.text,
-                metadata={
-                    'usage': {
-                        "prompt_tokens": response.usage_metadata.prompt_token_count,
-                        "completion_tokens": response.usage_metadata.candidates_token_count,
-                        "total_tokens": response.usage_metadata.total_token_count
-                    },
-                    'safety_ratings': [
-                        {r.category: r.probability}
-                        for r in response.safety_ratings
-                    ] if hasattr(response, 'safety_ratings') else None
-                }
+                metadata=metadata['metadata'] if metadata else None
             )
             
         except Exception as e:
@@ -252,31 +289,20 @@ class GeminiProvider(LLMAPIProvider):
             model_args = {
                 "generation_config": self._get_generation_config()
             }
-            
-            # Generate streaming response using generate_content
-            response = self.model.generate_content(
+
+            # Generate streaming using generate_content
+            for chunk in self.model.generate_content(
                 contents=llm_messages,
                 stream=True,
                 **model_args
-            )
-            
-            # Stream response chunks
-            for chunk in response:
-                if hasattr(chunk, 'text'):
-                    yield {'content': {'text': chunk.text}}
-                
-                # Extract usage metadata if available
-                if hasattr(chunk, 'usage_metadata'):
-                    yield {
-                        'metadata': {
-                            'model': self.config.model_id,
-                            'usage': {
-                                'prompt_tokens': chunk.usage_metadata.prompt_token_count,
-                                'completion_tokens': chunk.usage_metadata.candidates_token_count,
-                                'total_tokens': chunk.usage_metadata.total_token_count
-                            }
-                        }
-                    }
+            ):
+                # Stream response content chunks
+                if content_dict := self._process_resp_chunk(chunk):
+                    yield content_dict
+
+                # Extract usage metadata if available 
+                if metadata := self._extract_metadata(chunk):
+                    yield metadata
                     
         except Exception as e:
             self._handle_gemini_error(e)
@@ -321,10 +347,8 @@ class GeminiProvider(LLMAPIProvider):
         """
         try:
             # Format history message
-            if history:
-                logger.debug(f"[GeminiProvider] Unconverted history messages: {history}")
-                history_messages = self._convert_messages(history, system_prompt)
-                logger.debug(f"[GeminiProvider] Converted history messages: {history_messages}")
+            history_messages = self._convert_messages(history, system_prompt) if history else []
+            logger.debug(f"[GeminiProvider] Converted history messages: {history_messages}")
 
             # Format current user message
             current_message = self._convert_message(message)
@@ -339,29 +363,19 @@ class GeminiProvider(LLMAPIProvider):
                 "generation_config": self._get_generation_config()
             }
             
-            # Stream response using formatted message parts
+            # Generate streaming using send_message
             for chunk in chat.send_message(
                 current_message['parts'],
                 stream=True,
                 **model_args
             ):
-                if hasattr(chunk, 'text'):
-                    yield {
-                        'content': {'text': chunk.text}
-                    }
-                
-                # Extract usage metadata if available
-                if hasattr(chunk, 'usage_metadata'):
-                    yield {
-                        'metadata': {
-                            'model': self.config.model_id,
-                            'usage': {
-                                'prompt_tokens': chunk.usage_metadata.prompt_token_count,
-                                'completion_tokens': chunk.usage_metadata.candidates_token_count,
-                                'total_tokens': chunk.usage_metadata.total_token_count
-                            }
-                        }
-                    }
-                    
+                # Stream response chunks
+                if content_dict := self._process_resp_chunk(chunk):
+                    yield content_dict
+
+                # Extract usage metadata if available 
+                if metadata := self._extract_metadata(chunk):
+                    yield metadata
+
         except Exception as e:
             self._handle_gemini_error(e)

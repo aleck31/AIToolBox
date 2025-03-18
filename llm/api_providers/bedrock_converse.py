@@ -290,10 +290,11 @@ class BedrockConverse(LLMAPIProvider):
             
         Returns:
             Dict containing:
-            - role: str ('user' or 'assistant')
-            - content: Dict containing LLM-generated content
-            - tool_use: Dict containing tool use information
-            - metadata: Dict containing usage, metrics and stop reason
+            - {'role': str} ('user' or 'assistant')
+            - {'content': dict} for LLM-generated content
+            - {'thinking': str} for thinking process text (for reasoning models)
+            - {'tool_use': dict} for tool use information
+            - {"metadata": dict} for response metadata, such as usage, metrics and stop reason
             
         Raises:
             ClientError: For Bedrock-specific errors
@@ -327,14 +328,18 @@ class BedrockConverse(LLMAPIProvider):
 
             # Get message and restructure response
             resp_msg = response.get('output', {}).get('message', {})
-            if first_block := resp_msg.get('content', [{}])[0]:
-                # Currently only considering text generation
-                content={'text': first_block.get('text', '')} if 'text' in first_block else {}
-                tool_use = first_block.get('toolUse', {})
+            content_blocks = resp_msg.get('content', [])
+
+            # Process each content block
+            for block in content_blocks:
+                content = {'text': block['text']} if 'text' in block else {}
+                thinking = block.get('reasoningContent', {}).get('reasoningText', '')
+                tool_use = block.get('toolUse', {})
 
             return {
                 'role': resp_msg.get('role', 'assistant'),
                 'content': content,
+                'thinking': thinking,
                 'tool_use': tool_use,
                 'metadata': {
                     'usage':response.get('usage'),
@@ -362,10 +367,11 @@ class BedrockConverse(LLMAPIProvider):
                         
         Yields:
             Dict containing:
-            - role: str ('user' or 'assistant')
-            - content: Dict containing LLM-generated content
-            - tool_use: Dict containing tool use information
-            - metadata: Dict containing usage, metrics and stop reason
+            - {'role': str} ('user' or 'assistant')
+            - {'content': dict} for LLM-generated content chunks
+            - {'thinking': str} for thinking process chunks (for reasoning models)
+            - {'tool_use': dict} for tool use information
+            - {"metadata": dict} for response metadata, such as usage, metrics and stop reason
         """
         try:
             inference_config, additional_fields = self._prepare_inference_params(**kwargs)
@@ -435,11 +441,13 @@ class BedrockConverse(LLMAPIProvider):
                             'tool_use': tool_use,
                             'metadata': {}
                         }
-                    elif 'text' in delta:
-                        # Yield delta text only, which aligns with the principle of stream processing
+                    elif 'text' in delta or 'reasoningContent' in delta:
+                        content = {'text': delta['text']} if 'text' in delta else {}
+                        thinking = delta.get('reasoningContent', {}).get('text', '')
                         yield {
                             'role': current_role,
-                            'content': {'text': delta['text']},
+                            'content': content,
+                            'thinking': thinking,
                             'tool_use': {},
                             'metadata': {}
                         }
@@ -557,6 +565,7 @@ class BedrockConverse(LLMAPIProvider):
 
             return LLMResponse(
                 content=resp_content,
+                thinking=response.get('thinking', ''),
                 metadata=response.get('metadata')
             )
             
@@ -579,6 +588,7 @@ class BedrockConverse(LLMAPIProvider):
         Yields:
             Dict containing either:            
             - {"content": dict} for content chunks (text, file_path)
+            - {'thinking': str} for thinking process chunks (for reasoning models)
             - {"metadata": dict} for response metadata
 
         Note:
@@ -605,10 +615,13 @@ class BedrockConverse(LLMAPIProvider):
                     system_prompt=system_prompt,
                     **kwargs
                 ):
-                    # Stream text content immediately if present
-                    if text := chunk.get('content', {}).get('text'):
+                    # Stream content(only text) and thinking immediately if present
+                    content = chunk.get('content', {})
+                    thinking = chunk.get('thinking', '')
+                    if content or thinking:
                         yield {
-                            'content': {'text': text},
+                            'content': content,
+                            'thinking': thinking,
                             'metadata': chunk.get('metadata', {})
                         }
 
@@ -676,6 +689,7 @@ class BedrockConverse(LLMAPIProvider):
         Yields:
             Dict containing either:
             - {"content": dict} for content chunks
+            - {'thinking': str} for thinking process chunks (for reasoning models)
             - {"metadata": dict} for response metadata
         """
         try:

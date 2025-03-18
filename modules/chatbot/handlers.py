@@ -184,6 +184,7 @@ class ChatbotHandlers:
 
                 # Stream response with optimized display handling
                 accumulated_text = ""
+                accumulated_thinking = ""
 
                 async for chunk in service.streaming_reply(
                     session=session,
@@ -193,12 +194,30 @@ class ChatbotHandlers:
                 ):
                     # Handle streaming chunks for immediate UI updates
                     if isinstance(chunk, dict):
+                        # Handle thinking (for thinking process)
+                        if thinking := chunk.get('thinking'):
+                            accumulated_thinking += thinking
+                            thinking_msg = gr.ChatMessage(
+                                content=accumulated_thinking,
+                                metadata={"title": "💭 Thinking Process"}
+                            )
+                            yield thinking_msg
+
+                        # Handle regular text content
                         if text := chunk.get('text', ''):
                             accumulated_text += text
-                    else:
-                        # For legacy text only content
+                            if accumulated_thinking:
+                                yield [
+                                    thinking_msg,
+                                    gr.ChatMessage(content=accumulated_text)
+                                ]
+                            else:
+                                yield gr.ChatMessage(content=accumulated_text)
+
+                    # For legacy text only content (when chunk is a string)
+                    elif isinstance(chunk, str):
                         accumulated_text += chunk
-                    yield {"text": accumulated_text}
+                        yield {"text": accumulated_text}
                     await asyncio.sleep(0)  # Add sleep for Gradio UI streaming echo
             except Exception as e:
                 logger.error(f"[ChatbotHandlers] Unexpected error in chat service: {str(e)}", exc_info=True)
