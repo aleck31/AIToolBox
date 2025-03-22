@@ -61,7 +61,7 @@ class SummaryHandlers:
                 # Update session with system prompt
                 session.context['system_prompt'] = SYSTEM_PROMPT
                 # Persist updated context
-                await service.session_store.update_session(session)
+                await service.session_store.save_session(session)
 
                 # Build content with system prompt
                 content = {

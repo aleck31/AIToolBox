@@ -96,6 +96,13 @@ def create_interface() -> gr.Blocks:
             api_name=False
         )
 
+        # Add clear history handler for the clear button
+        chat.chatbot.clear(
+            fn=ChatbotHandlers.clear_chat_history,
+            inputs=[chat.chatbot_state],
+            outputs=[chat.chatbot_state, chat.chatbot]  # Update both state and chatbot
+        )
+
     return chat_interface
 
 # Create interface

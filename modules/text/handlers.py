@@ -118,7 +118,7 @@ class TextHandlers:
                 # Update session with style-specific system prompt
                 session.context['system_prompt'] = content.pop('system_prompt')        
                 # Persist updated context to session store
-                await service.session_store.update_session(session)
+                await service.session_store.save_session(session)
 
                 # Generate response with session context
                 response = await service.gen_text(

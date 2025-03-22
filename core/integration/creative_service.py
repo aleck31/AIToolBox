@@ -118,7 +118,7 @@ class CreativeService(BaseService):
             })
             
             # Update session
-            await self.session_store.update_session(session)
+            await self.session_store.save_session(session)
 
             return response.content.get('video_url', '')
 

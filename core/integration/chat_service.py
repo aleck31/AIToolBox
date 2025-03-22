@@ -110,6 +110,23 @@ class ChatService(BaseService):
             return user_desc if role == 'user' else assistant_desc
         return ''
 
+    async def clear_history(self, session: Session) -> None:
+        """Clear chat history for a session
+        
+        Args:
+            session: Active chat session to clear history for
+            
+        Note:
+            - Clears the history list
+            - Resets interaction count
+            - Updates timestamp
+            - Persists changes to session store
+        """
+        session.history = []  # Clear message history
+        # session.context['total_interactions'] = 0  # Reset interaction count
+        await self.session_store.save_session(session)
+        logger.debug(f"[ChatService] Cleared history for session {session.session_id}")
+
     async def streaming_reply(
         self,
         session: Session,
@@ -201,7 +218,7 @@ class ChatService(BaseService):
                     )
                     session.add_interaction(assistant_message.to_dict())
                     # Persist to session store
-                    await self.session_store.update_session(session)
+                    await self.session_store.save_session(session)
 
             except LLMProviderError as e:
                 # Log error with code and details

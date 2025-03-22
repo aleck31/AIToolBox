@@ -68,7 +68,7 @@ class CodingHandlers:
             
             # Phase 1: Architecture design
             session.context['system_prompt'] = ARCHITECT_PROMPT
-            await service.session_store.update_session(session)            
+            await service.session_store.save_session(session)            
             content = await cls._build_content(
                 text=f"Analyze and provide {language} architecture design for:\n{requirement}",
                 language=language
@@ -108,7 +108,7 @@ class CodingHandlers:
             
             # Phase 2: code generation
             session.context['system_prompt'] = CODER_PROMPT
-            await service.session_store.update_session(session)
+            await service.session_store.save_session(session)
             
             content = await cls._build_content(
                 text=f"Implement the solution based on this architecture:\n{architecture}",

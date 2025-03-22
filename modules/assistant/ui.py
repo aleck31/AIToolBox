@@ -27,6 +27,7 @@ def create_interface() -> gr.Blocks:
         min_height='60vh',
         max_height='80vh',
         avatar_images=(None, "modules/assistant/avata_bot.png"),
+        show_label=False,
         render=False
     )
 
@@ -77,6 +78,13 @@ def create_interface() -> gr.Blocks:
             inputs=[input_model],
             outputs=None,
             api_name=False
+        )
+
+        # Add clear history handler for the clear button
+        chat.chatbot.clear(
+            fn=AssistantHandlers.clear_chat_history,
+            inputs=[chat.chatbot_state],
+            outputs=[chat.chatbot_state, chat.chatbot]  # Update both state and chatbot
         )
 
     return chat_interface

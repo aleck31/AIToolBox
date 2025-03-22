@@ -94,5 +94,4 @@ class Session:
             
         # Update session state
         self.history.append(message)
-        self.updated_time = datetime.now()  # Store as datetime object
         self.context['total_interactions'] += 1

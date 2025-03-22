@@ -2,8 +2,8 @@
 Simplified session storage implementation
 """
 import uuid
-from typing import Dict, List, Optional, Any
 from datetime import datetime
+from typing import List, Optional
 from core.config import env_config
 from core.logger import logger
 from utils.aws import get_aws_resource
@@ -81,19 +81,22 @@ class SessionStore:
         except Exception as e:
             self._handle_error(e, 'Failed to create session')
 
-    async def update_session(
+    async def save_session(
             self, 
             session: Session
         ) -> None:
         """Persist the current session data to database and refresh TTL value."""
-        try:                
+        try:
+            # Update the timestamp before saving
+            session.updated_time = datetime.now()
+            
             item = {
                 **session.to_dict(),
                 'ttl': int(datetime.now().timestamp() + (self.ttl_days * 86400))
             }
             self.table.put_item(Item=item)
             logger.debug(f"[SessionStore] Updated session {session.session_id}")
-            
+
         except Exception as e:
             self._handle_error(e, 'Failed to update session')
 

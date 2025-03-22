@@ -118,7 +118,7 @@ class GenService(BaseService):
             })
             
             # Update session
-            await self.session_store.update_session(session)
+            await self.session_store.save_session(session)
 
             return response.content.get('text', '')
 
@@ -191,7 +191,7 @@ class GenService(BaseService):
                         "metadata": response_metadata or None
                     })
                     # Persist to session store
-                    await self.session_store.update_session(session)
+                    await self.session_store.save_session(session)
 
             except LLMProviderError as e:
                 logger.error(f"[GenService] Failed to get response from LLM Provider: {e.error_code}")

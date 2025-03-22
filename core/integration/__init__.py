@@ -169,7 +169,7 @@ class BaseService:
         try:
             if session.metadata.model_id != model_id:
                 session.metadata.model_id = model_id
-                await self.session_store.update_session(session)
+                await self.session_store.save_session(session)
                 logger.debug(f"[BaseService] Updated model to {model_id} in session {session.session_id}")
         except Exception as e:
             logger.error(f"[BaseService] Failed to update model_id in session: {str(e)}")

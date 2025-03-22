@@ -137,7 +137,7 @@ class VisionHandlers:
                 # Update session with system prompt
                 session.context['system_prompt'] = VISION_SYSTEM_PROMPT
                 # Persist updated context
-                await service.session_store.update_session(session)
+                await service.session_store.save_session(session)
                 logger.debug("Updated session with vision system prompt")
 
                 # Build content
