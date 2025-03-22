@@ -57,7 +57,7 @@ class ResponseMetadata:
 
 
 # Model category and capabilities
-VAILD_CATEGORY = ['text', 'vision', 'image', 'video', 'embedding']
+VAILD_CATEGORY = ['text', 'vision', 'image', 'video', 'reasoning', 'embedding']
 VALID_MODALITY = ['text', 'document', 'image', 'video', 'audio']
 
 @dataclass

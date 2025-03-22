@@ -31,6 +31,7 @@ def setup_logger(name: str) -> logging.Logger:
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
     console_handler.setLevel(logging.DEBUG if debug_mode else logging.INFO)
+    logger.propagate = False  # Prevent propagation to avoid duplicate logs
     logger.addHandler(console_handler)
     
     # Regular application log file (INFO and above)

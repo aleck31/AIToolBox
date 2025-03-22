@@ -12,7 +12,7 @@ def create_interface() -> gr.Interface:
         inputs=[
             gr.Textbox(
                 label="Text or URL",
-                placeholder="Enter text to summarize or paste a URL",
+                placeholder="Enter text or paste a URL (@url) to summarize",
                 lines=11
             )
         ],

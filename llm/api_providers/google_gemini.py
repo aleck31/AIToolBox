@@ -103,18 +103,19 @@ class GeminiProvider(LLMAPIProvider):
 
     def _format_system_prompt(self, system_prompt: str) -> List[str]:
         """Format system prompt into list of instructions"""
-        if not system_prompt:
+        if system_prompt:
+            return [
+                instruction.strip() 
+                for instruction in system_prompt.split('\n') 
+                if instruction.strip()
+            ]
+        else:
             return []
-        return [
-            instruction.strip() 
-            for instruction in system_prompt.split('\n') 
-            if instruction.strip()
-        ]
 
     def _convert_messages(
         self,
         messages: List[Message],
-        system_prompt: Optional[str] = None
+        system_prompt: Optional[str] = ''
     ) -> List[content_types.ContentType]:
         """Convert messages to Gemini-specific format with system prompt handling
         
@@ -126,7 +127,7 @@ class GeminiProvider(LLMAPIProvider):
             List of Converted messages for Gemini API
         """
         # Update model with system prompt if provided
-        if system_prompt:
+        if system_prompt.strip():
             # Get current safety settings if model exists
             safety_settings = getattr(self.model, '_safety_settings', None)
             system_instruction = self._format_system_prompt(system_prompt)
@@ -156,7 +157,7 @@ class GeminiProvider(LLMAPIProvider):
         Returns:
             Dict with role and parts formatted for Gemini API
         """
-        parts = []
+        content_parts = []
         
         # Handle context if present and not None
         context = getattr(message, 'context', None)
@@ -169,19 +170,19 @@ class GeminiProvider(LLMAPIProvider):
                     context_items.append(f"{readable_key}: {value}")
             if context_items:
                 # Add formatted context with clear labeling
-                parts.append({
+                content_parts.append({
                     "text": f"Context Information:\n{' | '.join(context_items)}\n"
                 })
 
         # Handle message content
         if isinstance(message.content, str):
             if message.content.strip():  # Skip empty strings
-                parts.append({"text": message.content})
+                content_parts.append({"text": message.content})
         # Handle multimodal content from Gradio chatbox
         elif isinstance(message.content, dict):
             # Add text if present
             if text := message.content.get("text", "").strip():
-                parts.append({"text": text})
+                content_parts.append({"text": text})
 
             # Add files if present
             if files := message.content.get("files", []):
@@ -189,7 +190,7 @@ class GeminiProvider(LLMAPIProvider):
                     try:
                         # Handle files using genai.upload_file
                         file_ref = genai.upload_file(path=file_path)
-                        parts.append(file_ref)
+                        content_parts.append(file_ref)
                     except Exception as e:
                         logger.error(f"Error uploading file {file_path}: {str(e)}")
                         continue
@@ -199,7 +200,7 @@ class GeminiProvider(LLMAPIProvider):
         if 'gemini-2.0-flash-thinking' in self.config.model_id and role == 'assistant':
             role = 'model'
 
-        return {"role": role, "parts": parts}
+        return {"role": role, "parts": content_parts}
 
     def _process_resp_chunk(self, chunk) -> Optional[Dict]:
         """Process a response chunk and return content dict
@@ -235,7 +236,7 @@ class GeminiProvider(LLMAPIProvider):
     def _generate_content_sync(
         self,
         messages: List[Message],
-        system_prompt: Optional[str] = None,
+        system_prompt: Optional[str] = '',
         **kwargs
     ) -> LLMResponse:
         """Synchronous implementation of content generation"""
@@ -277,7 +278,7 @@ class GeminiProvider(LLMAPIProvider):
     def _generate_stream_sync(
         self,
         messages: List[Message],
-        system_prompt: Optional[str] = None,
+        system_prompt: Optional[str] = '',
         **kwargs
     ) -> Iterator[Dict]:
         """Synchronous implementation of streaming generation"""
@@ -310,7 +311,7 @@ class GeminiProvider(LLMAPIProvider):
     async def generate_content(
         self,
         messages: List[Message],
-        system_prompt: Optional[str] = None,
+        system_prompt: Optional[str] = '',
         **kwargs
     ) -> LLMResponse:
         """Generate a response from Gemini using generate_content"""
@@ -319,7 +320,7 @@ class GeminiProvider(LLMAPIProvider):
     async def generate_stream(
         self,
         messages: List[Message],
-        system_prompt: Optional[str] = None,
+        system_prompt: Optional[str] = '',
         **kwargs
     ) -> AsyncIterator[Dict]:
         """Generate a streaming response from Gemini using generate_content with stream=True"""
@@ -330,7 +331,7 @@ class GeminiProvider(LLMAPIProvider):
         self,
         message: Message,
         history: Optional[List[Message]] = [],
-        system_prompt: Optional[str] = None,
+        system_prompt: Optional[str] = '',
         **kwargs
     ) -> AsyncIterator[Dict]:
         """Generate streaming response using multi-turn chat
@@ -356,7 +357,7 @@ class GeminiProvider(LLMAPIProvider):
 
             # Create chat session with history
             chat = self.model.start_chat(history=history_messages)
-            logger.debug(f"[GeminiProvider] Processing multi-turn chat with {len(history_messages)+1} messages")
+            logger.info(f"[GeminiProvider] Processing multi-turn chat with {len(history_messages)+1} messages")
 
             # Update model args if new system prompt provided
             model_args = {

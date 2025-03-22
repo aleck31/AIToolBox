@@ -84,7 +84,7 @@ class AccountHandlers:
                 session.history = []
             
             # Update session
-            await cls._get_session_store().update_session(session)
+            await cls._get_session_store().save_session(session)
             gr.Info(f"Cleared history for session {session.session_name}")
 
             # Return updated sessions list

@@ -4,7 +4,7 @@ from .modules import ModuleHandlers, MODULE_LIST
 
 def set_tools_visible(model_id):
     """Update tools interactivity based on model selection"""
-    if model_id and "claude" in model_id.lower():
+    if model_id and "claude" in model_id.lower():   #Todo: based on the model tool_use capabilities.
         return gr.CheckboxGroup(visible=True)
     else:
         return gr.CheckboxGroup(visible=False)

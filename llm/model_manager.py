@@ -3,7 +3,6 @@ LLM model management and configuration
 """
 from typing import Dict, List, Optional
 from decimal import Decimal
-from dataclasses import dataclass
 from botocore.exceptions import ClientError
 from core.config import env_config
 from core.logger import logger

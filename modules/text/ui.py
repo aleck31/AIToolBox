@@ -37,40 +37,39 @@ def create_interface() -> gr.Blocks:
 
             with gr.Column(scale=2):
                 with gr.Row():
-                    with gr.Column(scale=1):
-                        # Target language selection
-                        target_language = gr.Dropdown(
-                            label="Target Language",
-                            show_label=False,
-                            info='Select target language',
-                            choices=LANGS,
-                            value='en_US'
-                        )
+                    # Target language selection
+                    target_language = gr.Dropdown(
+                        label="Target Language",
+                        show_label=False,
+                        info='Select target language',
+                        choices=LANGS,
+                        value='en_US'
+                    )
 
-                    with gr.Column(scale=1):
-                        # Options area
-                        option_components = {}
-                        input_option = {}
-                        
-                        for op_name, op_info in TEXT_OPERATIONS.items():
-                            with gr.Row(visible=(op_name == "Proofreading ✍️")) as options_row:
-                                if op_info["options"]:
-                                    options = op_info["options"]
-                                    if options["type"] == "dropdown":
-                                        option_components[f"{op_name}_{options['label']}"] = gr.Dropdown(
-                                            label=options["label"],
-                                            show_label=False,
-                                            info='Choose writing style',
-                                            choices=options["choices"],
-                                            value=options["default"]
-                                        )
-                                    elif options["type"] == "radio":
-                                        option_components[f"{op_name}_{options['label']}"] = gr.Radio(
-                                            label=options["label"],
-                                            choices=options["choices"],
-                                            value=options["default"]
-                                        )
-                            input_option[op_name] = options_row
+                    # Options area
+                    option_components = {}
+                    input_option = {}                    
+                    for op_name, op_info in TEXT_OPERATIONS.items():
+                        with gr.Row(visible=(op_name == "Proofreading ✍️")) as options_row:
+                            if op_info["options"]:
+                                options = op_info["options"]
+                                if options["type"] == "dropdown":
+                                    option_components[f"{op_name}_{options['label']}"] = gr.Dropdown(
+                                        label=options["label"],
+                                        show_label=False,
+                                        info='Choose writing style',
+                                        choices=options["choices"],
+                                        value=options["default"]
+                                    )
+                                elif options["type"] == "radio":
+                                    option_components[f"{op_name}_{options['label']}"] = gr.Radio(
+                                        label=options["label"],
+                                        show_label=False,
+                                        info='Choose writing style',
+                                        choices=options["choices"],
+                                        value=options["default"]
+                                    )
+                        input_option[op_name] = options_row
 
         with gr.Row():
             # Input column
