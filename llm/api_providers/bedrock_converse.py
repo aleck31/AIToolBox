@@ -5,11 +5,16 @@ from botocore.exceptions import ClientError, ParamValidationError
 from core.logger import logger
 from core.config import env_config
 from utils.aws import get_aws_client
-from utils.file import get_file_name, get_file_type_and_format, read_file_bytes
+from utils.file import FileProcessor
 from llm import ResponseMetadata
 from llm.tools.tool_registry import br_registry
 from . import LLMAPIProvider, LLMConfig, Message, LLMResponse, LLMProviderError
 
+
+# Maximum file size for Bedrock API (5MB)
+MAX_FILE_SIZE = 5 * 1024 * 1024
+# Maximum allowed imaage dimension for Bedrock API (8000 pixels)
+MAX_IMG_DIMENSION_= 8000
 
 class BedrockConverse(LLMAPIProvider):
     """Amazon Bedrock LLM API provider implemented with Converse API, featuring comprehensive tool support."""
@@ -24,6 +29,9 @@ class BedrockConverse(LLMAPIProvider):
         super().__init__(config, [])  # Initialize base with empty tools list
         self._initialize_client()
         
+        # Initialize FileProcessor for file handling
+        self.file_processor = FileProcessor(max_file_size=MAX_FILE_SIZE)
+        
         # Initialize tools if provided
         if tools:
             # Get tool specifications from registry
@@ -33,9 +41,9 @@ class BedrockConverse(LLMAPIProvider):
                     tool_spec = br_registry.get_tool_spec(tool_name)
                     if tool_spec:
                         tool_specs.append(tool_spec)
-                        logger.info(f"Loaded tool specification for {tool_name}")
+                        logger.info(f"[BRConverseProvider] Loaded tool specification for {tool_name}")
                     else:
-                        logger.warning(f"No specification found for tool: {tool_name}")
+                        logger.warning(f"[BRConverseProvider] No specification found for tool: {tool_name}")
                 except Exception as e:
                     logger.error(f"[BRConverseProvider] Error loading tool {tool_name}: {str(e)}")
             
@@ -216,7 +224,7 @@ class BedrockConverse(LLMAPIProvider):
             - content: List ({'text':'string'})
 
         """
-        content = []
+        content_parts = []
 
         # Handle context if present and not None
         context = getattr(message, 'context', None)
@@ -229,40 +237,38 @@ class BedrockConverse(LLMAPIProvider):
                     context_items.append(f"{readable_key}: {value}")
             if context_items:
                 # Add formatted context with clear labeling
-                content.append({
+                content_parts.append({
                     "text": f"Context Information:\n{' | '.join(context_items)}\n"
                 })
 
         # Handle message content
         if isinstance(message.content, str):
             if message.content.strip():  # Skip empty strings
-                content.append({"text": message.content})
+                content_parts.append({"text": message.content})
         # Handle multimodal content from Gradio chatbox
         elif isinstance(message.content, dict):
             # Add text if present
             if text := message.content.get("text", "").strip():
-                content.append({"text": text})
-
+                content_parts.append({"text": text})
             # Add files if present
             if files := message.content.get("files", []):
                 for file_path in files:
-                    file_type, format = get_file_type_and_format(file_path)
+                    file_type, format = self.file_processor.get_file_type_and_format(file_path)
                     if file_type:
                         content_block = {
                             "format": format,
                             "source": {
-                                "bytes": read_file_bytes(file_path)
+                                "bytes": self.file_processor.read_file(file_path, optimize=True)
                             }
                         }
                         # Add name parameter only for document type
                         if file_type == 'document':
-                            content_block["name"] = get_file_name(file_path)
-                        
-                        content.append({
+                            content_block["name"] = self.file_processor.get_file_name(file_path)
+                        content_parts.append({
                             file_type: content_block
                         })
             
-        return {"role": message.role, "content": content}
+        return {"role": message.role, "content": content_parts}
 
     def _convert_messages(self, messages: List[Message]) -> List[Dict]:
         """Convert messages to Bedrock-specified format efficiently
@@ -278,7 +284,7 @@ class BedrockConverse(LLMAPIProvider):
     def _converse_sync(
             self,
             messages: List[Message],
-            system_prompt: Optional[str] = None,
+            system_prompt: Optional[str] = '',
             **kwargs
         ) -> Dict:
         """Send a request to Bedrock's converse API and handle the response
@@ -313,8 +319,8 @@ class BedrockConverse(LLMAPIProvider):
             if additional_fields:
                 request_params["additionalModelRequestFields"] = additional_fields
 
-            # Add include system if prompt is provided and not empty
-            if system_prompt and system_prompt.strip():
+            # Add system parm if system prompt is provided
+            if system_prompt.strip():
                 request_params["system"] = [{"text": system_prompt}]
 
             # Add toolConfig if specified
@@ -322,7 +328,7 @@ class BedrockConverse(LLMAPIProvider):
                 request_params["toolConfig"] = {"tools": self.tools}
 
             # Get response
-            logger.debug(f"[BRConverseProvider] Request params: {request_params}")
+            # logger.debug(f"[BRConverseProvider] Request params: {request_params}")
             response = self.client.converse(**request_params)
             # logger.debug(f"Raw Bedrock response: {response}")
 
@@ -355,7 +361,7 @@ class BedrockConverse(LLMAPIProvider):
     def _converse_stream_sync(
             self,
             messages: List[Message],
-            system_prompt: Optional[str] = None,
+            system_prompt: Optional[str] = '',
             **kwargs
         ) -> Iterator[Dict]:
         """
@@ -386,8 +392,8 @@ class BedrockConverse(LLMAPIProvider):
             if additional_fields:
                 request_params["additionalModelRequestFields"] = additional_fields
 
-            # Add include system if prompt is provided and not empty
-            if system_prompt and system_prompt.strip():
+            # Add system parm if system prompt is provided
+            if system_prompt.strip():
                 request_params["system"] = [{"text": system_prompt}]
 
             # Add toolConfig if specified
@@ -395,7 +401,7 @@ class BedrockConverse(LLMAPIProvider):
                 request_params["toolConfig"] = {"tools": self.tools}
 
             # Get response stream
-            logger.debug(f"[BRConverseProvider] Request params: {request_params}")
+            # logger.debug(f"[BRConverseProvider] Request params: {request_params}")  #Todo: Remove 'messages' field from request_params to prevent excessively long log
             response = self.client.converse_stream(**request_params)
             
             # Initialize response tracking
@@ -491,7 +497,7 @@ class BedrockConverse(LLMAPIProvider):
     async def generate_content(
         self,
         messages: List[Message],
-        system_prompt: Optional[str] = None,
+        system_prompt: Optional[str] = '',
         **kwargs
     ) -> LLMResponse:
         """Generate response with tool use handling
@@ -575,7 +581,7 @@ class BedrockConverse(LLMAPIProvider):
     async def generate_stream(
         self,
         messages: List[Message],
-        system_prompt: Optional[str] = None,
+        system_prompt: Optional[str] = '',
         **kwargs
     ) -> AsyncIterator[Dict]:
         """Generate streaming response with multi-turn tool use handling
@@ -603,7 +609,7 @@ class BedrockConverse(LLMAPIProvider):
         try:
             # Format messages for Bedrock
             llm_messages = self._convert_messages(messages)
-            logger.debug(f"[BRConverseProvider] Initial messages for Bedrock: {llm_messages}")
+            # logger.debug(f"[BRConverseProvider] Initial messages for Bedrock: {llm_messages}")  #Todo: Remove 'content' field from request_params to prevent excessively long log
 
             while True:  # Continue until no more tool uses
                 has_tool_use = False
@@ -675,7 +681,7 @@ class BedrockConverse(LLMAPIProvider):
         self,
         message: Message,
         history: Optional[List[Message]] = None,
-        system_prompt: Optional[str] = None,
+        system_prompt: Optional[str] = '',
         **kwargs
     ) -> AsyncIterator[Dict]:
         """Generate streaming response for multi-turn chat with tool use handling
@@ -699,7 +705,7 @@ class BedrockConverse(LLMAPIProvider):
                 messages.extend(history)   
             # Add current message
             messages.append(message)
-            logger.info(f"Processing multi-turn chat with {len(messages)} messages")
+            logger.info(f"[BRConverseProvider] Processing multi-turn chat with {len(messages)} messages")
             
             # Stream responses using async iterator
             async for chunk in self.generate_stream(
