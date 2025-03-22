@@ -3,6 +3,7 @@ gradio
 gradio_pdf
 boto3
 google-generativeai
+openai
 
 # Utilities
 uvicorn[standard]

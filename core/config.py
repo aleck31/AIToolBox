@@ -54,6 +54,13 @@ class ENVConfig:
             'secret_id': os.getenv('GEMINI_SECRET_ID'),
         }
 
+    @property
+    def openai_config(self) -> Dict[str, str]:
+        """Get OpenAI API configuration"""
+        return {
+            'secret_id': os.getenv('OPENAI_SECRET_ID'),
+        }
+
 class AppConfig:
     """Application-level configuration settings"""
 

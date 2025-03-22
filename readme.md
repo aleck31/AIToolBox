@@ -113,8 +113,10 @@ llm-toolbox/
 │   ├── init.py               # Base LLM interfaces
 │   ├── model_manager.py      # Model management
 │   ├── api_providers/        # LLM tools implementations
-│   │   ├── base.py             # Abstract interface for LLM providers
-│   │   ├── aws_bedrock.py      # AWS Bedrock integration
+│   │   ├── init.py             # Abstract interface for LLM providers
+│   │   ├── bredrock_converse.py    # Bedrock Converse integration
+│   │   ├── bedrock_invoke.py      # Bedrock invoke integration
+│   │   ├── openai.py           # OpenAI integration
 │   │   └── google_gemini.py    # Google Gemini integration
 │   └── tools/         # LLM tools implementations
 │       └── tool_registry.py  # Tool registry for Bedrock
