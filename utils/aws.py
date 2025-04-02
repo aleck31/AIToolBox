@@ -3,8 +3,8 @@ Centralized AWS configuration and client creation
 """
 import os
 import ast
-from typing import Optional, Dict, Any, Tuple
 import boto3
+from typing import Optional, Dict, Any
 from botocore.config import Config
 from core.config import env_config
 from core.logger import logger

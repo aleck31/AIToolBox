@@ -4,7 +4,7 @@ import random
 from pathlib import Path
 from typing import Dict
 from core.logger import logger
-from core.integration.service_factory import ServiceFactory
+from core.service.service_factory import ServiceFactory
 from core.module_config import module_config
 from modules.draw.prompts import NEGATIVE_PROMPTS
 

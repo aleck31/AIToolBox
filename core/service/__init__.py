@@ -4,72 +4,29 @@ from core.logger import logger
 from core.session import Session, SessionStore
 from core.module_config import module_config
 from llm.model_manager import model_manager
-from llm.api_providers import LLMConfig, LLMAPIProvider, LLMProviderError
+from llm.api_providers import LLMParameters, LLMAPIProvider, LLMProviderError, create_provider
 
 
 class BaseService:
-    """Base service with common functionality, independent of model"""
-        
+    """Base service with common functionality"""
+
     def __init__(
         self,
-        enabled_tools: Optional[List[str]] = None,
+        module_name: str,
         cache_ttl: int = 600  # 10 minutes default TTL
     ):
-        """Initialize base service with optional tools and caching
-        
+        """Initialize base service without LLM params
+
         Args:
-            enabled_tools: Optional list of tool module names to enable
+            module_name: Name of the module using this service
             cache_ttl: Time in seconds to keep sessions in cache (default 10 min)
         """
+        self.module_name = module_name
         self.session_store = SessionStore.get_instance()
         self._llm_providers: Dict[str, LLMAPIProvider] = {}
         self._session_cache: Dict[str, tuple[Session, float]] = {}
-        self.enabled_tools = enabled_tools or []
         self.cache_ttl = cache_ttl
-
-    def _get_llm_provider(self, model_id: str, inference_params: Optional[Dict] = None) -> LLMAPIProvider:
-        """Get or create LLM API provider for given model
-        
-        Args:
-            model_id: ID of the model to get provider for
-            inference_params: Optional inference parameters to override defaults
-            
-        Returns:
-            LLMAPIProvider: Cached or newly created provider
-        """
-        try:
-            # Use cached provider if available and no custom params
-            if not inference_params and model_id in self._llm_providers:
-                logger.debug(f"[BaseService] Using cached provider for model {model_id}")
-                return self._llm_providers[model_id]
-
-            # Get model info
-            model = model_manager.get_model_by_id(model_id)
-            if not model:
-                raise ValueError(f"Model not found: {model_id}")
-            logger.debug(f"[BaseService] Found model: {model.name} ({model.api_provider})")
-
-            # Create config with model info and optional params
-            config = LLMConfig(
-                api_provider=model.api_provider,
-                model_id=model_id,
-                **(inference_params or {})
-            )
-            logger.debug(f"[BaseService] Created LLM config for {model_id} with params: {inference_params}")
-
-            # Create provider with enabled tools
-            provider = LLMAPIProvider.create(config, tools=self.enabled_tools)
-            logger.debug(f"[BaseService] Created provider {provider.__class__.__name__} with tools: {self.enabled_tools}")
-
-            # Cache provider if using default params
-            if not inference_params:
-                self._llm_providers[model_id] = provider
-
-            return provider
-
-        except LLMProviderError as e:
-            logger.error(f"[BaseService] Failed to get LLM provider for {model_id}: {e.error_code}")
-            raise
+        self.model_id = None
 
     async def get_or_create_session(
         self,
@@ -128,7 +85,7 @@ class BaseService:
             logger.error(f"[BaseService] Failed to get/create session for {user_name}: {str(e)}")
             raise
 
-    async def get_session_model(self, session: Session) -> Optional[str]:
+    async def get_session_model(self, session: Session) -> str:
         """Get model ID from session or module defaults
         
         Args:
@@ -144,16 +101,21 @@ class BaseService:
         """
         try:
             # Return existing model_id if set
-            if model_id := session.metadata.model_id:
-                return model_id
-
+            if self.model_id:
+                logger.debug(f"[BaseService] Get cached model id: {self.model_id}")
+                return self.model_id
+            elif model_id := session.metadata.model_id:
+                logger.debug(f"[BaseService] Get session model id: {model_id}")
+                self.model_id = model_id
+                return self.model_id
             # Falls back to module config default model
-            if model_id := module_config.get_default_model(session.metadata.module_name):
+            elif model_id := module_config.get_default_model(session.metadata.module_name):
+                self.model_id = model_id
                 logger.debug(f"[BaseService] Falls back to module default model: {model_id}")
-                return model_id
-
-            logger.warning(f"[BaseService] No model ID found for {session.metadata.module_name}")
-            return None
+                return self.model_id
+            else:
+                logger.warning(f"[BaseService] No model ID found for {session.metadata.module_name}")
+                return None 
 
         except Exception as e:
             logger.error(f"[BaseService] Failed to get model for session {session.session_id}: {str(e)}")
@@ -167,35 +129,90 @@ class BaseService:
             model_id: New model ID to set
         """
         try:
-            if session.metadata.model_id != model_id:
+            if self.model_id != model_id:
+                self.model_id = model_id
                 session.metadata.model_id = model_id
                 await self.session_store.save_session(session)
                 logger.debug(f"[BaseService] Updated model to {model_id} in session {session.session_id}")
         except Exception as e:
-            logger.error(f"[BaseService] Failed to update model_id in session: {str(e)}")
+            logger.error(f"[BaseService] Failed to update session model: {str(e)}")
+            raise
+
+    def _get_llm_provider(self, model_id: Optional[str], llm_params: Optional[LLMParameters] = None) -> LLMAPIProvider:
+        """Get or create LLM API provider for given model
+        
+        Args:
+            model_id: ID of the model to get provider for
+            llm_params: Optional LLM inference parameters to override defaults
+            
+        Returns:
+            LLMAPIProvider: Cached or newly created provider
+            
+        Note:
+            If no llm_params provided, uses module's default inference parameters
+        """
+        try:
+            # Use cached provider if available and no custom params
+            if model_id in self._llm_providers and not llm_params:
+                logger.debug(f"[BaseService] Using cached provider for model {model_id}")
+                return self._llm_providers[model_id]
+
+            # Get model info
+            if model := model_manager.get_model_by_id(model_id):
+                logger.debug(f"[BaseService] Found model: {model.name} ({model.api_provider})")
+            else:
+                raise ValueError(f"Model not found: {model_id}")
+
+            # Get module's default tools and params if not provided
+            if not llm_params:
+                params = module_config.get_inference_params(self.module_name) or {}
+                # Ensure proper type conversion for numeric parameters
+                if 'max_tokens' in params:
+                    params['max_tokens'] = int(params['max_tokens'])
+                if 'temperature' in params:
+                    params['temperature'] = float(params['temperature'])
+                if 'top_p' in params:
+                    params['top_p'] = float(params['top_p'])
+                if 'top_k' in params:
+                    params['top_k'] = int(params['top_k'])
+                llm_params = params
+
+            enabled_tools = module_config.get_enabled_tools(self.module_name)
+
+            # Create provider with module configuration
+            provider = create_provider(
+                model.api_provider,
+                model_id,
+                LLMParameters(**(llm_params or {})),
+                enabled_tools
+            )
+
+            # Cache provider if no custom params
+            if not llm_params:
+                self._llm_providers[model_id] = provider
+
+            return provider
+
+        except LLMProviderError as e:
+            logger.error(f"[BaseService] Provider error for {model_id}: {e.error_code}")
+            raise
+        except Exception as e:
+            logger.error(f"[BaseService] Failed to get provider for {model_id}: {str(e)}")
             raise
 
     async def load_session_history(
         self,
         session: Session,
-        max_number: int = 24
+        max_messages: int = 24
     ) -> List[Dict[str, str]]:
-        """Load chat history from session
-        
-        Args:
-            session: Session to load history from
-            max_number: Maximum number of messages to return
-            
-        Returns:
-            List[Dict]: List of message dictionaries
-        """
+        """Load formatted chat history from session"""
         try:
             if not session.history:
                 return []
                 
             messages = []
             # Process only the most recent messages up to max_number
-            for msg in session.history[-max_number:]:
+            for msg in session.history[-max_messages:]:
                 content = msg['content']
                 
                 if isinstance(content, dict):
@@ -222,4 +239,4 @@ class BaseService:
             
         except Exception as e:
             logger.error(f"[BaseService] Failed to load history from session {session.session_id}: {str(e)}")
-            return []
+            return []  # Return empty history on error

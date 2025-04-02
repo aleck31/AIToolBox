@@ -67,14 +67,3 @@ Ensure the output is in {target_lang} language.
 Output only with the succinct context and nothing else.
 """
 }
-
-# Inference parameters
-INFERENCE_PARAMS = {
-    'max_tokens': 4096,  # maximum number of tokens to generate. Responses are not guaranteed to fill up to the maximum desired length. 
-    'temperature': 0.5,  # tunes the degree of randomness in generation. Lower temperatures mean less random generations.
-    'top_p': 0.5,  # less than one keeps only the smallest set of most probable tokens with probabilities that add up to top_p or higher for generation.
-    'stop_sequences': ["end_turn"], # stop_sequences - are sequences where the API will stop generating further tokens. The returned text will not contain the stop sequence.
-    # Additional model field for Claude
-    'top_k': 200  # The higher the value, the stronger a penalty is applied to previously present tokens, Use a lower value to ignore less probable options.  Claude 0-500, default 250
-
-}

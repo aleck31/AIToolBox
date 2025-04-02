@@ -1,8 +1,8 @@
 """Service for creative content generation"""
-from typing import Dict, List, Optional, Any
+from typing import Dict, Optional
 from core.logger import logger
 from core.session import Session
-from llm.api_providers import LLMConfig, Message, LLMProviderError
+from llm.api_providers import LLMMessage, LLMProviderError
 from . import BaseService
 
 
@@ -11,16 +11,20 @@ class CreativeService(BaseService):
     
     def __init__(
         self,
-        llm_config: LLMConfig,
+        module_name: str,
         cache_ttl: int = 600  # 10 minutes default TTL
     ):
-        """Initialize CreativeService with model configuration"""
-        super().__init__(cache_ttl=cache_ttl)  # No tools needed for image generation
-        self.default_llm_config = llm_config
+        """Initialize Creative Service
 
-    def _prepare_message(self, content: Dict[str, str]) -> Message:
+        Args:
+            module_name: Name of the module using this service
+            cache_ttl: Cache time-to-live in seconds
+        """
+        super().__init__(module_name=module_name, cache_ttl=cache_ttl)
+
+    def _prepare_message(self, content: Dict[str, str]) -> LLMMessage:
         """Create standardized message format"""
-        return Message(
+        return LLMMessage(
             role="user",
             content=content if isinstance(content, dict) else {"text": str(content)}
         )
@@ -43,7 +47,7 @@ class CreativeService(BaseService):
         """
         try:
             # Always use default model for stateless operations
-            provider = self._get_llm_provider(self.default_llm_config.model_id)
+            provider = self._get_llm_provider(self.model_id)
             
             logger.debug(f"[CreativeService] Content for stateless generation: {content}")
             

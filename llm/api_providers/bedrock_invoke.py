@@ -5,21 +5,27 @@ from core.logger import logger
 from core.config import env_config
 from botocore import exceptions as boto_exceptions
 from utils.aws import get_aws_client
-from . import LLMAPIProvider, LLMConfig, Message, LLMResponse, LLMProviderError
+from . import LLMAPIProvider, LLMParameters, LLMMessage, LLMResponse, LLMProviderError
 
 
 class BedrockInvoke(LLMAPIProvider):
     """Amazon Bedrock LLM provider powered by the invoke model API for single-turn generation."""
+    
+    def __init__(self, model_id: str, llm_params: LLMParameters, tools=None):
+        """Initialize provider with model ID, parameters and tools
+        
+        Args:
+            model_id: Model identifier
+            llm_params: LLM inference parameters
+            tools: Optional list of tool specifications
+        """
+        super().__init__(model_id, llm_params, tools)
 
     def _validate_config(self) -> None:
         """Validate Bedrock-specific configuration"""
-        if not self.config.model_id:
+        if not self.model_id:
             raise boto_exceptions.ParamValidationError(
                 report="Model ID must be specified for Bedrock"
-            )
-        if self.config.api_provider.upper() != 'BEDROCKINVOKE':
-            raise boto_exceptions.ParamValidationError(
-                report=f"Invalid API provider: {self.config.api_provider}"
             )
 
     def _initialize_client(self) -> None:
@@ -97,10 +103,10 @@ class BedrockInvoke(LLMAPIProvider):
             body = json.dumps(request_body)
 
             # Invoke model
-            logger.debug(f"[BRInvokeProvider] Invoking model {self.config.model_id}")
+            logger.debug(f"[BRInvokeProvider] Invoking model {self.model_id}")
             logger.debug(f"--- Request body: {body}")
             resp = self.client.invoke_model(
-                modelId=self.config.model_id,
+                modelId=self.model_id,
                 body=body,
                 accept=accept,
                 contentType=content_type
@@ -138,7 +144,7 @@ class BedrockInvoke(LLMAPIProvider):
             
             # Get streaming response
             response = self.client.invoke_model_with_response_stream(
-                modelId=self.config.model_id,
+                modelId=self.model_id,
                 body=body,
                 accept=accept,
                 contentType=content_type
@@ -219,8 +225,8 @@ class BedrockInvoke(LLMAPIProvider):
 
     async def multi_turn_generate(
         self,
-        message: Message,
-        history: Optional[List[Message]] = None,
+        message: LLMMessage,
+        history: Optional[List[LLMMessage]] = None,
         system_prompt: Optional[str] = None,
         **kwargs
     ) -> AsyncIterator[Dict]:

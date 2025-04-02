@@ -2,11 +2,12 @@
 import io
 import json
 import base64
-from typing import Dict, Optional, Any
 from PIL import Image
+from typing import Dict, Optional, Any
 from core.logger import logger
 from core.session import Session
-from llm.api_providers import LLMConfig, LLMProviderError
+from core.module_config import module_config
+from llm.api_providers import LLMProviderError
 from . import BaseService
 
 
@@ -15,12 +16,28 @@ class DrawService(BaseService):
 
     def __init__(
         self,
-        llm_config: LLMConfig,
+        module_name: str = 'draw',
         cache_ttl: int = 600  # 10 minutes default TTL
     ):
-        """Initialize draw service with model configuration"""
-        super().__init__(cache_ttl=cache_ttl)  # No tools needed for image generation
-        self.default_llm_config = llm_config
+        """Initialize draw service
+        
+        Args:
+            module_name: Name of the module using this service (defaults to 'draw')
+            cache_ttl: Cache time-to-live in seconds
+        """
+        super().__init__(module_name=module_name, cache_ttl=cache_ttl)
+
+    def _validate_model(self, model_id: str) -> None:
+        """Validate model is a Stability AI model
+        
+        Args:
+            model_id: Model ID to validate
+            
+        Raises:
+            ValueError: If model is not a Stability AI model
+        """
+        if not model_id or 'stability' not in model_id:
+            raise ValueError("Please use Stability AI's SD text-to-image model")
 
     async def text_to_image_stateless(
         self,
@@ -43,8 +60,16 @@ class DrawService(BaseService):
             Image.Image: Generated image
         """
         try:
-            # Always use the default model for stateless operations
-            provider = self._get_llm_provider(self.default_llm_config.model_id)
+            # Get default model from module config
+            model_id = module_config.get_default_model(self.module_name)
+            if not model_id:
+                raise ValueError(f"No default model configured for {self.module_name}")
+            
+            # Validate model is Stability AI
+            self._validate_model(model_id)
+            
+            # Get provider with module's default configuration
+            provider = self._get_llm_provider(model_id)
             
             # Prepare request body
             request_body = {
@@ -113,10 +138,11 @@ class DrawService(BaseService):
             Image.Image: Generated image
         """
         try:
-            # Get model_id with fallback to module default if needed
+            # Get model_id with fallback to module default
             model_id = await self.get_session_model(session)
-            if 'stability' not in model_id:
-                raise ValueError("Please use Stability AI's SD text-to-image model")
+            
+            # Validate model is Stability AI
+            self._validate_model(model_id)
 
             # Get LLM provider
             provider = self._get_llm_provider(model_id)

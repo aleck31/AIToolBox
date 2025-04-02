@@ -5,9 +5,9 @@ import gradio as gr
 from typing import Optional, Tuple
 from PIL import Image
 from core.logger import logger
-from core.integration.service_factory import ServiceFactory
-from core.integration.draw_service import DrawService
-from core.integration.gen_service import GenService
+from core.service.service_factory import ServiceFactory
+from core.service.draw_service import DrawService
+from core.service.gen_service import GenService
 from core.module_config import module_config
 from .prompts import STYLE_OPTIMIZER_TEMPLATE, NEGATIVE_PROMPTS
 
@@ -38,8 +38,8 @@ class DrawHandlers:
             cls._draw_service = ServiceFactory.create_draw_service('draw')
             cls._gen_service = ServiceFactory.create_gen_service(
                 module_name = 'draw', 
-                # Initialize gen service with text module's default model
-                model_id = module_config.get_default_model('text')
+                # Initialize gen service using claude 3.7
+                model_id = 'us.anthropic.claude-3-7-sonnet-20250219-v1:0'
             )
         return cls._draw_service, cls._gen_service
 

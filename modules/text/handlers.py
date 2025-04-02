@@ -5,8 +5,8 @@ from typing import Dict, List, Optional, Any, Tuple
 from fastapi import HTTPException
 from core.logger import logger
 from .prompts import SYSTEM_PROMPTS, STYLES
-from core.integration.service_factory import ServiceFactory
-from core.integration.gen_service import GenService
+from core.service.service_factory import ServiceFactory
+from core.service.gen_service import GenService
 
 
 # Language options

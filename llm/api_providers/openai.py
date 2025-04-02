@@ -5,29 +5,27 @@ from openai import AsyncOpenAI
 from core.logger import logger
 from core.config import env_config
 from utils.aws import get_secret
-from . import LLMAPIProvider, LLMConfig, Message, LLMResponse, LLMProviderError
+from . import LLMAPIProvider, LLMParameters, LLMMessage, LLMResponse, LLMProviderError
 
 
 class OpenAIProvider(LLMAPIProvider):
     """OpenAI LLM API provider implementation"""
     
-    def __init__(self, config: LLMConfig, tools=None):
-        """Initialize provider with config and tools
+    def __init__(self, model_id: str, llm_params: LLMParameters, tools=None):
+        """Initialize provider with model ID, parameters and tools
         
         Args:
-            config: LLM configuration
+            model_id: Model identifier
+            llm_params: LLM inference parameters
             tools: Optional list of tool specifications
         """
-        super().__init__(config, tools)
-        self._initialize_client()
+        super().__init__(model_id, llm_params, tools)
 
     def _validate_config(self) -> None:
         """Validate OpenAI-specific configuration"""
-        logger.debug(f"[OpenAIProvider] Model Configurations: {self.config}")
-        if not self.config.model_id:
+        logger.debug(f"[OpenAIProvider] Model Configurations: {self.model_id}, {self.llm_params}")
+        if not self.model_id:
             raise ValueError("Model ID must be specified for OpenAI")
-        if self.config.api_provider.upper() != 'OPENAI':
-            raise ValueError(f"Invalid API provider: {self.config.api_provider}")
 
     def _initialize_client(self) -> None:
         """Initialize OpenAI client"""
@@ -78,7 +76,7 @@ class OpenAIProvider(LLMAPIProvider):
             
         raise LLMProviderError(error_code, message, error_detail)
 
-    def _convert_message(self, message: Message) -> Dict:
+    def _convert_message(self, message: LLMMessage) -> Dict:
         """Convert a single message into OpenAI-specific format
         
         Args:
@@ -134,7 +132,7 @@ class OpenAIProvider(LLMAPIProvider):
 
     def _convert_messages(
         self,
-        messages: List[Message],
+        messages: List[LLMMessage],
         system_prompt: Optional[str] = None
     ) -> List[Dict]:
         """Convert messages to OpenAI-specific format with system prompt handling
@@ -165,7 +163,7 @@ class OpenAIProvider(LLMAPIProvider):
         usage = response.usage if hasattr(response, 'usage') else None
         return {
             'metadata': {
-                'model': self.config.model_id,
+                'model': self.model_id,
                 'usage': {
                     'prompt_tokens': usage.prompt_tokens if usage else None,
                     'completion_tokens': usage.completion_tokens if usage else None,
@@ -176,7 +174,7 @@ class OpenAIProvider(LLMAPIProvider):
 
     async def generate_content(
         self,
-        messages: List[Message],
+        messages: List[LLMMessage],
         system_prompt: Optional[str] = None,
         **kwargs
     ) -> LLMResponse:
@@ -195,11 +193,11 @@ class OpenAIProvider(LLMAPIProvider):
             logger.debug(f"[OpenAIProvider] Converted messages: {llm_messages}")
             
             response = await self.async_client.chat.completions.create(
-                model=self.config.model_id,
+                model=self.model_id,
                 messages=llm_messages,
-                temperature=kwargs.get('temperature', self.config.temperature),
-                max_tokens=kwargs.get('max_tokens', self.config.max_tokens),
-                top_p=kwargs.get('top_p', self.config.top_p),
+                temperature=kwargs.get('temperature', self.llm_params.temperature),
+                max_tokens=kwargs.get('max_tokens', self.llm_params.max_tokens),
+                top_p=kwargs.get('top_p', self.llm_params.top_p),
                 stream=False
             )
             
@@ -224,7 +222,7 @@ class OpenAIProvider(LLMAPIProvider):
 
     async def generate_stream(
         self,
-        messages: List[Message],
+        messages: List[LLMMessage],
         system_prompt: Optional[str] = None,
         **kwargs
     ) -> AsyncIterator[Dict]:
@@ -243,11 +241,11 @@ class OpenAIProvider(LLMAPIProvider):
             logger.debug(f"[OpenAIProvider] Converted messages for streaming: {llm_messages}")
             
             async for chunk in self.async_client.chat.completions.create(
-                model=self.config.model_id,
+                model=self.model_id,
                 messages=llm_messages,
-                temperature=kwargs.get('temperature', self.config.temperature),
-                max_tokens=kwargs.get('max_tokens', self.config.max_tokens),
-                top_p=kwargs.get('top_p', self.config.top_p),
+                temperature=kwargs.get('temperature', self.llm_params.temperature),
+                max_tokens=kwargs.get('max_tokens', self.llm_params.max_tokens),
+                top_p=kwargs.get('top_p', self.llm_params.top_p),
                 stream=True
             ):
                 if content := chunk.choices[0].delta.content:
@@ -268,8 +266,8 @@ class OpenAIProvider(LLMAPIProvider):
 
     async def multi_turn_generate(
         self,
-        message: Message,
-        history: Optional[List[Message]] = None,
+        message: LLMMessage,
+        history: Optional[List[LLMMessage]] = None,
         system_prompt: Optional[str] = None,
         **kwargs
     ) -> AsyncIterator[Dict]:

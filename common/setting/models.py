@@ -1,7 +1,7 @@
 """Handler implementation for Model Management tab"""
 import gradio as gr
 from typing import List, Tuple, Optional
-from llm.model_manager import model_manager, LLMModel, MODEL_CAPABILITIES
+from llm.model_manager import model_manager, LLMModel, LLM_CAPABILITIES
 from core.logger import logger
 
 
@@ -49,7 +49,7 @@ class ModelHandlers:
         if not name or not model_id:
             raise ValueError("Model name and ID are required")
 
-        capabilities = MODEL_CAPABILITIES(
+        capabilities = LLM_CAPABILITIES(
             input_modality=input_modality,
             output_modality=output_modality,
             streaming=streaming,

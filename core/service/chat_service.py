@@ -3,7 +3,7 @@ from itertools import groupby
 from typing import Dict, List, Optional, AsyncIterator
 from core.logger import logger
 from core.session import Session
-from llm.api_providers import Message, LLMConfig, LLMProviderError
+from llm.api_providers import LLMMessage, LLMProviderError
 from llm.model_manager import model_manager
 from . import BaseService
 
@@ -13,13 +13,16 @@ class ChatService(BaseService):
 
     def __init__(
         self,
-        llm_config: LLMConfig,
-        enabled_tools: Optional[List[str]] = None,
+        module_name: str,
         cache_ttl: int = 600  # 10 minutes default TTL
     ):
-        """Initialize ChatService with model configuration and tools"""
-        super().__init__(enabled_tools=enabled_tools, cache_ttl=cache_ttl)  # Tools needed for function calling
-        self.default_llm_config = llm_config
+        """Initialize ChatService
+        
+        Args:
+            module_name: Name of the module using this service
+            cache_ttl: Cache time-to-live in seconds
+        """
+        super().__init__(module_name=module_name, cache_ttl=cache_ttl)
 
     # File type definitions
     _FILE_TYPES = {
@@ -35,7 +38,7 @@ class ChatService(BaseService):
         model_id: Optional[str] = None,
         context: Optional[Dict] = None, 
         metadata: Optional[Dict] = None
-    ) -> Message:
+    ) -> LLMMessage:
         """Create standardized interaction entry with content filtering based on model capabilities.
         
         Note:
@@ -54,14 +57,14 @@ class ChatService(BaseService):
                     content['text'] = (content.get('text', '') + 
                         "\n[Note: Files were removed as the current model does not support multimodal content.]").strip()
 
-        return Message(
+        return LLMMessage(
             role=role,
             content=content,
             context=context,
             metadata=metadata
         )
 
-    def _prepare_history(self, ui_history: List[Dict], model_id: Optional[str] = None,) -> List[Message]:
+    def _prepare_history(self, ui_history: List[Dict]) -> List[LLMMessage]:
         """Process history messages to chat Message format.
  
         Note:

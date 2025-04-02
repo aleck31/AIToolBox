@@ -4,64 +4,13 @@ from typing import Dict, List, Optional, Union, Any
 from dataclasses import dataclass, asdict
 
 
-@dataclass
-class LLMConfig:
-    """Model-specific parameters for LLM providers"""
-    # Do we need to update LLMConfig for compatibility with generative models like Stable Diffusion and Nova?
-    api_provider: str
-    model_id: str
-    max_tokens: int = 4096
-    temperature: float = 0.9
-    top_p: float = 0.99
-    top_k: Optional[int] = 200
-    stop_sequences: Optional[List[str]] = None
-
-
-@dataclass
-class Message:
-    """Chat message structure"""
-    role: str
-    content: Union[str, Dict]
-    context: Optional[Dict] = None    
-    metadata: Optional[Dict] = None
-
-    def to_dict(self) -> Dict:
-        """Convert message to dictionary, excluding None values"""
-        return {k: v for k, v in asdict(self).items() if v is not None}
-
-
-@dataclass
-class LLMResponse:
-    """Basic LLM response structure"""
-    content: Dict # text, image, video, file_path
-    thinking: Optional[str] = None  # Thinking text from Reasoning models
-    metadata: Optional[Dict] = None
-
-@dataclass
-class ResponseMetadata:
-    """Metadata structure for LLM responses with stop_reason"""
-    stop_reason: Optional[str] = None
-    usage: Optional[Dict] = None
-    metrics: Optional[Dict] = None
-    performance_config: Optional[Dict] = None
-
-    def update_from_chunk(self, chunk_metadata: Dict) -> None:
-        """Update metadata fields from a chunk"""
-        self.usage = chunk_metadata.get('usage', self.usage)
-        self.metrics = chunk_metadata.get('metrics', self.metrics)
-        self.performance_config = chunk_metadata.get('performanceConfig', self.performance_config)
-
-    def to_dict(self) -> Dict:
-        """Convert metadata to dictionary, excluding None values"""
-        return {k: v for k, v in asdict(self).items() if v is not None}
-
-
 # Model category and capabilities
 VAILD_CATEGORY = ['text', 'vision', 'image', 'video', 'reasoning', 'embedding']
 VALID_MODALITY = ['text', 'document', 'image', 'video', 'audio']
 
+
 @dataclass
-class MODEL_CAPABILITIES:
+class LLM_CAPABILITIES:
     """Model capabilities configuration"""
     input_modality: List[str] = None  # Support input modalities
     output_modality: List[str] = None # Support output modalities
@@ -77,6 +26,7 @@ class MODEL_CAPABILITIES:
         self.tool_use = False if self.tool_use is None else self.tool_use
         self.context_window = self.context_window or 128*1024
 
+
 @dataclass
 class LLMModel:
     """Represents an LLM model configuration with capabilities"""
@@ -86,7 +36,7 @@ class LLMModel:
     category: str   #Legacy to compatibility with existing models
     vendor: str = ""      # Optional
     description: str = "" # Optional
-    capabilities: Optional[MODEL_CAPABILITIES] = None
+    capabilities: Optional[LLM_CAPABILITIES] = None
 
     def __post_init__(self):
         """Validate model attributes after initialization"""
@@ -96,11 +46,13 @@ class LLMModel:
             raise ValueError("Model ID is required")
         if not self.api_provider:
             raise ValueError("API provider is required")
+        if not isinstance(self.api_provider, str):
+            raise ValueError("API provider must be a string")
         if self.category not in VAILD_CATEGORY:
             raise ValueError(f"Invalid model category. Must be one of: {VAILD_CATEGORY}")
 
         # Initialize capabilities if none provided
-        self.capabilities = self.capabilities or MODEL_CAPABILITIES()
+        self.capabilities = self.capabilities or LLM_CAPABILITIES()
 
     def supports_input(self, modality: str) -> bool:
         """Check if model supports a specific input modality"""
@@ -132,7 +84,7 @@ class LLMModel:
         
         # Extract and convert capabilities data if present
         capabilities_data = data.pop('capabilities', None)
-        capabilities = MODEL_CAPABILITIES(**capabilities_data) if capabilities_data else None
+        capabilities = LLM_CAPABILITIES(**capabilities_data) if capabilities_data else None
         
         # Create instance with remaining data
         return cls(
@@ -144,3 +96,58 @@ class LLMModel:
             description=data.get('description', ''),
             capabilities=capabilities
         )
+
+
+@dataclass
+class LLMMessage:
+    """LLM message structure"""
+    role: str
+    content: Union[str, Dict]
+    context: Optional[Dict] = None    
+    metadata: Optional[Dict] = None
+
+    def to_dict(self) -> Dict:
+        """Convert message to dictionary, excluding None values"""
+        return {k: v for k, v in asdict(self).items() if v is not None}
+
+
+@dataclass
+class LLMParameters:
+    """LLM inference parameters configuration"""
+    max_tokens: int = 4096  # maximum number of tokens to generate. Responses are not guaranteed to fill up to the maximum desired length.
+    temperature: float = 0.9  # tunes the degree of randomness in generation. Lower temperatures mean less random generations.
+    top_p: float = 0.99   # less than one keeps only the smallest set of most probable tokens with probabilities that add up to top_p or higher for generation.
+    top_k: Optional[int] = 100 # Lower values produce more conservative and focused outputs, while higher values introduce diversity and creativity.
+    stop_sequences: Optional[List[str]] = None  # stop_sequences - are sequences where the API will stop generating further tokens. The returned text will not contain the stop sequence.
+
+    def to_dict(self) -> Dict:
+        """Convert config to dictionary, excluding None values"""
+        return {k: v for k, v in asdict(self).items() if v is not None}
+
+
+@dataclass
+class LLMResponse:
+    """Basic LLM response structure"""
+    content: Dict # text, image, video, file_path
+    thinking: Optional[str] = None  # Thinking text from Reasoning models
+    metadata: Optional[Dict] = None
+
+
+@dataclass
+class ResponseMetadata:
+    """Metadata structure for LLM responses with stop_reason"""
+    stop_reason: Optional[str] = None
+    usage: Optional[Dict] = None
+    metrics: Optional[Dict] = None
+    performance_config: Optional[Dict] = None
+
+    def update_from_chunk(self, chunk_metadata: Dict) -> None:
+        """Update metadata fields from a chunk"""
+        self.usage = chunk_metadata.get('usage', self.usage)
+        self.metrics = chunk_metadata.get('metrics', self.metrics)
+        self.performance_config = chunk_metadata.get('performanceConfig', self.performance_config)
+
+    def to_dict(self) -> Dict:
+        """Convert metadata to dictionary, excluding None values"""
+        return {k: v for k, v in asdict(self).items() if v is not None}
+

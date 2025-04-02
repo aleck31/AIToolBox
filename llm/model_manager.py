@@ -7,7 +7,7 @@ from botocore.exceptions import ClientError
 from core.config import env_config
 from core.logger import logger
 from utils.aws import get_aws_resource
-from . import LLMModel, MODEL_CAPABILITIES
+from . import LLMModel, LLM_CAPABILITIES
 
 
 # Default model configurations
@@ -19,7 +19,7 @@ DEFAULT_MODELS = [
         category='vision',
         description='Claude 3.5 Sonnet v2 model for general use',
         vendor='Anthropic',
-        capabilities=MODEL_CAPABILITIES(
+        capabilities=LLM_CAPABILITIES(
             input_modality=['text', 'image', 'document'],
             output_modality=['text'],
             streaming=True,
@@ -34,7 +34,7 @@ DEFAULT_MODELS = [
         category='vision',
         description='Gemini Pro model for text and vision',
         vendor='Google',
-        capabilities=MODEL_CAPABILITIES(
+        capabilities=LLM_CAPABILITIES(
             input_modality=['text', 'image', 'document'],
             output_modality=['text'],
             streaming=True,
@@ -49,7 +49,7 @@ DEFAULT_MODELS = [
         category='vision',
         description='Gemini Flash model for text and vision',
         vendor='Google',
-        capabilities=MODEL_CAPABILITIES(
+        capabilities=LLM_CAPABILITIES(
             input_modality=['text', 'image', 'document'],
             output_modality=['text'],
             streaming=True,
@@ -64,7 +64,7 @@ DEFAULT_MODELS = [
         description= "Nova Pro is a vision understanding foundation model. It is multilingual and can reason over text, images and videos.",
         model_id= "amazon.nova-pro-v1:0",
         vendor= "Amazon",
-        capabilities=MODEL_CAPABILITIES(
+        capabilities=LLM_CAPABILITIES(
             input_modality=['text', 'image', 'document', 'video'],
             output_modality=['text'],
             streaming=True,
@@ -78,7 +78,7 @@ DEFAULT_MODELS = [
         description= "Nova image generation model. It generates images from text and allows users to upload and edit an existing image. ",
         model_id= "amazon.nova-canvas-v1:0",
         vendor= "Amazon",
-        capabilities=MODEL_CAPABILITIES(
+        capabilities=LLM_CAPABILITIES(
             input_modality=['text', 'image'],
             output_modality=['image']
         )
@@ -90,7 +90,7 @@ DEFAULT_MODELS = [
         category='image',
         description='Stable Diffusion Ultra for image generation',
         vendor='Stability AI',
-        capabilities=MODEL_CAPABILITIES(
+        capabilities=LLM_CAPABILITIES(
             input_modality=['text', 'image'],
             output_modality=['image']
         )
@@ -102,7 +102,7 @@ DEFAULT_MODELS = [
         description= "Nova video generation model. It generates short high-definition videos, up to 9 seconds long from input images or a natural language prompt.",
         model_id= "amazon.nova-reel-v1:0",
         vendor= "Amazon",
-        capabilities=MODEL_CAPABILITIES(
+        capabilities=LLM_CAPABILITIES(
             input_modality=['text', 'image'],
             output_modality=['video']
         )
@@ -114,7 +114,7 @@ DEFAULT_MODELS = [
         category='text',
         description='DeepSeek R1 model for text generation',
         vendor='DeepSeek',
-        capabilities=MODEL_CAPABILITIES(
+        capabilities=LLM_CAPABILITIES(
             input_modality=['text'],
             output_modality=['text'],
             streaming=True,

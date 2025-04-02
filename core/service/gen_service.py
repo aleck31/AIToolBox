@@ -1,7 +1,9 @@
-from typing import Dict, List, Optional, AsyncIterator
+from typing import Dict, Optional, AsyncIterator
 from core.logger import logger
 from core.session import Session
-from llm.api_providers import LLMConfig, Message, LLMProviderError
+from core.module_config import module_config
+from llm.api_providers import LLMMessage, LLMProviderError
+from llm.model_manager import model_manager
 from . import BaseService
 
 
@@ -10,20 +12,50 @@ class GenService(BaseService):
     
     def __init__(
         self,
-        llm_config: LLMConfig,
-        enabled_tools: Optional[List[str]] = None,
+        module_name: str,
         cache_ttl: int = 600  # 10 minutes default TTL
     ):
-        """Initialize GenService with model configuration"""
-        super().__init__(enabled_tools=enabled_tools, cache_ttl=cache_ttl)
-        self.default_llm_config = llm_config
+        """Initialize GenService
+        
+        Args:
+            module_name: Name of the module using this service
+            cache_ttl: Cache time-to-live in seconds
+        """
+        super().__init__(module_name=module_name, cache_ttl=cache_ttl)
 
-    def _prepare_message(self, content: Dict[str, str]) -> Message:
-        """Create standardized message format"""
-        return Message(
-            role="user",
-            content=content if isinstance(content, dict) else {"text": str(content)}
-        )
+    def _prepare_message(
+        self,
+        content: Dict[str, str],
+        model_id: Optional[str] = None
+    ) -> LLMMessage:
+        """Create standardized message with content filtering
+        
+        Args:
+            content: Message content (text and/or files)
+            model_id: Optional model ID for content filtering
+            
+        Returns:
+            LLMMessage: Standardized message instance
+            
+        Note:
+            Filters content based on model's supported input modalities
+        """
+        # Normalize content to dict format
+        if not isinstance(content, dict):
+            content = {"text": str(content)}
+            
+        # Filter content based on model capabilities if model_id provided
+        if model_id and "files" in content:
+            model = model_manager.get_model_by_id(model_id)
+            if model and model.capabilities:
+                supported_modalities = model.capabilities.input_modality
+                # Remove files for text-only models
+                if len(supported_modalities) == 1 and supported_modalities[0] == "text":
+                    content.pop("files")
+                    content["text"] = (content.get("text", "") + 
+                        "\n[Note: Files were removed as the current model does not support multimodal content.]").strip()
+            
+        return LLMMessage(role="user", content=content)
 
     async def gen_text_stateless(
         self,
@@ -42,13 +74,18 @@ class GenService(BaseService):
             str: Generated text
         """
         try:
-            # Always use the default model for stateless operations
-            provider = self._get_llm_provider(self.default_llm_config.model_id)
+            # Get default model from module config
+            model_id = module_config.get_default_model(self.module_name)
+            if not model_id:
+                raise ValueError(f"No default model configured for {self.module_name}")
+            
+            # Get provider with module's default configuration
+            provider = self._get_llm_provider(model_id)
             
             logger.debug(f"[GenService] Content for stateless generation: {content}")
             
-            # Create standardized message
-            messages = [self._prepare_message(content)]
+            # Create message with content filtering
+            messages = [self._prepare_message(content, model_id)]
 
             # Generate response
             response = await provider.generate_content(
@@ -92,8 +129,8 @@ class GenService(BaseService):
             
             logger.debug(f"[GenService] Content for session {session.session_id}: {content}")
             
-            # Create message with multimodal content support
-            message = self._prepare_message(content)
+            # Create message with content filtering
+            message = self._prepare_message(content, model_id)
 
             # Generate response
             response = await provider.generate_content(
@@ -152,8 +189,8 @@ class GenService(BaseService):
 
             logger.debug(f"[GenService] Content for session {session.session_name}: {content}")
 
-            # Create message for generation
-            message = self._prepare_message(content)
+            # Create message with content filtering
+            message = self._prepare_message(content, model_id)
 
             # Track response state
             accumulated_text = []

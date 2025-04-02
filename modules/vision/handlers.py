@@ -4,8 +4,8 @@ import asyncio
 import gradio as gr
 from typing import Dict, Optional, AsyncIterator, List, Tuple
 from core.logger import logger
-from core.integration.service_factory import ServiceFactory
-from core.integration.gen_service import GenService
+from core.service.service_factory import ServiceFactory
+from core.service.gen_service import GenService
 from llm.model_manager import model_manager
 from .prompts import VISION_SYSTEM_PROMPT
 
@@ -57,8 +57,8 @@ class VisionHandlers:
             )
             
             # Update model and log
-            await service.update_session_model(session, model_id)
             logger.debug(f"[VisionHandlers] Updating session model to: {model_id}")
+            await service.update_session_model(session, model_id)
 
         except Exception as e:
             logger.error(f"[VisionHandlers] Failed updating session model: {str(e)}", exc_info=True)
@@ -79,7 +79,7 @@ class VisionHandlers:
                 
                 # Get current model id from session
                 model_id = await service.get_session_model(session)
-                logger.debug(f"[VisionHandlers] Loaded model {model_id} from session")
+                logger.debug(f"[VisionHandlers] Get model {model_id} from session")
                 
                 # Return model_id for selected value
                 return model_id
@@ -125,43 +125,30 @@ class VisionHandlers:
             user_name = request.session.get('user', {}).get('username')
             # Get service for the selected model
             service = await cls._get_service()
+            # Get or create session
+            session = await service.get_or_create_session(
+                user_name=user_name,
+                module_name='vision'
+            )
 
-            try:
-                # Get or create session
-                session = await service.get_or_create_session(
-                    user_name=user_name,
-                    module_name='vision'
-                )
-                logger.debug(f"[VisionHandlers] Created/retrieved session: {session.session_id}")
+            # Build content
+            user_requirement = text or "Describe the media or document in detail."
+            content = {
+                "text": f"<requirement>{user_requirement}</requirement>",
+                "files": [file_path]
+            }
+            logger.info(f"[VisionHandlers] Vision analysis request - Model: {model_id}")
+            logger.debug(f"[VisionHandlers] Analysis content: {content}")
 
-                # Update session with system prompt
-                session.context['system_prompt'] = VISION_SYSTEM_PROMPT
-                # Persist updated context
-                await service.session_store.save_session(session)
-                logger.debug("Updated session with vision system prompt")
-
-                # Build content
-                user_requirement = text or "Describe the media or document in detail."
-                content = {
-                    "text": f"<requirement>{user_requirement}</requirement>",
-                    "files": [file_path]
-                }
-                logger.info(f"Vision analysis request - Model: {model_id}")
-                logger.debug(f"Analysis content: {content}")
-
-                # Generate streaming response
-                buffered_text = ""
-                async for chunk in service.gen_text_stream(
-                    session=session,
-                    content=content
-                ):
-                    buffered_text += chunk
-                    yield buffered_text
-                    await asyncio.sleep(0)  # Add sleep for Gradio UI streaming echo
-
-            except Exception as e:
-                logger.error(f"[VisionHandlers] Service error: {str(e)}")
-                yield f"Error: {str(e)}"
+            # Generate streaming response
+            buffered_text = ""
+            async for chunk in service.gen_text_stream(
+                session=session,
+                content=content
+            ):
+                buffered_text += chunk
+                yield buffered_text
+                await asyncio.sleep(0)  # Add sleep for Gradio UI streaming echo
 
         except Exception as e:
             logger.error(f"[VisionHandlers] Failed to analyze image: {str(e)}", exc_info=True)

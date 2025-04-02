@@ -4,8 +4,8 @@ import asyncio
 import gradio as gr
 from typing import Dict, Optional, AsyncIterator, List, Union
 from core.logger import logger
-from core.integration.service_factory import ServiceFactory
-from core.integration.gen_service import GenService
+from core.service.service_factory import ServiceFactory
+from core.service.gen_service import GenService
 from .prompts import SYSTEM_PROMPT
 
 

@@ -94,19 +94,19 @@ The project follows a clean, layered architecture:
 
 ```
 llm-toolbox/
-├── app.py              # Main application entry point
-├── core/               # Core components
+├── app.py          # Main application entry point
+├── core/           # Core components
 │   ├── auth.py        # Authentication handling (cognito)
 │   ├── config.py      # Configuration settings
 │   ├── logger.py      # Logging configuration
 │   ├── module_config.py    # Module configuration
-│   ├── integration/   # Service integration
-│   │   ├── service_factory.py  # Service creation factory
-│   │   ├── base_service.py     # Base service with common functionality
+│   ├── service/         # Service integration
+│   │   ├── init.py           # Base service with common functionality
+│   │   ├── gen_service.py      # General content generation service
 │   │   ├── chat_service.py     # Chat service implementation
 │   │   ├── draw_service.py     # Image generation service
-│   │   └── gen_service.py      # General content generation service
-│   └── session/       # Session management
+│   │   └── service_factory.py    # Service creation factory
+│   └── session/        # Session management
 │       ├── models.py         # Data models for Session
 │       └── store.py          # DynamoDB-based session storage
 ├── llm/               # LLM implementations

@@ -6,9 +6,9 @@ from core.logger import logger
 from core.config import env_config
 from utils.aws import get_aws_client
 from utils.file import FileProcessor
-from llm import ResponseMetadata
 from llm.tools.tool_registry import br_registry
-from . import LLMAPIProvider, LLMConfig, Message, LLMResponse, LLMProviderError
+from llm import ResponseMetadata, LLMParameters, LLMMessage, LLMResponse
+from . import LLMAPIProvider, LLMProviderError
 
 
 # Maximum file size for Bedrock API (5MB)
@@ -19,15 +19,15 @@ MAX_IMG_DIMENSION_= 8000
 class BedrockConverse(LLMAPIProvider):
     """Amazon Bedrock LLM API provider implemented with Converse API, featuring comprehensive tool support."""
     
-    def __init__(self, config: LLMConfig, tools: Optional[List[str]] = None):
-        """Initialize provider with config and tools
+    def __init__(self, model_id: str, llm_params: LLMParameters, tools: Optional[List[str]] = None):
+        """Initialize provider with configuration and tools
         
         Args:
-            config: LLM configuration
+            model_id: Model identifier
+            llm_params: LLM inference parameters
             tools: Optional list of tool names to enable
         """
-        super().__init__(config, [])  # Initialize base with empty tools list
-        self._initialize_client()
+        super().__init__(model_id, llm_params, [])  # Initialize base with empty tools list
         
         # Initialize FileProcessor for file handling
         self.file_processor = FileProcessor(max_file_size=MAX_FILE_SIZE)
@@ -57,14 +57,10 @@ class BedrockConverse(LLMAPIProvider):
         Raises:
             ParamValidationError: If configuration is invalid
         """
-        logger.debug(f"[BRConverseProvider] Model Configurations: {self.config}")
-        if not self.config.model_id:
+        logger.debug(f"[BRConverseProvider] Model Configurations: {self.model_id}, {self.llm_params}")
+        if not self.model_id:
             raise ParamValidationError(
                 report="Model ID must be specified for Bedrock"
-            )
-        if self.config.api_provider.upper() != 'BEDROCK':
-            raise ParamValidationError(
-                report=f"Invalid API provider: {self.config.api_provider}"
             )
 
     def _initialize_client(self) -> None:
@@ -131,20 +127,20 @@ class BedrockConverse(LLMAPIProvider):
         """
         # Prepare standard inference parameters
         inference_config = {
-            "maxTokens": kwargs.get('max_tokens', self.config.max_tokens),
-            "temperature": kwargs.get('temperature', self.config.temperature),
-            "topP": kwargs.get('top_p', self.config.top_p),
-            "stopSequences": kwargs.get('stop_sequences', self.config.stop_sequences)
+            "maxTokens": kwargs.get('max_tokens', self.llm_params.max_tokens),
+            "temperature": kwargs.get('temperature', self.llm_params.temperature),
+            "topP": kwargs.get('top_p', self.llm_params.top_p),
+            "stopSequences": kwargs.get('stop_sequences', self.llm_params.stop_sequences)
         }
         inference_config = {k: v for k, v in inference_config.items() if v is not None}
 
         # Prepare additional model request fields if needed
         additional_fields = None
-        if top_k := kwargs.get('top_k', self.config.top_k):
+        if top_k := kwargs.get('top_k', self.llm_params.top_k):
             if isinstance(top_k, (int, float)):  # Validate top_k
-                if 'deepseek' in self.config.model_id:
+                if 'deepseek' in self.model_id:
                     additional_fields = None
-                elif 'nova' in self.config.model_id:
+                elif 'nova' in self.model_id:
                     additional_fields = {"inferenceConfig": {"topK": top_k}}
                 else:
                     additional_fields = {'top_k': top_k}
@@ -212,7 +208,7 @@ class BedrockConverse(LLMAPIProvider):
             'content': [{'toolResult': tool_result}]
         }
 
-    def _convert_message(self, message: Message) -> Dict:
+    def _convert_message(self, message: LLMMessage) -> Dict:
         """Convert a single message for Bedrock API
 
         Args:
@@ -254,23 +250,33 @@ class BedrockConverse(LLMAPIProvider):
             if files := message.content.get("files", []):
                 for file_path in files:
                     file_type, format = self.file_processor.get_file_type_and_format(file_path)
-                    if file_type:
+                    if file_type == 'image':
+                        # Handle image files according to Nova schema
+                        content_parts.append({
+                            "image": {
+                                "format": format,  # Nova requires explicit format
+                                "source": {
+                                    "bytes": self.file_processor.read_file(file_path, optimize=True)
+                                }
+                            }
+                        })
+                        logger.debug(f"[BRConverseProvider] Added image with format: {format}")
+                    elif file_type == 'document':
+                        # Handle document files
                         content_block = {
                             "format": format,
                             "source": {
                                 "bytes": self.file_processor.read_file(file_path, optimize=True)
-                            }
+                            },
+                            "name": self.file_processor.get_file_name(file_path)
                         }
-                        # Add name parameter only for document type
-                        if file_type == 'document':
-                            content_block["name"] = self.file_processor.get_file_name(file_path)
                         content_parts.append({
                             file_type: content_block
                         })
             
         return {"role": message.role, "content": content_parts}
 
-    def _convert_messages(self, messages: List[Message]) -> List[Dict]:
+    def _convert_messages(self, messages: List[LLMMessage]) -> List[Dict]:
         """Convert messages to Bedrock-specified format efficiently
         
         Args:
@@ -283,7 +289,7 @@ class BedrockConverse(LLMAPIProvider):
 
     def _converse_sync(
             self,
-            messages: List[Message],
+            messages: List[LLMMessage],
             system_prompt: Optional[str] = '',
             **kwargs
         ) -> Dict:
@@ -311,7 +317,7 @@ class BedrockConverse(LLMAPIProvider):
             
             # Prepare request parameters
             request_params = {
-                "modelId": self.config.model_id,
+                "modelId": self.model_id,
                 "messages": messages,
                 "inferenceConfig": inference_config
             }
@@ -328,7 +334,7 @@ class BedrockConverse(LLMAPIProvider):
                 request_params["toolConfig"] = {"tools": self.tools}
 
             # Get response
-            # logger.debug(f"[BRConverseProvider] Request params: {request_params}")
+            # logger.debug(f"[BRConverseProvider] Full request params: {request_params}")
             response = self.client.converse(**request_params)
             # logger.debug(f"Raw Bedrock response: {response}")
 
@@ -360,7 +366,7 @@ class BedrockConverse(LLMAPIProvider):
 
     def _converse_stream_sync(
             self,
-            messages: List[Message],
+            messages: List[LLMMessage],
             system_prompt: Optional[str] = '',
             **kwargs
         ) -> Iterator[Dict]:
@@ -381,10 +387,10 @@ class BedrockConverse(LLMAPIProvider):
         """
         try:
             inference_config, additional_fields = self._prepare_inference_params(**kwargs)
-            logger.debug(f"[BRConverseProvider] Stream using model: {self.config.model_id}")
+            logger.debug(f"[BRConverseProvider] Stream using model: {self.model_id}")
             # Prepare request parameters
             request_params = {
-                "modelId": self.config.model_id,
+                "modelId": self.model_id,
                 "messages": messages,
                 "inferenceConfig": inference_config
             }
@@ -401,7 +407,7 @@ class BedrockConverse(LLMAPIProvider):
                 request_params["toolConfig"] = {"tools": self.tools}
 
             # Get response stream
-            # logger.debug(f"[BRConverseProvider] Request params: {request_params}")  #Todo: Remove 'messages' field from request_params to prevent excessively long log
+            # logger.debug(f"[BRConverseProvider] Full request params: {request_params}")  #Todo: Remove 'messages' field from request_params to prevent excessively long log
             response = self.client.converse_stream(**request_params)
             
             # Initialize response tracking
@@ -496,7 +502,7 @@ class BedrockConverse(LLMAPIProvider):
 
     async def generate_content(
         self,
-        messages: List[Message],
+        messages: List[LLMMessage],
         system_prompt: Optional[str] = '',
         **kwargs
     ) -> LLMResponse:
@@ -580,7 +586,7 @@ class BedrockConverse(LLMAPIProvider):
 
     async def generate_stream(
         self,
-        messages: List[Message],
+        messages: List[LLMMessage],
         system_prompt: Optional[str] = '',
         **kwargs
     ) -> AsyncIterator[Dict]:
@@ -679,8 +685,8 @@ class BedrockConverse(LLMAPIProvider):
 
     async def multi_turn_generate(
         self,
-        message: Message,
-        history: Optional[List[Message]] = None,
+        message: LLMMessage,
+        history: Optional[List[LLMMessage]] = None,
         system_prompt: Optional[str] = '',
         **kwargs
     ) -> AsyncIterator[Dict]:

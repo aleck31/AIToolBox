@@ -5,32 +5,28 @@ from google.api_core import exceptions
 from core.logger import logger
 from core.config import env_config
 from utils.aws import get_secret
-from . import LLMAPIProvider, LLMConfig, Message, LLMResponse, LLMProviderError
+from . import LLMAPIProvider, LLMParameters, LLMMessage, LLMResponse, LLMProviderError
 
 
 class GeminiProvider(LLMAPIProvider):
     """Google Gemini LLM provider implementation"""
     
-    def __init__(self, config: LLMConfig, tools=None):
-        """Initialize provider with config and tools
+    def __init__(self, model_id: str, llm_params: LLMParameters, tools=None):
+        """Initialize provider with model ID, parameters and tools
         
         Args:
-            config: LLM configuration
+            model_id: Model identifier
+            llm_params: LLM inference parameters
             tools: Optional list of tool specifications
         """
-        super().__init__(config, tools)
-        self._initialize_client()
+        super().__init__(model_id, llm_params, tools)
     
     def _validate_config(self) -> None:
         """Validate Gemini-specific configuration"""
-        logger.debug(f"[GeminiProvider] Model Configurations: {self.config}")
-        if not self.config.model_id:
+        logger.debug(f"[GeminiProvider] Model Configurations: {self.model_id}, {self.llm_params}")
+        if not self.model_id:
             raise exceptions.InvalidArgument(
                 "Model ID must be specified for Gemini"
-            )
-        if self.config.api_provider.upper() != 'GEMINI':
-            raise exceptions.InvalidArgument(
-                f"Invalid API provider: {self.config.api_provider}"
             )
 
     def _initialize_client(self) -> None:
@@ -44,7 +40,7 @@ class GeminiProvider(LLMAPIProvider):
             
             # Initialize model with default system_instruction
             model_args = {
-                "model_name": self.config.model_id,
+                "model_name": self.model_id,
                 "generation_config": self._get_generation_config()
             }
             
@@ -63,10 +59,10 @@ class GeminiProvider(LLMAPIProvider):
     def _get_generation_config(self) -> genai.GenerationConfig:
         """Get Gemini-specific generation configuration"""
         return genai.GenerationConfig(
-            max_output_tokens=self.config.max_tokens,
-            temperature=self.config.temperature,
-            top_p=self.config.top_p,
-            top_k=self.config.top_k,
+            max_output_tokens=self.llm_params.max_tokens,
+            temperature=self.llm_params.temperature,
+            top_p=self.llm_params.top_p,
+            top_k=self.llm_params.top_k,
             candidate_count=1
         )
 
@@ -114,7 +110,7 @@ class GeminiProvider(LLMAPIProvider):
 
     def _convert_messages(
         self,
-        messages: List[Message],
+        messages: List[LLMMessage],
         system_prompt: Optional[str] = ''
     ) -> List[content_types.ContentType]:
         """Convert messages to Gemini-specific format with system prompt handling
@@ -133,7 +129,7 @@ class GeminiProvider(LLMAPIProvider):
             system_instruction = self._format_system_prompt(system_prompt)
             
             model_args = {
-                "model_name": self.config.model_id,
+                "model_name": self.model_id,
                 "generation_config": self._get_generation_config(),
                 "system_instruction": system_instruction
             }
@@ -148,7 +144,7 @@ class GeminiProvider(LLMAPIProvider):
         # Convert each message using _convert_message
         return [self._convert_message(msg) for msg in messages]
 
-    def _convert_message(self, message: Message) -> Dict:
+    def _convert_message(self, message: LLMMessage) -> Dict:
         """Convert a single message into Gemini-specific format
         
         Args:
@@ -197,7 +193,7 @@ class GeminiProvider(LLMAPIProvider):
 
         # Special handling for flash-thinking model which expects 'model' instead of 'assistant'
         role = message.role
-        if 'gemini-2.0-flash-thinking' in self.config.model_id and role == 'assistant':
+        if 'gemini-2.0-flash-thinking' in self.model_id and role == 'assistant':
             role = 'model'
 
         return {"role": role, "parts": content_parts}
@@ -223,7 +219,7 @@ class GeminiProvider(LLMAPIProvider):
         if hasattr(chunk, 'usage_metadata'):
             return {
                 'metadata': {
-                    'model': self.config.model_id,
+                    'model': self.model_id,
                     'usage': {
                         'prompt_tokens': chunk.usage_metadata.prompt_token_count,
                         'completion_tokens': chunk.usage_metadata.candidates_token_count,
@@ -235,7 +231,7 @@ class GeminiProvider(LLMAPIProvider):
 
     def _generate_content_sync(
         self,
-        messages: List[Message],
+        messages: List[LLMMessage],
         system_prompt: Optional[str] = '',
         **kwargs
     ) -> LLMResponse:
@@ -277,7 +273,7 @@ class GeminiProvider(LLMAPIProvider):
 
     def _generate_stream_sync(
         self,
-        messages: List[Message],
+        messages: List[LLMMessage],
         system_prompt: Optional[str] = '',
         **kwargs
     ) -> Iterator[Dict]:
@@ -310,7 +306,7 @@ class GeminiProvider(LLMAPIProvider):
 
     async def generate_content(
         self,
-        messages: List[Message],
+        messages: List[LLMMessage],
         system_prompt: Optional[str] = '',
         **kwargs
     ) -> LLMResponse:
@@ -319,7 +315,7 @@ class GeminiProvider(LLMAPIProvider):
 
     async def generate_stream(
         self,
-        messages: List[Message],
+        messages: List[LLMMessage],
         system_prompt: Optional[str] = '',
         **kwargs
     ) -> AsyncIterator[Dict]:
@@ -329,8 +325,8 @@ class GeminiProvider(LLMAPIProvider):
 
     async def multi_turn_generate(
         self,
-        message: Message,
-        history: Optional[List[Message]] = [],
+        message: LLMMessage,
+        history: Optional[List[LLMMessage]] = [],
         system_prompt: Optional[str] = '',
         **kwargs
     ) -> AsyncIterator[Dict]:

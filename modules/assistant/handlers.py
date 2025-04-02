@@ -1,10 +1,9 @@
-from typing import List, Dict, AsyncGenerator, Union, Optional, Tuple
 import asyncio
 import gradio as gr
-
+from typing import List, Dict, AsyncGenerator, Union, Optional, Tuple
 from core.logger import logger
-from core.integration.service_factory import ServiceFactory
-from core.integration.chat_service import ChatService
+from core.service.service_factory import ServiceFactory
+from core.service.chat_service import ChatService
 from llm.model_manager import model_manager
 from .prompts import ASSISTANT_PROMPT
 
@@ -77,7 +76,7 @@ class AssistantHandlers:
 
             history_future = service.load_session_history(
                 session=session,
-                max_number=cls.MAX_DISPLAY_MSG
+                max_messages=cls.MAX_DISPLAY_MSG
             )
             model_future = service.get_session_model(session)
             

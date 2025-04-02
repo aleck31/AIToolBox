@@ -3,10 +3,10 @@ Module configuration management
 """
 from typing import Dict, Optional, Any, List
 from decimal import Decimal
-import boto3
 from botocore.exceptions import ClientError
 from core.config import env_config
 from core.logger import logger
+from utils.aws import get_aws_session
 
 
 class AppConf:
@@ -34,7 +34,7 @@ class AppConf:
 
 class ModuleConfig:
     def __init__(self):
-        session = boto3.Session(region_name=env_config.default_region)
+        session = get_aws_session(region_name=env_config.default_region)
         self.dynamodb = session.resource('dynamodb')
         self.table = self.dynamodb.Table(env_config.database_config['setting_table'])
         self._config_cache = {}  # Cache for module configurations
@@ -199,12 +199,11 @@ class ModuleConfig:
                 'type': 'module',
                 'description': 'Assistant Module',
                 'default_model': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-                'system_prompt': 'You are a helpful AI assistant.',
                 'parameters': {
-                    'temperature': Decimal('0.7'),
                     'max_tokens': 4096,
-                    'top_k': 200,
-                    'top_p': 0.9
+                    'temperature': Decimal('0.7'),
+                    'top_p': 0.9,
+                    'top_k': 100
                 },
                 'enabled_tools': [
                     'get_weather',         # Weather information
@@ -219,12 +218,11 @@ class ModuleConfig:
                 'type': 'module',
                 'description': 'Chatbot Module Settings',
                 'default_model': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-                'system_prompt': 'You are a friendly chatbot.',
                 'parameters': {
                     'temperature': Decimal('0.7'),
                     'max_tokens': 1000,
                     'top_p': Decimal('0.99'),
-                    'top_k': 200
+                    'top_k': 128
                 }
             },
             'coding': {
@@ -232,7 +230,6 @@ class ModuleConfig:
                 'type': 'module',
                 'description': 'Coding Module',
                 'default_model': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-                'system_prompt': 'You are a coding assistant.',
                 'parameters': {
                     'temperature': Decimal('0.2'),
                     'max_tokens': 2000
@@ -246,7 +243,7 @@ class ModuleConfig:
                 'parameters': {
                     'temperature': Decimal('0.7'),
                     'max_tokens': 2000,
-                    "top_k": 200
+                    'top_k': 100
                 }
             },
             'summary': {
@@ -254,7 +251,6 @@ class ModuleConfig:
                 'type': 'module',
                 'description': 'Summary Module',
                 'default_model': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-                'system_prompt': 'You are a summarization assistant.',
                 'parameters': {
                     'temperature': Decimal('0.2'),
                     'max_tokens': 2000
@@ -268,10 +264,11 @@ class ModuleConfig:
                 'type': 'module',
                 'description': 'Vision Module',
                 'default_model': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-                'system_prompt': 'You are a computer vision assistant.',
                 'parameters': {
                     'temperature': Decimal('0.7'),
-                    'max_tokens': 1000
+                    'max_tokens': 2048,
+                    'top_p': Decimal('0.8'),
+                    'top_k': 100
                 }
             },
             'asking': {
@@ -279,7 +276,6 @@ class ModuleConfig:
                 'type': 'module',
                 'description': 'Asking Module',
                 'default_model': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-                'system_prompt': 'You are able to think before and during responding.',
                 'parameters': {
                     'temperature': Decimal('0.7'),
                     'max_tokens': 4096
