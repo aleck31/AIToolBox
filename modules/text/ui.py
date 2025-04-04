@@ -25,7 +25,16 @@ def create_interface() -> gr.Blocks:
         operation_description = gr.Markdown(
             value=f"{TEXT_OPERATIONS['Proofreading ✍️']['description']}"
         )
-        
+
+        # Define output components first to avoid reference errors
+        output_text = gr.Textbox(
+            label="Processed Result",
+            lines=8,
+            show_copy_button=True,
+            render=False
+        )
+
+        # Main layout row
         with gr.Row():
             with gr.Column(scale=2):
                 # Operation area
@@ -83,18 +92,16 @@ def create_interface() -> gr.Blocks:
 
                 # Action buttons
                 with gr.Row():
-                    btn_clear = gr.Button("🗑️ Clear")
+                    btn_clear = gr.ClearButton(
+                        value="🗑️ Clear",
+                        components=[input_text, output_text]
+                    )
                     btn_submit = gr.Button("▶️ Process", variant="primary")
 
             # Output column
             with gr.Column(scale=2):
-                output_text = gr.Textbox(
-                    label="Processed Result",
-                    lines=8,
-                    show_copy_button=True
-                )
+                output_text.render()
 
-        
         # Examples section
         gr.Examples(
             examples=[
@@ -120,13 +127,6 @@ def create_interface() -> gr.Blocks:
             inputs=submit_inputs,
             outputs=output_text,
             api_name="text_process"
-        )
-        
-        # Handle clear button click
-        btn_clear.click(
-            fn=lambda: ['', ''],
-            inputs=None,
-            outputs=[input_text, output_text]
         )
 
     return interface

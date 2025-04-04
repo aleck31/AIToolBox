@@ -19,6 +19,14 @@ def create_interface() -> gr.Blocks:
         gr.Markdown("I can see 乛◡乛")
         
         saved_path = gr.State()
+        output_text = gr.Markdown(
+            value="",
+            line_breaks=True,
+            container=True,
+            show_copy_button=True,
+            min_height=320,
+            render=False
+        )
 
         with gr.Row():
             with gr.Column(scale=6, min_width=450):
@@ -60,31 +68,21 @@ def create_interface() -> gr.Blocks:
                     )
                 
                 with gr.Row():
-                    btn_clear = gr.Button(value="🗑️ Clear All")
+                    btn_clear = gr.ClearButton(
+                        value="🗑️ Clear",
+                        components=[input_img, input_pdf, input_require, saved_path, output_text]
+                    )
                     btn_submit = gr.Button("▶️ Analyze", variant='primary')
 
             with gr.Column(scale=6, min_width=450):
                 gr.Markdown('Analysis Results')
-                output = gr.Markdown(
-                    value="",
-                    line_breaks=True,
-                    container=True,
-                    show_copy_button=True,
-                    min_height=320
-                )
+                output_text.render()
 
         btn_submit.click(
             fn=VisionHandlers.analyze_image,
             inputs=[saved_path, input_require, input_model],
-            outputs=output,
+            outputs=output_text,
             api_name="vision_analyze"
-        )
-
-        # Handle clear button click
-        btn_clear.click(
-            fn=lambda: ['', '', '', '', ''],
-            inputs=None,
-            outputs=[input_img, input_pdf, input_require, saved_path, output]
         )
 
         # Add model selection change handler

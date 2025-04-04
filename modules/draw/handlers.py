@@ -8,7 +8,6 @@ from core.logger import logger
 from core.service.service_factory import ServiceFactory
 from core.service.draw_service import DrawService
 from core.service.gen_service import GenService
-from core.module_config import module_config
 from .prompts import STYLE_OPTIMIZER_TEMPLATE, NEGATIVE_PROMPTS
 
 
@@ -29,18 +28,14 @@ class DrawHandlers:
     # Shared service instances
     _draw_service: Optional[DrawService] = None
     _gen_service: Optional[GenService] = None
-
+    
     @classmethod
     def _get_services(cls) -> Tuple[DrawService, GenService]:
         """Get or initialize services"""
         if cls._draw_service is None:
             logger.info("[DrawHandlers] Initializing services")
             cls._draw_service = ServiceFactory.create_draw_service('draw')
-            cls._gen_service = ServiceFactory.create_gen_service(
-                module_name = 'draw', 
-                # Initialize gen service using claude 3.7
-                model_id = 'us.anthropic.claude-3-7-sonnet-20250219-v1:0'
-            )
+            cls._gen_service = ServiceFactory.create_gen_service('text')
         return cls._draw_service, cls._gen_service
 
     @classmethod
@@ -95,6 +90,75 @@ class DrawHandlers:
             return prompt
 
     @classmethod
+    def get_available_models(cls):
+        """Get list of available models with id and names"""
+        try:
+            # Filter for models with image output capability
+            from llm.model_manager import model_manager
+            if models := model_manager.get_models(filter={'output_modality': ['image']}):
+                logger.debug(f"[DrawHandlers] Get {len(models)} available image models")
+                return [(f"{m.name}, {m.api_provider}", m.model_id) for m in models]
+            else:
+                logger.warning("[DrawHandlers] No image generation models available")
+                return []
+        except Exception as e:
+            logger.error(f"[DrawHandlers] Failed to fetch models: {str(e)}", exc_info=True)
+            return []
+
+    @classmethod
+    async def update_model_id(cls, model_id: str, request: gr.Request = None):
+        """Update session model when dropdown selection changes"""
+        try:
+            # Get authenticated user from FastAPI session
+            user_name = request.session.get('user', {}).get('username')
+            if not user_name:
+                logger.warning("[DrawHandlers] No authenticated user for model update")
+                return
+
+            draw_service, _ = cls._get_services()
+            # Get active session
+            session = await draw_service.get_or_create_session(
+                user_name=user_name,
+                module_name='draw'
+            )
+            
+            # Update model and log
+            logger.debug(f"[DrawHandlers] Updating session model to: {model_id}")
+            await draw_service.update_session_model(session, model_id)
+
+        except Exception as e:
+            logger.error(f"[DrawHandlers] Failed updating session model: {str(e)}", exc_info=True)
+
+    @classmethod
+    async def get_model_id(cls, request: gr.Request = None):
+        """Get selected model id from session"""
+        try:
+            # Get authenticated user from FastAPI session
+            if user_name := request.session.get('user', {}).get('username'):
+
+                draw_service, _ = cls._get_services()
+                # Get active session
+                session = await draw_service.get_or_create_session(
+                    user_name=user_name,
+                    module_name='draw'
+                )
+                
+                # Get current model id from session
+                model_id = await draw_service.get_session_model(session)
+                logger.debug(f"[DrawHandlers] Get model {model_id} from session")
+                
+                # Return model_id for selected value
+                return model_id
+
+            else:
+                logger.warning("[DrawHandlers] No authenticated user for loading model")
+                return None
+
+        except Exception as e:
+            logger.error(f"[DrawHandlers] Failed loading selected model: {str(e)}", exc_info=True)
+            return None
+
+    @classmethod
     async def generate_image(
         cls,
         prompt: str,
@@ -102,6 +166,7 @@ class DrawHandlers:
         ratio: str,
         seed: Optional[int] = None,
         is_random: bool = True,
+        model_id: str = None,
         request: gr.Request = None
     ) -> Tuple[Image.Image, int]:
         """Generate image from text prompt
@@ -117,6 +182,9 @@ class DrawHandlers:
         Returns:
             Tuple[Image.Image, int]: Generated image and used seed
         """
+        if not model_id:
+            gr.Info("lease select a model for image generation.", duration=3)
+
         try:
             # Get services
             draw_service, _ = cls._get_services()

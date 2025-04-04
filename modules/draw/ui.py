@@ -11,6 +11,14 @@ def create_interface() -> gr.Blocks:
     with interface:
         gr.Markdown("Draw something interesting...")
 
+        # Define output components first
+        output_image = gr.Image(
+            interactive=False,
+            label="Generated Image",
+            render=False
+        )
+
+        # Main layout row
         with gr.Row():
             # Input column
             with gr.Column(scale=6):
@@ -22,62 +30,69 @@ def create_interface() -> gr.Blocks:
                     )
                     original_prompt = gr.State()  # Store original prompt
 
-                # Optional parameters
-                input_negative = gr.Text(
-                    label="Negative Prompt",
-                    placeholder="What you don't want in the image..."
-                )
+                    # Optional parameters
+                    input_negative = gr.Textbox(
+                        info="Negative Prompt",
+                        show_label=False,
+                        placeholder="What you don't want in the image..."
+                    )
 
-                with gr.Row():
-                    # SDXL preset style
-                    input_style = gr.Dropdown(
-                        choices=IMAGE_STYLES,
-                        value='增强(enhance)',
-                        label='Picture style:',
-                        min_width=240,
-                        scale=3
-                    )
-                    input_ratio = gr.Dropdown(
-                        choices=IMAGE_RATIOS,
-                        value='2:3',
-                        label='Aspect Ratio:',
-                        min_width=240,
-                        scale=3
+                with gr.Accordion(label='Options', open=True):
+                    with gr.Row():
+                        # SDXL preset style
+                        input_style = gr.Dropdown(
+                            choices=IMAGE_STYLES,
+                            value='增强(enhance)',
+                            label='Picture style:',
+                            min_width=240,
+                            scale=3
+                        )
+                        input_ratio = gr.Dropdown(
+                            choices=IMAGE_RATIOS,
+                            value='2:3',
+                            label='Aspect Ratio:',
+                            min_width=240,
+                            scale=3
+                        )
+
+                    with gr.Row():
+                        input_seed = gr.Number(
+                            value=0,
+                            label="Seed",
+                            container=False,
+                            scale=7
+                        )
+                        seed_random = gr.Checkbox(
+                            value=True,
+                            label='🎲 Random Seed',
+                            scale=3
+                        )
+                    # Add model selection dropdown
+                    input_model = gr.Dropdown(
+                        info="Select image generation model",
+                        show_label=False,
+                        choices=DrawHandlers.get_available_models(),
+                        interactive=True,
+                        min_width=120
                     )
                 
                 with gr.Row():
-                    input_seed = gr.Number(
-                        value=0,
-                        label="Seed",
-                        container=False,
-                        scale=5
-                    )
-                    seed_random = gr.Checkbox(
-                        value=True,
-                        label='🎲 Random',
-                        scale=1
-                    )
-                
-                with gr.Row():
-                    btn_text_clean = gr.ClearButton(
-                        components=[input_prompt, original_prompt, input_negative],
+                    btn_clean = gr.ClearButton(
+                        components=[input_prompt, original_prompt, input_negative, output_image],
                         value='🗑️ Clear'
                     )
                     btn_optimize = gr.Button(
                         "✨ Optimize",
                         variant='secondary'
                     )
-                    btn_img_gen = gr.Button(
+                    btn_draw = gr.Button(
                         "🪄 Draw",
                         variant='primary'
                     )
             
             # Output column
             with gr.Column(scale=6):
-                output_image = gr.Image(
-                    interactive=False,
-                    label="Generated Image"
-                )
+                output_image.render()
         
         # Save original prompt when input
         input_prompt.input(
@@ -94,16 +109,36 @@ def create_interface() -> gr.Blocks:
         )
 
         # Handle image generation
-        btn_img_gen.click(
+        btn_draw.click(
             fn=DrawHandlers.generate_image,
             inputs=[
                 input_prompt,
                 input_negative,
                 input_ratio,
                 input_seed,
-                seed_random
+                seed_random,
+                input_model
             ],
             outputs=[output_image, input_seed]
+        )
+        
+        # Add model selection change handler
+        input_model.change(
+            fn=DrawHandlers.update_model_id,
+            inputs=[input_model],
+            outputs=None,
+            api_name=False
+        )
+
+        # Add model list refresh on load
+        interface.load(
+            fn=lambda: gr.Dropdown(choices=DrawHandlers.get_available_models()),
+            inputs=[],
+            outputs=[input_model]
+        ).then(  # set selected model 
+            fn=DrawHandlers.get_model_id,
+            inputs=[],
+            outputs=[input_model]  # Update selected model
         )
 
     return interface

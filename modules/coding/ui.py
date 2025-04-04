@@ -4,18 +4,38 @@ import gradio as gr
 from .handlers import CodingHandlers, DEV_LANGS
 
 
-def create_coding_interface() -> gr.Blocks:
+def create_interface() -> gr.Blocks:
     """Create coding interface with handlers"""
     # Create interface without eager initialization
     interface = gr.Blocks(theme=gr.themes.Soft())
     
     with interface:
         gr.Markdown("Code Generation")
+
+        # Define output components first to avoid reference errors
+        arch_thinking = gr.Markdown(
+            label='Design',
+            show_label=False,
+            value="",
+            line_breaks=True,
+            header_links=True,
+            render=False
+        )
         
+        output_code = gr.Markdown(
+            label='Code',
+            show_label=False,
+            line_breaks=True,
+            min_height=300,
+            show_copy_button=True,
+            header_links=True,
+            render=False
+        )
+
         # Main layout row
         with gr.Row():
-            # Left column: Input and output
-            with gr.Column(scale=7, min_width=500):
+            # Left column: Input and Options
+            with gr.Column(scale=5, min_width=400):
                 # Requirements input
                 input_requirement = gr.Textbox(
                     label="Describe your requirements:",
@@ -23,45 +43,47 @@ def create_coding_interface() -> gr.Blocks:
                     lines=5,
                     show_copy_button=True
                 )
-                
-                # Architecture Design output
-                with gr.Accordion(label="Architecture Design"):
-                    arch_thinking = gr.Markdown(
-                        label='Design',
-                        show_label=False,
-                        line_breaks=True,
-                        header_links=True,
-                        value=""
+
+                # Options accordion
+                with gr.Accordion(label="Options", open=True):
+                    # Language selection
+                    input_lang = gr.Radio(
+                        label="Programming Language",
+                        choices=DEV_LANGS,
+                        value="Python"
                     )
-                
-                # Generated code output
-                with gr.Accordion(label="Generated Code"):
-                    output_code = gr.Markdown(
-                        label='Code',
+                    
+                    # Model selection dropdown
+                    input_model = gr.Dropdown(
+                        info="Select model",
                         show_label=False,
-                        line_breaks=True,
-                        min_height=120,
-                        show_copy_button=True,
-                        header_links=True
+                        choices=CodingHandlers.get_available_models(),
+                        interactive=True,
+                        min_width=120
                     )
-            
-            # Right column: Settings and controls
-            with gr.Column(scale=3, min_width=120):
-                # Language selection
-                input_lang = gr.Radio(
-                    label="Programming Language",
-                    choices=DEV_LANGS,
-                    value="Python"
-                )
+
+                # Control buttons at the bottom of left column
                 with gr.Row():
                     btn_clear = gr.ClearButton(
                         value="🗑️ Clear",
                         components=[input_requirement, arch_thinking, output_code]
                     )
-                    btn_code_submit = gr.Button(
+                    btn_submit = gr.Button(
                         value="⌨️ Generate",
                         variant="primary"
                     )
+
+            # Right column: Output
+            with gr.Column(scale=7, min_width=500):
+                # Architecture Design output
+                with gr.Accordion(label="Architecture Design", open=True):
+                    # Use the pre-defined component
+                    arch_thinking.render()
+                
+                # Generated code output
+                with gr.Accordion(label="Generated Code", open=True):
+                    # Use the pre-defined component
+                    output_code.render()
 
         # Event handler functions
         def update_btn_phase(phase: str):
@@ -73,9 +95,9 @@ def create_coding_interface() -> gr.Blocks:
             return labels.get(phase, "⌨️ Generate")
 
         # Event bindings for two-phase generation
-        btn_code_submit.click(
+        btn_submit.click(
             fn=lambda: update_btn_phase("arch"),
-            outputs=btn_code_submit
+            outputs=btn_submit
         ).then(
             fn=CodingHandlers.design_arch,
             inputs=[input_requirement, input_lang],
@@ -83,7 +105,7 @@ def create_coding_interface() -> gr.Blocks:
             api_name="design_arch"
         ).then(
             fn=lambda: update_btn_phase("code"),
-            outputs=btn_code_submit
+            outputs=btn_submit
         ).then(
             fn=CodingHandlers.gen_code,
             inputs=[arch_thinking, input_lang],
@@ -91,10 +113,29 @@ def create_coding_interface() -> gr.Blocks:
             api_name="gen_code"
         ).then(
             fn=lambda: update_btn_phase("done"),
-            outputs=btn_code_submit
+            outputs=btn_submit
         )
-        
+
+        # Add model selection change handler
+        input_model.change(
+            fn=CodingHandlers.update_model_id,
+            inputs=[input_model],
+            outputs=None,
+            api_name=False
+        )
+
+        # Add model list refresh on load
+        interface.load(
+            fn=lambda: gr.Dropdown(choices=CodingHandlers.get_available_models()),
+            inputs=[],
+            outputs=[input_model]
+        ).then(  # set selected model 
+            fn=CodingHandlers.get_model_id,
+            inputs=[],
+            outputs=[input_model]  # Update selected model
+        )
+
     return interface
 
 # Create interface
-tab_coding = create_coding_interface()
+tab_coding = create_interface()

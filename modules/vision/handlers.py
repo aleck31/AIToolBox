@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT-0
 import asyncio
 import gradio as gr
-from typing import Dict, Optional, AsyncIterator, List, Tuple
+from typing import Optional, AsyncIterator
 from core.logger import logger
 from core.service.service_factory import ServiceFactory
 from core.service.gen_service import GenService
@@ -130,6 +130,12 @@ class VisionHandlers:
                 user_name=user_name,
                 module_name='vision'
             )
+ 
+            # Update session with system prompt
+            session.context['system_prompt'] = VISION_SYSTEM_PROMPT
+            # Persist updated context
+            # await service.session_store.save_session(session)
+            logger.info(f"[VisionHandlers] Vision analysis request - Model: {model_id}")
 
             # Build content
             user_requirement = text or "Describe the media or document in detail."
@@ -137,7 +143,6 @@ class VisionHandlers:
                 "text": f"<requirement>{user_requirement}</requirement>",
                 "files": [file_path]
             }
-            logger.info(f"[VisionHandlers] Vision analysis request - Model: {model_id}")
             logger.debug(f"[VisionHandlers] Analysis content: {content}")
 
             # Generate streaming response

@@ -10,47 +10,77 @@ def create_interface() -> gr.Blocks:
     interface = gr.Blocks(theme=gr.themes.Soft())
     
     with interface:
-        gr.Markdown("I think, therefore I am. (Powered by Claude)")
+        gr.Markdown("I think, therefore I am.")
         
         # Add state for conversation history (list of message dicts)
         history = gr.State(value=[])
         
+        # Define output components first to avoid reference errors
+        output_thinking = gr.Markdown(
+            value="",
+            label='Thinking',
+            show_label=False,
+            header_links=True,
+            line_breaks=True,
+            render=False
+        )
+        
+        output_response = gr.Markdown(
+            value="",
+            label='Final Response',
+            show_label=False,
+            header_links=True,
+            line_breaks=True,
+            min_height=120,
+            render=False
+        )
+        
+        # Main layout row
         with gr.Row():
-            with gr.Column(scale=10): # Main content column
-                with gr.Row():
-                    input_box = gr.MultimodalTextbox(
+            # Left column: Input and Options
+            with gr.Column(scale=5, min_width=400):
+                # Input box
+                input_box = gr.MultimodalTextbox(
+                    info="Ask your question:",
+                    placeholder="Type a message or upload image(s)",
+                    show_label=False,
+                    file_types=['text', 'image', 'video', 'audio', '.pdf'],
+                    file_count='multiple',
+                    lines=6,
+                    submit_btn=None,
+                    max_plain_text_length=2500
+                )
+                
+                # Options accordion
+                with gr.Accordion(label="Options", open=False):
+                    # Model selection dropdown
+                    input_model = gr.Dropdown(
+                        info="Select model",
                         show_label=False,
-                        file_types=['text', 'image', 'video', 'audio', '.pdf'],
-                        file_count='multiple',
-                        placeholder="Type a message or upload image(s)",
-                        min_width=60,
-                        lines=4,
-                        submit_btn=None,
-                        max_plain_text_length=2500
+                        choices=AskingHandlers.get_available_models(),
+                        interactive=True,
+                        min_width=120
                     )
                 
-                with gr.Accordion(label='Thinking', open=False):
-                    output_thinking = gr.Markdown(
-                        header_links=True,
-                        show_label=False,
-                        line_breaks=True,
-                        value=""
+                # Control buttons at the bottom of left column
+                with gr.Row():
+                    btn_clear = gr.ClearButton(
+                        value="🗑️ Clear",
+                        components=[input_box, output_thinking, output_response, history]
                     )
-                    
-                with gr.Accordion(label='Final Response:', open=True):
-                    output_response = gr.Markdown(
-                        header_links=True,
-                        show_label=False,
-                        line_breaks=True,
-                        value=""
-                    )
-
-            with gr.Column(scale=2, min_width=120): # Button column
-                clear_btn = gr.ClearButton(
-                    value="🗑️ Clear",
-                    components=[input_box, output_thinking, output_response]
-                )
-                submit_btn = gr.Button("✨ Go", variant="primary")  
+                    btn_submit = gr.Button("✨ Go", variant="primary")
+            
+            # Right column: Output
+            with gr.Column(scale=7, min_width=500):
+                # Thinking output
+                with gr.Accordion(label="Thinking", open=False):
+                    # Use the pre-defined component
+                    output_thinking.render()
+                
+                # Final response output
+                with gr.Accordion(label="Final Response", open=True):
+                    # Use the pre-defined component
+                    output_response.render()
 
         # Event handler functions
         def update_btn_immediate():
@@ -69,9 +99,9 @@ def create_interface() -> gr.Blocks:
             ]
 
         # Event bindings
-        submit_btn.click(
+        btn_submit.click(
             fn=update_btn_immediate,  # First update button
-            outputs=submit_btn
+            outputs=btn_submit
         ).then(
             fn=AskingHandlers.gen_with_think,  # Then generate response
             inputs=[input_box, history],
@@ -84,13 +114,32 @@ def create_interface() -> gr.Blocks:
         ).then(
             fn=update_btn_label,
             inputs=output_response,
-            outputs=submit_btn
+            outputs=btn_submit
         )
 
-        # Clear all contents and reset submit button
-        clear_btn.click(
-            lambda: (None, None, None, [], "✨ Go"),
-            outputs=[input_box, output_thinking, output_response, history, submit_btn]
+        # Reset submit button
+        btn_clear.click(
+            lambda: ("✨ Go"),
+            outputs=[btn_submit]
+        )
+        
+        # Add model selection change handler
+        input_model.change(
+            fn=AskingHandlers.update_model_id,
+            inputs=[input_model],
+            outputs=None,
+            api_name=False
+        )
+
+        # Add model list refresh on load
+        interface.load(
+            fn=lambda: gr.Dropdown(choices=AskingHandlers.get_available_models()),
+            inputs=[],
+            outputs=[input_model]
+        ).then(  # set selected model 
+            fn=AskingHandlers.get_model_id,
+            inputs=[],
+            outputs=[input_model]  # Update selected model
         )
         
     return interface
