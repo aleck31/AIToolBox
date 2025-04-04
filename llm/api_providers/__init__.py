@@ -1,8 +1,8 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, AsyncIterator
-from llm import LLMParameters, LLMMessage, LLMResponse
+from typing import Dict, List, Optional, AsyncIterator, Union
+from llm import LLMParameters, GenImageParameters, LLMMessage, LLMResponse
 
 
 class LLMProviderError(Exception):
@@ -24,12 +24,12 @@ class LLMProviderError(Exception):
 class LLMAPIProvider(ABC):
     """Base class for LLM API providers"""
     
-    def __init__(self, model_id: str, llm_params: LLMParameters, tools):
+    def __init__(self, model_id: str, llm_params: Union[LLMParameters, GenImageParameters], tools):
         """Initialize provider with model ID, parameters and tools
         
         Args:
             model_id: Model identifier
-            llm_params: LLM inference parameters
+            llm_params: LLM inference parameters (either LLMParameters for text or GenImageParameters for images)
             tools: List of tool module names to enable
         """
         self.model_id = model_id
@@ -111,13 +111,13 @@ class LLMAPIProvider(ABC):
         pass
 
 
-def create_provider(provider_name: str, model_id: str, llm_params: LLMParameters, tools: Optional[List[str]] = None) -> LLMAPIProvider:
+def create_provider(provider_name: str, model_id: str, llm_params: Union[LLMParameters, GenImageParameters], tools: Optional[List[str]] = None) -> LLMAPIProvider:
     """Factory function to create appropriate provider instance
     
     Args:
         provider_name: Name of provider (e.g. 'Bedrock', 'Gemini', 'OpenAI')
         model_id: Model identifier
-        llm_params: LLM inference parameters
+        llm_params: LLM inference parameters (either LLMParameters for text or GenImageParameters for images)
         tools: Optional list of tool module names to enable
         
     Returns:

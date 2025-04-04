@@ -126,6 +126,20 @@ class LLMParameters:
 
 
 @dataclass
+class GenImageParameters:
+    """LLM inference parameters for Image Generation"""
+    height: Optional[int] = None  # Height of the generated image
+    width: Optional[int] = None  # Width of the generated image
+    aspect_ratio: Optional[str] = '16:9'  # Aspect ratio of the generated image
+    img_number: Optional[int] = 1  # The number of images to generate
+    cfg_scale: Optional[float] = 6.5  # Specifies how strongly the generated image should adhere to the prompt
+
+    def to_dict(self) -> Dict:
+        """Convert config to dictionary, excluding None values"""
+        return {k: v for k, v in asdict(self).items() if v is not None}
+
+
+@dataclass
 class LLMResponse:
     """Basic LLM response structure"""
     content: Dict # text, image, video, file_path
@@ -150,4 +164,3 @@ class ResponseMetadata:
     def to_dict(self) -> Dict:
         """Convert metadata to dictionary, excluding None values"""
         return {k: v for k, v in asdict(self).items() if v is not None}
-

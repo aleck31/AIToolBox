@@ -1,22 +1,21 @@
 import json
-from typing import Dict, List, Optional, Iterator, AsyncIterator
-from botocore.exceptions import ClientError
+from typing import Dict, List, Optional, Iterator, AsyncIterator, Union
+from botocore import exceptions as boto_exceptions
 from core.logger import logger
 from core.config import env_config
-from botocore import exceptions as boto_exceptions
 from utils.aws import get_aws_client
-from . import LLMAPIProvider, LLMParameters, LLMMessage, LLMResponse, LLMProviderError
+from . import LLMAPIProvider, LLMParameters, GenImageParameters, LLMMessage, LLMResponse, LLMProviderError
 
 
 class BedrockInvoke(LLMAPIProvider):
     """Amazon Bedrock LLM provider powered by the invoke model API for single-turn generation."""
     
-    def __init__(self, model_id: str, llm_params: LLMParameters, tools=None):
+    def __init__(self, model_id: str, llm_params: Union[LLMParameters, GenImageParameters], tools=None):
         """Initialize provider with model ID, parameters and tools
         
         Args:
             model_id: Model identifier
-            llm_params: LLM inference parameters
+            llm_params: LLM inference parameters (either LLMParameters for text or GenImageParameters for images)
             tools: Optional list of tool specifications
         """
         super().__init__(model_id, llm_params, tools)
@@ -49,7 +48,7 @@ class BedrockInvoke(LLMAPIProvider):
                 operation_name='initialize_client'
             )
 
-    def _handle_bedrock_error(self, error: ClientError):
+    def _handle_bedrock_error(self, error: boto_exceptions.ClientError):
         """Handle Bedrock-specific errors by raising LLMProviderError
         
         Args:
@@ -117,7 +116,7 @@ class BedrockInvoke(LLMAPIProvider):
             # logger.debug(f"[BRInvokeProvider] Raw response: {raw_resp}")
             return json.loads(raw_resp)
             
-        except ClientError as e:
+        except boto_exceptions.ClientError as e:
             self._handle_bedrock_error(e)
     
     def _invoke_model_stream_sync(
@@ -155,7 +154,7 @@ class BedrockInvoke(LLMAPIProvider):
                 # Parse and yield chunk
                 yield json.loads(chunk.get('chunk').get('bytes'))
                 
-        except ClientError as e:
+        except boto_exceptions.ClientError as e:
             self._handle_bedrock_error(e)
 
     async def generate_content(
@@ -189,7 +188,7 @@ class BedrockInvoke(LLMAPIProvider):
                 metadata={}
             )
             
-        except ClientError as e:
+        except boto_exceptions.ClientError as e:
             self._handle_bedrock_error(e)
 
     async def generate_stream(
@@ -220,7 +219,7 @@ class BedrockInvoke(LLMAPIProvider):
             ):
                 yield chunk
                 
-        except ClientError as e:
+        except boto_exceptions.ClientError as e:
             self._handle_bedrock_error(e)
 
     async def multi_turn_generate(

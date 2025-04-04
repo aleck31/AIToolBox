@@ -28,9 +28,7 @@ async def generate_image(
     try:
         # Initialize draw service
         draw_service = ServiceFactory.create_draw_service(
-            module_name = 'draw', 
-            # use draw module's default model
-            model_id = module_config.get_default_model('draw')
+            module_name = 'draw'
         )
 
         # Add negative prompt to defaults

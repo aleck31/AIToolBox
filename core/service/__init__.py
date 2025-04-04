@@ -4,7 +4,8 @@ from core.logger import logger
 from core.session import Session, SessionStore
 from core.module_config import module_config
 from llm.model_manager import model_manager
-from llm.api_providers import LLMParameters, LLMAPIProvider, LLMProviderError, create_provider
+from llm import LLMParameters, GenImageParameters
+from llm.api_providers import LLMAPIProvider, LLMProviderError, create_provider
 
 
 class BaseService:
@@ -166,16 +167,35 @@ class BaseService:
             # Get module's default tools and params if not provided
             if not llm_params:
                 params = module_config.get_inference_params(self.module_name) or {}
-                # Ensure proper type conversion for numeric parameters
-                if 'max_tokens' in params:
-                    params['max_tokens'] = int(params['max_tokens'])
-                if 'temperature' in params:
-                    params['temperature'] = float(params['temperature'])
-                if 'top_p' in params:
-                    params['top_p'] = float(params['top_p'])
-                if 'top_k' in params:
-                    params['top_k'] = int(params['top_k'])
-                llm_params = params
+                
+                # Check if this is an image generation model
+                if model.category == 'image':
+                    # Use GenImageParameters for image generation models
+                    # Ensure proper type conversion for numeric parameters
+                    if 'height' in params:
+                        params['height'] = int(params['height'])
+                    if 'width' in params:
+                        params['width'] = int(params['width'])
+                    if 'img_number' in params:
+                        params['img_number'] = int(params['img_number'])
+                    if 'cfg_scale' in params:
+                        params['cfg_scale'] = float(params['cfg_scale'])
+                    
+                    llm_params = GenImageParameters(**(params or {}))
+                    logger.debug(f"[BaseService] Using GenImageParameters for model {model_id}")
+                else:
+                    # Use LLMParameters for text generation models
+                    # Ensure proper type conversion for numeric parameters
+                    if 'max_tokens' in params:
+                        params['max_tokens'] = int(params['max_tokens'])
+                    if 'temperature' in params:
+                        params['temperature'] = float(params['temperature'])
+                    if 'top_p' in params:
+                        params['top_p'] = float(params['top_p'])
+                    if 'top_k' in params:
+                        params['top_k'] = int(params['top_k'])
+                    
+                    llm_params = LLMParameters(**(params or {}))
 
             enabled_tools = module_config.get_enabled_tools(self.module_name)
 
@@ -183,7 +203,7 @@ class BaseService:
             provider = create_provider(
                 model.api_provider,
                 model_id,
-                LLMParameters(**(llm_params or {})),
+                llm_params,
                 enabled_tools
             )
 
