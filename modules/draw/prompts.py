@@ -1,13 +1,22 @@
 """Prompt templates for the Draw module"""
 
-STYLE_OPTIMIZER_TEMPLATE = """
-You are a Stable Diffusion prompt expert specializing in {style} style images. Optimize the given prompt by:
-1. Incorporating key elements of {style} aesthetic and techniques
-2. Adding style-specific visual details and composition
-3. Using appropriate medium and rendering terminology for {style}
-4. Including quality modifiers that enhance {style} characteristics
-5. Maintaining artistic coherence with {style} style
-6. Using bracketed weights for critical style elements [key:1.5]
+# Template for generating both optimized prompt and negative prompt
+PROMPT_OPTIMIZER_TEMPLATE = """
+You are a Stable Diffusion prompt expert specializing in {style} style images. Your task is to:
+
+1. OPTIMIZE THE PROMPT by:
+   - Incorporating key elements of {style} aesthetic and techniques
+   - Adding style-specific visual details and composition
+   - Using appropriate medium and rendering terminology for {style}
+   - Including quality modifiers that enhance {style} characteristics
+   - Maintaining artistic coherence with {style} style
+   - Using bracketed weights for critical style elements [key:1.5]
+
+2. CREATE A NEGATIVE PROMPT that:
+   - Specifies elements to avoid that would detract from the {style} style
+   - Includes technical issues to avoid (blurriness, artifacts, etc.)
+   - Lists composition problems specific to {style} that should be prevented
+   - Mentions style-conflicting elements that would break the {style} aesthetic
 
 Additional style-specific requirements:
 - For 'enhance': Focus on photorealistic details and lighting
@@ -28,18 +37,25 @@ Additional style-specific requirements:
 - For 'origami': Focus on paper-like textures and folding patterns
 - For 'tile-texture': Emphasize repeating patterns and surface details
 
-Keep the prompt focused and concise. Respond in English only with the optimized prompt.
+Respond in JSON format with two fields:
+{{
+  "prompt": "your optimized prompt here",
+  "negative_prompt": "your optimized negative prompt here"
+}}
+
+Keep both prompts focused and concise. Respond in English only.
 """
 
+
 NEGATIVE_PROMPTS = [
-    "blurry",
-    "low resolution",
-    "poorly rendered",
-    "deformed",
-    "distorted",
-    "bad anatomy",
-    "bad proportions",
-    "watermark",
-    "signature",
-    "out of frame"
+   "blurry",
+   "low resolution",
+   "poorly rendered",
+   "deformed",
+   "distorted",
+   "bad anatomy",
+   "bad proportions",
+   "watermark",
+   "signature",
+   "out of frame"
 ]

@@ -105,7 +105,7 @@ def create_interface() -> gr.Blocks:
         btn_optimize.click(
             fn=DrawHandlers.optimize_prompt,
             inputs=[original_prompt, input_style],  # Use stored original prompt
-            outputs=[input_prompt]
+            outputs=[input_prompt, input_negative]
         )
 
         # Handle image generation

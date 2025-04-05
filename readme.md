@@ -1,6 +1,6 @@
 # GenAI Toolbox
 
-GenAI Toolbox is a Gen-AI application suite built with FastAPI and Gradio, offering a user-friendly interface for accessing various AI capabilities, such as chatbot, translation, summary, image&document recognition, coding and text-to-image etc.
+GenAI Toolbox is a Gen-AI application suite built with FastAPI and Gradio, offering a user-friendly interface for accessing various AI capabilities, such as chatbot, translation, summary, image&document recognition, coding and image generation etc.
 
 🎉 **What's New in v2.0**
 - Optimized performance and reliability
@@ -14,16 +14,15 @@ GenAI Toolbox is a Gen-AI application suite built with FastAPI and Gradio, offer
 - Added BedrockInvoke provider for image/video generation
 
 ## Overview
-The application integrates multiple AI models including Claude and Gemini, with secure authentication via Amazon Cognito and session management. 
+The application integrates multiple GenAI models, with secure authentication via Amazon Cognito and session management. 
 It provides a modular architecture that makes it easy to add new features and AI models.
 
 Its user-friendly Gradio-based web interface provides an intuitive experience.
 
 ## Features
 
-* **Multimodal Chatbot** 🤖
-  - Claude-powered conversational AI with streaming responses
-  - Gemini-powered chat interface
+* **Multimodal Assistant** 🤖
+  - Bedrock-powered agentic AI assistant with streaming responses
   - Support for text, images, and document inputs
   - Context-aware conversations
   - Tool use (function calling) integration
@@ -125,6 +124,7 @@ llm-toolbox/
 │   ├── setting/          # Module settings
 │   └── main_ui.py        # UI settings
 ├── modules/           # Feature modules
+│   ├── init.py           # Base handler class 
 │   ├── assistant/        # Smart Assistant powered by Bedrock 
 │   ├── chatbot/          # Basic chatbot implementation
 │   ├── text/             # Text processing
@@ -166,6 +166,10 @@ cp .env.example .env
 5. Run the application:
 
 ```bash
+# Run in background
+./run.sh start
+
+# or run for local test
 uvicorn app:app --host 127.0.0.1 --port 8080 --reload 
 ```
 

@@ -1,6 +1,7 @@
 """Handlers for the Draw module"""
-import random
 import re
+import json
+import random
 import gradio as gr
 from PIL import Image
 from typing import Optional, Tuple
@@ -8,7 +9,7 @@ from core.logger import logger
 from core.service.service_factory import ServiceFactory
 from core.service.gen_service import GenService
 from modules import BaseHandler
-from .prompts import STYLE_OPTIMIZER_TEMPLATE, NEGATIVE_PROMPTS
+from .prompts import PROMPT_OPTIMIZER_TEMPLATE, NEGATIVE_PROMPTS
 
 
 # Preset styles for SDXL
@@ -66,15 +67,48 @@ class DrawHandlers(BaseHandler):
         return random.randrange(1, 4294967295)  # Maximum 4294967295
 
     @classmethod
-    async def optimize_prompt(cls, prompt: str, style: str) -> str:
-        """Convert simple prompt to highly optimized version
+    def _parse_response(cls, response: str, original_prompt: str) -> Tuple[str, str]:
+        """Parse the LLM response to extract optimized prompt and negative prompt
         
+        Args:
+            response: Raw response from LLM
+            original_prompt: Original prompt to use as fallback
+            
+        Returns:
+            Tuple[str, str]: Optimized prompt and negative prompt
+        """
+        default_negative = ", ".join(NEGATIVE_PROMPTS)
+        
+        try:
+            # Try to parse as JSON
+            result = json.loads(response)
+            optimized_prompt = result.get("prompt", original_prompt)
+            negative_prompt = result.get("negative_prompt", default_negative)
+            logger.info("[DrawHandlers] Successfully parsed JSON response")
+            return optimized_prompt, negative_prompt
+        except json.JSONDecodeError:
+            # Fallback if response is not valid JSON
+            logger.warning(f"[DrawHandlers] Failed to parse JSON response: {response[:100]}...")
+            
+            # Try to extract from text format (if response has multiple lines)
+            lines = response.strip().split('\n')
+            if len(lines) >= 2:
+                # Assume first line is prompt, second is negative prompt
+                return lines[0], lines[1]
+            
+            # If all else fails, return original prompt and default negative
+            return response, default_negative
+
+    @classmethod
+    async def optimize_prompt(cls, prompt: str, style: str) -> Tuple[str, str]:
+        """Optimize prompts based on the original prompt and style specifications
+
         Args:
             prompt: Original text prompt
             style: Style preset name
             
         Returns:
-            str: Optimized prompt for image generation
+            Tuple[str, str]: Optimized prompt and negative prompt for image generation
         """
         try:
             # Get services
@@ -90,26 +124,29 @@ class DrawHandlers(BaseHandler):
             # Validate input
             if not prompt or len(prompt.strip()) == 0:
                 logger.warning("[DrawHandlers] Empty prompt received")
-                return "a beautiful scene, highly detailed"
+                return "a beautiful scene, highly detailed", ", ".join(NEGATIVE_PROMPTS)
 
             # Get style-specific optimized template prompt
-            system_prompt = STYLE_OPTIMIZER_TEMPLATE.format(style=style_name)
-            optimized = await gen_service.gen_text_stateless(
+            system_prompt = PROMPT_OPTIMIZER_TEMPLATE.format(style=style_name)
+            response = await gen_service.gen_text_stateless(
                 content={"text": prompt},
                 system_prompt=system_prompt,
                 option_params={
                     "temperature": 0.7,
-                    "max_tokens": 600
+                    "max_tokens": 800
                 }
             )
 
+            # Parse the response to extract optimized prompt and negative prompt
+            optimized_prompt, negative_prompt = cls._parse_response(response, prompt)
+            
             logger.info(f"[DrawHandlers] Optimized prompt for style: {style_name}")
-            return optimized
+            return optimized_prompt, negative_prompt
 
         except Exception as e:
             logger.error(f"[DrawHandlers] Failed to optimize prompt: {str(e)}", exc_info=True)
-            # Return original prompt if optimization fails
-            return prompt
+            # Return original prompt and default negative prompt if optimization fails
+            return prompt, ", ".join(NEGATIVE_PROMPTS)
 
     @classmethod
     async def generate_image(
@@ -148,7 +185,7 @@ class DrawHandlers(BaseHandler):
                 negative_prompts = negative
             else:
                 logger.debug(f"[DrawHandlers] No negative prompts are specified, using default prompts")
-                negative_prompts = NEGATIVE_PROMPTS
+                negative_prompts = ", ".join(NEGATIVE_PROMPTS)
 
             # Validate aspect ratio
             if ratio not in IMAGE_RATIOS:
@@ -159,7 +196,7 @@ class DrawHandlers(BaseHandler):
             image = await draw_service.text_to_image(
                 session=session,
                 prompt=prompt,
-                negative_prompt="\n".join(negative_prompts),
+                negative_prompt=negative_prompts,
                 seed=used_seed,
                 aspect_ratio=ratio
             )
