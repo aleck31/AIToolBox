@@ -2,12 +2,12 @@
 import random
 import re
 import gradio as gr
-from typing import Optional, Tuple
 from PIL import Image
+from typing import Optional, Tuple
 from core.logger import logger
 from core.service.service_factory import ServiceFactory
-from core.service.draw_service import DrawService
 from core.service.gen_service import GenService
+from modules import BaseHandler
 from .prompts import STYLE_OPTIMIZER_TEMPLATE, NEGATIVE_PROMPTS
 
 
@@ -22,21 +22,43 @@ IMAGE_STYLES = [
 IMAGE_RATIOS = ['16:9', '5:4', '3:2', '21:9', '1:1', '2:3', '4:5', '9:16', '9:21']
 
 
-class DrawHandlers:
+class DrawHandlers(BaseHandler):
     """Handlers for image generation functionality"""
 
-    # Shared service instances
-    _draw_service: Optional[DrawService] = None
+    # Module name for the handler
+    _module_name: str = "draw"
+    
+    # Service type
+    _service_type: str = "draw"
+    
+    # Additional service for prompt optimization
     _gen_service: Optional[GenService] = None
     
     @classmethod
-    def _get_services(cls) -> Tuple[DrawService, GenService]:
-        """Get or initialize services"""
-        if cls._draw_service is None:
-            logger.info("[DrawHandlers] Initializing services")
-            cls._draw_service = ServiceFactory.create_draw_service('draw')
+    async def _get_gen_service(cls) -> GenService:
+        """Get or initialize gen services"""
+
+        if cls._gen_service is None:
+            logger.info("[DrawHandlers] Initializing gen service for prompt optimization")
             cls._gen_service = ServiceFactory.create_gen_service('text')
-        return cls._draw_service, cls._gen_service
+            
+        return cls._gen_service
+
+    @classmethod
+    def get_available_models(cls):
+        """Get list of available models with id and names"""
+        try:
+            # Filter for models with image output capability
+            from llm.model_manager import model_manager
+            if models := model_manager.get_models(filter={'category': 'image'}):
+                logger.debug(f"[DrawHandlers] Get {len(models)} available image models")
+                return [(f"{m.name}, {m.api_provider}", m.model_id) for m in models]
+            else:
+                logger.warning("[DrawHandlers] No image generation models available")
+                return []
+        except Exception as e:
+            logger.error(f"[DrawHandlers] Failed to fetch models: {str(e)}", exc_info=True)
+            return []
 
     @classmethod
     def _random_seed(cls) -> int:
@@ -56,7 +78,7 @@ class DrawHandlers:
         """
         try:
             # Get services
-            _, gen_service = cls._get_services()
+            gen_service = await cls._get_gen_service()
 
             # Extract style name from parentheses
             if style:
@@ -90,75 +112,6 @@ class DrawHandlers:
             return prompt
 
     @classmethod
-    def get_available_models(cls):
-        """Get list of available models with id and names"""
-        try:
-            # Filter for models with image output capability
-            from llm.model_manager import model_manager
-            if models := model_manager.get_models(filter={'output_modality': ['image']}):
-                logger.debug(f"[DrawHandlers] Get {len(models)} available image models")
-                return [(f"{m.name}, {m.api_provider}", m.model_id) for m in models]
-            else:
-                logger.warning("[DrawHandlers] No image generation models available")
-                return []
-        except Exception as e:
-            logger.error(f"[DrawHandlers] Failed to fetch models: {str(e)}", exc_info=True)
-            return []
-
-    @classmethod
-    async def update_model_id(cls, model_id: str, request: gr.Request = None):
-        """Update session model when dropdown selection changes"""
-        try:
-            # Get authenticated user from FastAPI session
-            user_name = request.session.get('user', {}).get('username')
-            if not user_name:
-                logger.warning("[DrawHandlers] No authenticated user for model update")
-                return
-
-            draw_service, _ = cls._get_services()
-            # Get active session
-            session = await draw_service.get_or_create_session(
-                user_name=user_name,
-                module_name='draw'
-            )
-            
-            # Update model and log
-            logger.debug(f"[DrawHandlers] Updating session model to: {model_id}")
-            await draw_service.update_session_model(session, model_id)
-
-        except Exception as e:
-            logger.error(f"[DrawHandlers] Failed updating session model: {str(e)}", exc_info=True)
-
-    @classmethod
-    async def get_model_id(cls, request: gr.Request = None):
-        """Get selected model id from session"""
-        try:
-            # Get authenticated user from FastAPI session
-            if user_name := request.session.get('user', {}).get('username'):
-
-                draw_service, _ = cls._get_services()
-                # Get active session
-                session = await draw_service.get_or_create_session(
-                    user_name=user_name,
-                    module_name='draw'
-                )
-                
-                # Get current model id from session
-                model_id = await draw_service.get_session_model(session)
-                logger.debug(f"[DrawHandlers] Get model {model_id} from session")
-                
-                # Return model_id for selected value
-                return model_id
-
-            else:
-                logger.warning("[DrawHandlers] No authenticated user for loading model")
-                return None
-
-        except Exception as e:
-            logger.error(f"[DrawHandlers] Failed loading selected model: {str(e)}", exc_info=True)
-            return None
-
-    @classmethod
     async def generate_image(
         cls,
         prompt: str,
@@ -187,44 +140,33 @@ class DrawHandlers:
 
         try:
             # Get services
-            draw_service, _ = cls._get_services()
+            draw_service, session = await cls._init_session(request)
 
-             # Get authenticated user from FastAPI request
-            user_name = request.session.get('user', {}).get('username')
+            # Process parameters
+            used_seed = cls._random_seed() if is_random else int(seed)
+            if negative:
+                negative_prompts = negative
+            else:
+                logger.debug(f"[DrawHandlers] No negative prompts are specified, using default prompts")
+                negative_prompts = NEGATIVE_PROMPTS
 
-            try:
-                # Get active session
-                session = await draw_service.get_or_create_session(
-                    user_name=user_name,
-                    module_name='draw'
-                )
+            # Validate aspect ratio
+            if ratio not in IMAGE_RATIOS:
+                logger.warning(f"[DrawHandlers] Invalid ratio {ratio}, using default 1:1")
+                ratio = "1:1"
 
-                # Process parameters
-                used_seed = cls._random_seed() if is_random else int(seed)
-                negative_prompts = NEGATIVE_PROMPTS.copy()
-                if negative:
-                    negative_prompts.append(negative)
+            # Generate image
+            image = await draw_service.text_to_image(
+                session=session,
+                prompt=prompt,
+                negative_prompt="\n".join(negative_prompts),
+                seed=used_seed,
+                aspect_ratio=ratio
+            )
 
-                # Validate aspect ratio
-                if ratio not in IMAGE_RATIOS:
-                    logger.warning(f"[DrawHandlers] Invalid ratio {ratio}, using default 1:1")
-                    ratio = "1:1"
-
-                # Generate image
-                image = await draw_service.text_to_image(
-                    session=session,
-                    prompt=prompt,
-                    negative_prompt="\n".join(negative_prompts),
-                    seed=used_seed,
-                    aspect_ratio=ratio
-                )
-
-                return image, used_seed
-
-            except Exception as e:
-                logger.error(f"[DrawHandlers] Service error: {str(e)}")
-                return None, used_seed
+            return image, used_seed
 
         except Exception as e:
             logger.error(f"[DrawHandlers] Failed to generate image: {str(e)}", exc_info=True)
-            raise
+            gr.Info(f"{str(e)}", duration=3)
+            return None, used_seed

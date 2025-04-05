@@ -1,12 +1,10 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 import gradio as gr
-from typing import Dict, List, Optional, Any, Tuple
-from fastapi import HTTPException
+from typing import Dict, Optional
 from core.logger import logger
+from modules import BaseHandler
 from .prompts import SYSTEM_PROMPTS, STYLES
-from core.service.service_factory import ServiceFactory
-from core.service.gen_service import GenService
 
 
 # Language options
@@ -40,19 +38,14 @@ TEXT_OPERATIONS = {
     }
 }
 
-class TextHandlers:
+class TextHandlers(BaseHandler):
     """Handlers for text processing with style support"""
     
-    # Shared service instance
-    _service : Optional[GenService] = None
+    # Module name for the handler
+    _module_name: str = "text"
     
-    @classmethod
-    async def _get_service(cls) -> GenService:
-        """Get or initialize service lazily"""
-        if cls._service is None:
-            logger.info("[TextHandlers] Initializing service")
-            cls._service = ServiceFactory.create_gen_service('text')
-        return cls._service
+    # Service type
+    _service_type: str = "gen"
 
     @classmethod
     async def _build_content(cls, text: str, operation: str, options: Dict) -> Dict[str, str]:
@@ -97,50 +90,33 @@ class TextHandlers:
             return "Please provide some text to process."
 
         try:
-            # Get service (initializes lazily if needed)
-            service = await cls._get_service()
+            # Get services
+            service, session = await cls._init_session(request)
 
-            # Get user info from FastAPI session
-            user_name = request.session.get('user', {}).get('username')
+            # Build prompt with operation-specific configuration
+            options = options or {}
+            content = await cls._build_content(text, operation, options)
+            logger.debug(f"Build content: {content}")
 
-            try:
-                # Get or create session
-                session = await service.get_or_create_session(
-                    user_name=user_name,
-                    module_name='text'
-                )
+            # Update session with style-specific system prompt
+            session.context['system_prompt'] = content.pop('system_prompt')        
+            # Persist updated context to session store
+            # await service.session_store.save_session(session)
 
-                # Build prompt with operation-specific configuration
-                options = options or {}
-                content = await cls._build_content(text, operation, options)
-                logger.debug(f"Build content: {content}")
-
-                # Update session with style-specific system prompt
-                session.context['system_prompt'] = content.pop('system_prompt')        
-                # Persist updated context to session store
-                # await service.session_store.save_session(session)
-
-                # Generate response with session context
-                response = await service.gen_text(
-                    session=session,
-                    content=content
-                )
+            # Generate response with session context
+            response = await service.gen_text(
+                session=session,
+                content=content
+            )
+            
+            if not response:
+                raise ValueError("Empty response from service")
                 
-                if not response:
-                    raise ValueError("Empty response from service")
-                    
-                # GenService returns the content string directly
-                return response
-                
-            except Exception as e:
-                logger.error(f"[TextHandlers] Service error: {str(e)}")
-                return f"Error: {str(e)}"
+            # GenService returns the content string directly
+            return response
 
-        except HTTPException as e:
-            logger.error(f"Authentication error: {e.detail}")
-            return str(e.detail)
         except Exception as e:
-            logger.error(f"[handle_request]: {str(e)}")
+            logger.error(f"[TextHandlers] Failed to generate text: {str(e)}")
             return "An error occurred while processing your text. Please try again."
 
     @classmethod

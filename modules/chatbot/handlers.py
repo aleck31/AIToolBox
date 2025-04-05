@@ -1,36 +1,23 @@
-from typing import List, Dict, AsyncGenerator, Union, Optional, Tuple
 import asyncio
 import gradio as gr
+from typing import List, Dict, AsyncGenerator, Union, Optional, Tuple
 from core.logger import logger
-from core.service.service_factory import ServiceFactory
-from core.service.chat_service import ChatService
 from llm.model_manager import model_manager
+from modules import BaseHandler
 from .prompts import CHATBOT_STYLES
 
 
-class ChatbotHandlers:
+class ChatbotHandlers(BaseHandler):
     """Handlers for chat functionality with session management."""
 
-    _service: Optional[ChatService] = None  # Shared service instance
+    # Module name for the handler
+    _module_name: str = "chatbot"
+    
+    # Service type
+    _service_type: str = "chat"
+    
     MAX_DISPLAY_MSG: int = 30  # Number of messages to show in UI
     MAX_CONTEXT_MSG: int = 12  # Number of messages to send to LLM
-
-    @classmethod
-    def _get_service(cls) -> ChatService:
-        """Get or initialize shared service instance."""
-        if cls._service is None:
-            cls._service = ServiceFactory.create_chat_service('chatbot')
-            logger.debug(f"[ChatbotHandlers] Chat service initialized: {cls._service}")
-        return cls._service
-
-    @classmethod
-    def get_user_name(cls, request: gr.Request) -> Optional[str]:
-        """Get authenticated user from FastAPI request."""
-        if user_name := request.session.get('user', {}).get('username'):
-            return user_name
-        else:
-            logger.warning("[ChatbotHandlers] No authenticated user found")
-            return None
 
     @classmethod
     def get_available_models(cls) -> List[Tuple[str, str]]:
@@ -65,14 +52,8 @@ class ChatbotHandlers:
             - Selected model_id for the dropdown
         """
         try:
-            user_name = cls.get_user_name(request)
-            service = cls._get_service()
-            # Get active session
-            session = await service.get_or_create_session(
-                user_name=user_name,
-                module_name='chatbot',
-                bypass_cache=True
-            )
+            # Initialize session
+            service, session = await cls._init_session(request)
 
             history_future = service.load_session_history(
                 session=session,
@@ -92,32 +73,6 @@ class ChatbotHandlers:
             return [], [], None
 
     @classmethod
-    async def update_model_id(cls, model_id: str, request: gr.Request) -> None:
-        """
-        Update session model when dropdown selection changes.
-
-        Args:
-            model_id: New model identifier to set
-            request: Gradio request with session data
-        """
-        try:
-            # Get authenticated user and service
-            user_name = cls.get_user_name(request)
-            service = cls._get_service()
-            # Get active session
-            session = await service.get_or_create_session(
-                user_name=user_name,
-                module_name='chatbot'
-            )
-            
-            # Update model
-            await service.update_session_model(session, model_id)
-            logger.debug(f"[ChatbotHandlers] Updated session model to: {model_id}")
-
-        except Exception as e:
-            logger.error(f"[ChatbotHandlers] Failed to update session model: {e}", exc_info=True)
-
-    @classmethod
     async def clear_chat_history(
         cls, chatbot_state: List, request: gr.Request
     ) -> Tuple[List, List]:
@@ -132,14 +87,8 @@ class ChatbotHandlers:
             Tuple of (updated chatbot state, empty list for UI)
         """
         try:
-            # Get authenticated user and service
-            user_name = cls.get_user_name(request)
-            service = cls._get_service()
-            # Get active session
-            session = await service.get_or_create_session(
-                user_name=user_name,
-                module_name='chatbot'
-            )
+            # Initialize session
+            service, session = await cls._init_session(request)
 
             # Clear history in session
             await service.clear_history(session)
@@ -197,27 +146,20 @@ class ChatbotHandlers:
         Yields:
             Either a dict with text/files or a list of ChatMessage objects
         """
+        # Input validation
+        if not model_id:
+            yield {"text": "Please select a model for Chatbot module."}
+            return
+        # Convert Gradio input to a unified dictionary format
+        unified_input = cls._normalize_input(ui_input)
+        if not unified_input:
+            yield {"text": "Please provide a message or file."}
+            return
+        logger.debug(f"[ChatbotHandlers] User message from Gradio UI: {ui_input}")
+
         try:
-            # Input validation
-            if not model_id:
-                yield {"text": "Please select a model for Chatbot module."}
-                return
-            # Convert Gradio input to a unified dictionary format
-            unified_input = cls._normalize_input(ui_input)
-            if not unified_input:
-                yield {"text": "Please provide a message or file."}
-                return
-            logger.debug(f"[ChatbotHandlers] User message from Gradio UI: {ui_input}")
-
-            # Get authenticated user and service
-            user_name = cls.get_user_name(request)
-            service = cls._get_service()
-
-            # Get or create chat session
-            session = await service.get_or_create_session(
-                user_name=user_name,
-                module_name='chatbot'
-            )
+            # Initialize session
+            service, session = await cls._init_session(request)
 
             # Configure chat style
             style_config = CHATBOT_STYLES.get(chat_style) or CHATBOT_STYLES['default']

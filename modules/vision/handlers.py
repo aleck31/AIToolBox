@@ -4,94 +4,32 @@ import asyncio
 import gradio as gr
 from typing import Optional, AsyncIterator
 from core.logger import logger
-from core.service.service_factory import ServiceFactory
-from core.service.gen_service import GenService
 from llm.model_manager import model_manager
+from modules import BaseHandler
 from .prompts import VISION_SYSTEM_PROMPT
 
 
-class VisionHandlers:
+class VisionHandlers(BaseHandler):
     """Handlers for vision analysis with streaming support"""
     
-    # Shared service instance
-    _service : Optional[GenService] = None
-
-    @classmethod
-    async def _get_service(cls) -> GenService:
-        """Get or initialize service lazily"""
-        if cls._service is None:
-            logger.info("[VisionHandlers] Initializing service")
-            cls._service = ServiceFactory.create_gen_service('vision')
-        return cls._service
-
+    # Module configuration
+    _module_name = "vision"
+    _service_type = "gen"
+    
     @classmethod
     def get_available_models(cls):
         """Get list of available models with id and names"""
         try:
-            # Filter for models with vision capability
+            # Override to filter for models with vision capability
             if models := model_manager.get_models(filter={'category': 'vision'}):
-                logger.debug(f"[VisionHandlers] Get {len(models)} available models")
+                logger.debug(f"[{cls.__name__}] Get {len(models)} available models")
                 return [(f"{m.name}, {m.api_provider}", m.model_id) for m in models]
             else:
-                logger.warning("[VisionHandlers] No vision-capable models available")
+                logger.warning(f"[{cls.__name__}] No vision-capable models available")
                 return []
         except Exception as e:
-            logger.error(f"[VisionHandlers] Failed to fetch models: {str(e)}", exc_info=True)
+            logger.error(f"[{cls.__name__}] Failed to fetch models: {str(e)}", exc_info=True)
             return []
-
-    @classmethod
-    async def update_model_id(cls, model_id: str, request: gr.Request = None):
-        """Update session model when dropdown selection changes"""
-        try:
-            # Get authenticated user from FastAPI session
-            user_name = request.session.get('user', {}).get('username')
-            if not user_name:
-                logger.warning("[VisionHandlers] No authenticated user for model update")
-                return
-
-            service = await cls._get_service()
-            # Get active session
-            session = await service.get_or_create_session(
-                user_name=user_name,
-                module_name='vision'
-            )
-            
-            # Update model and log
-            logger.debug(f"[VisionHandlers] Updating session model to: {model_id}")
-            await service.update_session_model(session, model_id)
-
-        except Exception as e:
-            logger.error(f"[VisionHandlers] Failed updating session model: {str(e)}", exc_info=True)
-
-    @classmethod
-    async def get_model_id(cls, request: gr.Request = None):
-        """Get selected model id from session"""
-        try:
-            # Get authenticated user from FastAPI session
-            if user_name := request.session.get('user', {}).get('username'):
-
-                service = await cls._get_service()
-                # Get active session
-                session = await service.get_or_create_session(
-                    user_name=user_name,
-                    module_name='vision'
-                )
-                
-                # Get current model id from session
-                model_id = await service.get_session_model(session)
-                logger.debug(f"[VisionHandlers] Get model {model_id} from session")
-                
-                # Return model_id for selected value
-                return model_id
-                # gr.Dropdown(choices=cls.get_available_models())   # Return dropdown with current choices and selected value
-
-            else:
-                logger.warning("[VisionHandlers] No authenticated user for loading model")
-                return None
-
-        except Exception as e:
-            logger.error(f"[VisionHandlers] Failed loading selected model: {str(e)}", exc_info=True)
-            return None
 
     @classmethod
     async def analyze_image(
@@ -121,15 +59,8 @@ class VisionHandlers:
             return
         
         try:
-            # Get authenticated user from FastAPI session
-            user_name = request.session.get('user', {}).get('username')
-            # Get service for the selected model
-            service = await cls._get_service()
-            # Get or create session
-            session = await service.get_or_create_session(
-                user_name=user_name,
-                module_name='vision'
-            )
+            # Initialize session
+            service, session = await cls._init_session(request)
  
             # Update session with system prompt
             session.context['system_prompt'] = VISION_SYSTEM_PROMPT
