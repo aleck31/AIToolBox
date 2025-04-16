@@ -18,15 +18,14 @@ def create_model_tab(model_choices_state):
         with gr.Row():
             models_list = gr.Dataframe(
                 headers=[
-                    "Name", "Model ID", "API Provider", "Vendor", "Category",
-                    "Input Modalities", "Output Modalities", "Streaming", "Tool Use", "Context Window",
-                    "Description"
+                    "Name", "Model ID", "API Provider", "Vendor", "Category", 
+                    "Streaming", "Tool Use", "Reasoning", "Context Window"
                 ],
-                datatype=["str", "str", "str", "str", "str", "str", "str", "str", "bool", "bool", "number"],
+                datatype=["str", "str", "str", "str", "str", "bool", "bool", "bool", "number"],
                 label="Available Models",
                 show_label=False,
                 interactive=False,
-                col_count=(11, "fixed")
+                col_count=(9, "fixed")
             )
 
         # Edit Model Form
@@ -98,6 +97,10 @@ def create_model_tab(model_choices_state):
                             label="Tool Use Support",
                             interactive=True
                         )
+                        reasoning = gr.Checkbox(
+                            label="Reasoning Support",
+                            interactive=True
+                        )
 
                     # Buttons row at the bottom, aligned to the right
                     with gr.Row():
@@ -114,25 +117,27 @@ def create_model_tab(model_choices_state):
         def handle_model_select(evt: gr.SelectData, models):
             if evt.value:
                 row = models.iloc[evt.index[0]]
-                input_mods = [m.strip() for m in row.iloc[5].split(",")] if row.iloc[5] else ["text"]
-                output_mods = [m.strip() for m in row.iloc[6].split(",")] if row.iloc[6] else ["text"]
-                return {
-                    form_title: gr.Markdown("| **Edit Model**"),
-                    model_name: row.iloc[0],
-                    model_id: gr.Textbox(value=row.iloc[1], interactive=False),
-                    model_provider: row.iloc[2],
-                    model_vendor: row.iloc[3],
-                    model_category: row.iloc[4],
-                    input_modality: input_mods,
-                    output_modality: output_mods,
-                    streaming: row.iloc[7],
-                    tool_use: row.iloc[8],
-                    context_window: row.iloc[9],                    
-                    model_desc: row.iloc[10],
-                    btn_submit: gr.Button(value="Update Model", variant="primary"),
-                    btn_delete: gr.Button(visible=True),
-                    btn_cancel: gr.Button(visible=True)
-                }
+                # Get the model details from the model manager
+                model = ModelHandlers._model_manager.get_model_by_id(row.iloc[1])
+                if model:
+                    return {
+                        form_title: gr.Markdown("| **Edit Model**"),
+                        model_name: model.name,
+                        model_id: gr.Textbox(value=model.model_id, interactive=False),
+                        model_provider: model.api_provider,
+                        model_vendor: model.vendor,
+                        model_category: model.category,
+                        input_modality: model.capabilities.input_modality,
+                        output_modality: model.capabilities.output_modality,
+                        streaming: model.capabilities.streaming,
+                        tool_use: model.capabilities.tool_use,
+                        reasoning: model.capabilities.reasoning,
+                        context_window: model.capabilities.context_window,
+                        model_desc: model.description,
+                        btn_submit: gr.Button(value="Update Model", variant="primary"),
+                        btn_delete: gr.Button(visible=True),
+                        btn_cancel: gr.Button(visible=True)
+                    }
             return {
                 form_title: gr.Markdown("| **Add New Model**"),
                 model_name: "",
@@ -145,6 +150,7 @@ def create_model_tab(model_choices_state):
                 output_modality: ["text"],
                 streaming: True,
                 tool_use: False,
+                reasoning: False,
                 context_window: 128*1024,
                 btn_submit: gr.Button(value="Add Model", variant="primary"),
                 btn_delete: gr.Button(visible=False),
@@ -166,6 +172,7 @@ def create_model_tab(model_choices_state):
                 output_modality,
                 streaming,
                 tool_use,
+                reasoning,
                 context_window,
                 btn_submit,
                 btn_delete,
@@ -175,13 +182,13 @@ def create_model_tab(model_choices_state):
 
         # Submit button handler for add/update
         def handle_submit(name, id, provider, vendor, category, desc, 
-                        input_mods, output_mods, stream, tools, context, btn_text):
+                        input_mods, output_mods, stream, tools, reasoning, context, btn_text):
             if btn_text == "Update Model":
                 ModelHandlers.update_model(name, id, provider, vendor, category, desc,
-                                        input_mods, output_mods, stream, tools, context)
+                                        input_mods, output_mods, stream, tools, reasoning, context)
             else:
                 ModelHandlers.add_model(name, id, provider, vendor, category, desc,
-                                      input_mods, output_mods, stream, tools, context)
+                                      input_mods, output_mods, stream, tools, reasoning, context)
             
             # Update models list and choices
             models = ModelHandlers.refresh_models()
@@ -201,6 +208,7 @@ def create_model_tab(model_choices_state):
                 output_modality,
                 streaming,
                 tool_use,
+                reasoning,
                 context_window,
                 btn_submit
             ],
@@ -233,6 +241,7 @@ def create_model_tab(model_choices_state):
                 ["text"],
                 True,
                 False,
+                False,
                 128*1024,
                 gr.Button(value="Add Model", variant="primary"),
                 gr.Button(visible=False),
@@ -250,6 +259,7 @@ def create_model_tab(model_choices_state):
                 output_modality,
                 streaming,
                 tool_use,
+                reasoning,
                 context_window,
                 btn_submit,
                 btn_delete,
@@ -271,6 +281,7 @@ def create_model_tab(model_choices_state):
                 ["text"],
                 True,
                 False,
+                False,
                 128*1024,
                 gr.Button(value="Add Model", variant="primary"),
                 gr.Button(visible=False),
@@ -288,6 +299,7 @@ def create_model_tab(model_choices_state):
                 output_modality,
                 streaming,
                 tool_use,
+                reasoning,
                 context_window,
                 btn_submit,
                 btn_delete,

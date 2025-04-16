@@ -12,6 +12,7 @@ build/
 develop-eggs/
 dist/
 node_modules
+assets/generated/
 
 # vscode
 .vscode
@@ -26,9 +27,8 @@ venv/
 .pid
 
 flagged
-*.log
-logs/
-demo*
-tmp/*
+devguide
 config.json
-assets/generated/
+logs/*
+*.log
+tmp

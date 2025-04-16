@@ -20,12 +20,12 @@ class AskingHandlers(BaseHandler):
     def get_available_models(cls):
         """Get list of available models with id and names"""
         try:
-            # Filter for models with text generation capability
-            if models := model_manager.get_models(filter={'tool_use': True}):
+            # Filter for models with reasoning capability
+            if models := model_manager.get_models(filter={'reasoning': True}):
                 logger.debug(f"[AskingHandlers] Get {len(models)} available models")
                 return [(f"{m.name}, {m.api_provider}", m.model_id) for m in models]
             else:
-                logger.warning("[AskingHandlers] No text-capable models available")
+                logger.warning("[AskingHandlers] No extended thinking models available")
                 return []
         except Exception as e:
             logger.error(f"[AskingHandlers] Failed to fetch models: {str(e)}", exc_info=True)
@@ -70,8 +70,6 @@ class AskingHandlers(BaseHandler):
 
             # Update session with system prompt
             session.context['system_prompt'] = SYSTEM_PROMPT
-            # Persist updated context
-            # await service.session_store.save_session(session)
 
             # Build content with option history
             text = input.get('text', '')
@@ -85,40 +83,20 @@ class AskingHandlers(BaseHandler):
             logger.debug(f"Build content: {content}")
 
             # Generate response with streaming
-            thinking_buffer = "```thinking\n"
+            thinking_buffer = ""
             response_buffer = ""
-            in_thinking_mode = True  # Start in thinking mode
             
             async for chunk in service.gen_text_stream(
                 session=session,
                 content=content
             ):
-                # logger.debug(f"[AskingHandlers] Received chunk: {chunk}")
-                # Process each chunk immediately
-                if in_thinking_mode:
-                    # Currently in thinking mode - look for closing tag
-                    if "</thinking>" in chunk:
-                        # Split chunk at closing tag
-                        parts = chunk.split("</thinking>", 1)
-                        thinking_buffer += parts[0]  # Add content before closing tag to thinking
-                        response_buffer += parts[1]  # Add content after closing to response
-                        in_thinking_mode = False  # Switch to response mode
-                    elif "<" in chunk:
-                        pass
-                    else:
-                        # No closing tag found, all content goes to thinking (removing <thinking> if present)
-                        thinking_buffer += chunk.replace("<thinking>", "")
-                else:
-                    # Currently in response mode - look for opening tag
-                    if "<thinking>" in chunk:
-                        # Split chunk at opening tag
-                        parts = chunk.split("<thinking>", 1)
-                        response_buffer += parts[0]  # Add content before opening tag to response
-                        thinking_buffer += parts[1]  # Add content after opening tag to thinking
-                        in_thinking_mode = True  # Switch to thinking mode
-                    else:
-                        # No opening tag found, all content goes to response
-                        response_buffer += chunk.replace("</thinking>", "\n```")
+                # Process structured chunks from GenService
+                if thinking := chunk.get('thinking'):
+                    # Add thinking content to buffer
+                    thinking_buffer += thinking
+                elif text := chunk.get('text'):
+                    # Add text content to response buffer
+                    response_buffer += text
 
                 # Yield current state of both buffers
                 yield thinking_buffer.strip(), response_buffer.strip()

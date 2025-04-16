@@ -135,7 +135,7 @@ class BedrockConverse(LLMAPIProvider):
         inference_config = {k: v for k, v in inference_config.items() if v is not None}
 
         # Prepare additional model request fields if needed
-        additional_fields = None
+        additional_fields = {}
         if top_k := kwargs.get('top_k', self.llm_params.top_k):
             if isinstance(top_k, (int, float)):  # Validate top_k
                 if 'deepseek' in self.model_id:
@@ -144,6 +144,25 @@ class BedrockConverse(LLMAPIProvider):
                     additional_fields = {"inferenceConfig": {"topK": top_k}}
                 else:
                     additional_fields = {'top_k': top_k}
+        # Handle thinking parameters from additionalModelRequestFields
+        if thinking_config := kwargs.get('thinking', self.llm_params.thinking):
+            if 'claude-3-7' in self.model_id:
+                # 1. Add thinking param to additional_fields
+                additional_fields['thinking'] = thinking_config
+                # 2. top_k must be unset when thinking is enabled
+                if 'top_k' in additional_fields:
+                    del additional_fields['top_k']
+                # 3. Temperature must be set to 1.0 when thinking is enabled
+                inference_config['temperature'] = 1.0
+                # 4. topP must be unset when thinking is enabled
+                if 'topP' in inference_config:
+                    del inference_config['topP']
+                # 5. maxTokens must be greater than thinking.budget_tokens
+                budget_tokens = thinking_config.get('budget_tokens', 2048)
+                if inference_config.get('maxTokens', 0) <= budget_tokens:
+                    inference_config['maxTokens'] = budget_tokens * 2  # Set to double the budget tokens
+
+                logger.debug(f"[BRConverseProvider] Applied Claude thinking parameters: {thinking_config}")
 
         return inference_config, additional_fields
 
@@ -455,7 +474,9 @@ class BedrockConverse(LLMAPIProvider):
                         }
                     elif 'text' in delta or 'reasoningContent' in delta:
                         content = {'text': delta['text']} if 'text' in delta else {}
+                        # For Claude 3.7 and Deepseek r1, the thinking is in reasoningContent.text
                         thinking = delta.get('reasoningContent', {}).get('text', '')
+
                         yield {
                             'role': current_role,
                             'content': content,

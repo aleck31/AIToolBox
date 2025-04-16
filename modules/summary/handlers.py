@@ -79,9 +79,17 @@ class SummaryHandlers(BaseHandler):
                 session=session,
                 content=content
             ):
-                # Accumulate text for display while maintaining streaming
-                buffered_text += chunk
-                yield buffered_text
+                # Handle structured chunks from GenService
+                if isinstance(chunk, dict):
+                    # Only process text content (ignore thinking content)
+                    if text := chunk.get('text'):
+                        buffered_text += text
+                        yield buffered_text
+                else:
+                    # Legacy format handling (string chunks)
+                    buffered_text += chunk
+                    yield buffered_text
+                
                 await asyncio.sleep(0)  # Add sleep for Gradio UI streaming echo
 
         except Exception as e:

@@ -1,7 +1,8 @@
 """Handler implementation for Model Management tab"""
 import gradio as gr
 from typing import List, Tuple, Optional
-from llm.model_manager import model_manager, LLMModel, LLM_CAPABILITIES
+from llm import LLMModel, LLM_CAPABILITIES
+from llm.model_manager import model_manager
 from core.logger import logger
 
 
@@ -28,12 +29,10 @@ class ModelHandlers:
             models = cls._model_manager.get_models()
             return [[
                 m.name, m.model_id, m.api_provider, m.vendor, m.category,
-                ", ".join(m.capabilities.input_modality),
-                ", ".join(m.capabilities.output_modality),
                 m.capabilities.streaming,
                 m.capabilities.tool_use,
-                m.capabilities.context_window, 
-                m.description
+                m.capabilities.reasoning,
+                m.capabilities.context_window
             ] for m in models]
         except Exception as e:
             logger.error(f"[ModelHandlers] Error refreshing models: {str(e)}")
@@ -44,7 +43,7 @@ class ModelHandlers:
     def _create_model(cls, name: str, model_id: str, api_provider: str,
                      vendor: str, category: str, description: str,
                      input_modality: List[str], output_modality: List[str],
-                     streaming: bool, tool_use: bool, context_window: int) -> LLMModel:
+                     streaming: bool, tool_use: bool, reasoning: bool, context_window: int) -> LLMModel:
         """Create a new LLM model instance with validation"""
         if not name or not model_id:
             raise ValueError("Model name and ID are required")
@@ -54,6 +53,7 @@ class ModelHandlers:
             output_modality=output_modality,
             streaming=streaming,
             tool_use=tool_use,
+            reasoning=reasoning,
             context_window=context_window
         )
 
@@ -71,11 +71,11 @@ class ModelHandlers:
     def add_model(cls, name: str, model_id: str, api_provider: str,
                   vendor: str, category: str, description: str,
                   input_modality: List[str], output_modality: List[str],
-                  streaming: bool, tool_use: bool, context_window: int) -> Optional[List[List]]:
+                  streaming: bool, tool_use: bool, reasoning: bool, context_window: int) -> Optional[List[List]]:
         """Add a new LLM model"""
         try:
             model = cls._create_model(name, model_id, api_provider, vendor, category, description,
-                                    input_modality, output_modality, streaming, tool_use, context_window)
+                                    input_modality, output_modality, streaming, tool_use, reasoning, context_window)
             cls._model_manager.add_model(model)
             gr.Info(f"Added new model: {name}", duration=3)
             return cls.refresh_models()
@@ -88,11 +88,11 @@ class ModelHandlers:
     def update_model(cls, name: str, model_id: str, api_provider: str,
                     vendor: str, category: str, description: str,
                     input_modality: List[str], output_modality: List[str],
-                    streaming: bool, tool_use: bool, context_window: int) -> Optional[List[List]]:
+                    streaming: bool, tool_use: bool, reasoning: bool, context_window: int) -> Optional[List[List]]:
         """Update an existing LLM model"""
         try:
             model = cls._create_model(name, model_id, api_provider, vendor, category, description,
-                                    input_modality, output_modality, streaming, tool_use, context_window)
+                                    input_modality, output_modality, streaming, tool_use, reasoning, context_window)
             cls._model_manager.update_model(model)
             gr.Info(f"Updated model: {name}", duration=3)
             return cls.refresh_models()

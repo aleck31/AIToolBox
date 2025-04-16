@@ -14,17 +14,19 @@ class LLM_CAPABILITIES:
     """Model capabilities configuration"""
     input_modality: List[str] = None  # Support input modalities
     output_modality: List[str] = None # Support output modalities
+    context_window: Optional[int] = None  # Maximum tokens(context window) size
     streaming: Optional[bool] = None  # Support for streaming responses
     tool_use: Optional[bool] = None  # Support for tool use / function calling
-    context_window: Optional[int] = None  # Maximum tokens(context window) size
+    reasoning: Optional[bool] = None  # Support for reasoning (extended thinking)
 
     def __post_init__(self):
         """Initialize default values if not provided"""
         self.input_modality = self.input_modality or ['text']
         self.output_modality = self.output_modality or ['text']
+        self.context_window = self.context_window or 128*1024
         self.streaming = True if self.streaming is None else self.streaming
         self.tool_use = False if self.tool_use is None else self.tool_use
-        self.context_window = self.context_window or 128*1024
+        self.reasoning = False if self.reasoning is None else self.reasoning
 
 
 @dataclass
@@ -118,6 +120,7 @@ class LLMParameters:
     temperature: float = 0.9  # tunes the degree of randomness in generation. Lower temperatures mean less random generations.
     top_p: float = 0.99   # less than one keeps only the smallest set of most probable tokens with probabilities that add up to top_p or higher for generation.
     top_k: Optional[int] = 100 # Lower values produce more conservative and focused outputs, while higher values introduce diversity and creativity.
+    thinking: Optional[Dict] = None # Reasoning Parameters for reasoning models，such claude 3.7
     stop_sequences: Optional[List[str]] = None  # stop_sequences - are sequences where the API will stop generating further tokens. The returned text will not contain the stop sequence.
 
     def to_dict(self) -> Dict:

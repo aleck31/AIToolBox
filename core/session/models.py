@@ -61,6 +61,9 @@ class Session:
 
     def to_dict(self) -> Dict:
         """Convert to dictionary for storage"""
+        # Create a copy of context without system_prompt to avoid persisting large prompts
+        persist_context = {k: v for k, v in self.context.items() if k != 'system_prompt'}
+        
         return {
             'session_id': self.session_id,
             'session_name': self.session_name,
@@ -69,7 +72,7 @@ class Session:
             'user_name': self.user_name,
             'metadata': self.metadata.to_dict(),
             'history': self.history,
-            'context': self.context
+            'context': persist_context
         }
 
     def add_interaction(self, message: Dict[str, Any]) -> None:

@@ -1,18 +1,18 @@
 # Copyright iX.
 # SPDX-License-Identifier: MIT-0
 import uvicorn
+import gradio as gr
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-import gradio as gr
-
 from core.config import app_config  # Fixed import path
 from llm.model_manager import model_manager
 from common.login import router as login_router, get_auth_user
 from common.main_ui import create_main_interface
 from core.logger import logger
+
 
 # Get configurations from app_config
 server_config = app_config.server_config
@@ -79,7 +79,7 @@ def public(request: Request):
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {"status": "healthy"}
+    return {"status": "OK!"}
 
 # Create main interface
 main_ui = create_main_interface()

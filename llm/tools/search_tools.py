@@ -1,9 +1,10 @@
 import time
 import asyncio
 import wikipedia
-from googlesearch import search
+from googlesearch import search as google_search
 from cachetools import TTLCache
 from core.logger import logger
+
 
 # Constants
 CACHE_TTL = 86400  # Cache for 1 day
@@ -14,7 +15,7 @@ MAX_SEARCH_RESULTS = 10  # Maximum number of search results to return
 wiki_cache = TTLCache(maxsize=CACHE_MAX_SIZE, ttl=CACHE_TTL)
 google_cache = TTLCache(maxsize=CACHE_MAX_SIZE, ttl=CACHE_TTL)
 
-def _get_wikipedia_page_and_summary(title, sentences=5):
+def _get_wikipedia_page_and_summary(title, sentences=6):
     """Helper function to get Wikipedia page and summary
     
     Args:
@@ -59,7 +60,7 @@ def search_wikipedia(query: str, num_results: int = 3, language: str = "en"):
         dict: Contains search results and article content
     """
     # Check cache first
-    cache_key = f"{query}:{language}:{num_results}"
+    cache_key = f"{query}:{language}"
     if cache_key in wiki_cache:
         cached_result = wiki_cache[cache_key]
         cached_result["cached"] = True
@@ -143,19 +144,19 @@ def search_wikipedia(query: str, num_results: int = 3, language: str = "en"):
             "error": f"Failed to search Wikipedia: {str(e)}"
         }
 
-async def search_internet(query: str, num_results: int = 5, language: str = "en"):
+async def search_internet(query: str, num_results: int = 6, language: str = "en"):
     """Search the internet via Google and return relevant search results
     
     Args:
         query: The search query
-        num_results: Number of results to return (default: 5, max: 10)
+        num_results: Number of results to return (default: 6, max: 10)
         language: Search language (default: "en")
         
     Returns:
         dict: Contains search results with titles and URLs
     """
     # Check cache first
-    cache_key = f"{query}:{language}:{num_results}"
+    cache_key = f"{query}:{language}"
     if cache_key in google_cache:
         cached_result = google_cache[cache_key]
         cached_result["cached"] = True
@@ -169,7 +170,7 @@ async def search_internet(query: str, num_results: int = 5, language: str = "en"
         loop = asyncio.get_event_loop()
         search_results = await loop.run_in_executor(
             None,
-            lambda: list(search(
+            lambda: list(google_search(
                 query, 
                 num_results=num_results, 
                 lang=language,
@@ -218,7 +219,7 @@ list_of_tools_specs = [
                             "type": "string",
                             "description": "The search query for Wikipedia"
                         },
-                        "results": {
+                        "num_results": {
                             "type": "integer",
                             "description": "Number of search results to return (default: 3)",
                             "default": 3
@@ -248,8 +249,8 @@ list_of_tools_specs = [
                         },
                         "num_results": {
                             "type": "integer",
-                            "description": "Number of search results to return (default: 5, max: 10)",
-                            "default": 5
+                            "description": "Number of search results to return (default: 6, max: 10)",
+                            "default": 6
                         },
                         "language": {
                             "type": "string",

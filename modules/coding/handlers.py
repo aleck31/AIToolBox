@@ -78,8 +78,17 @@ class CodingHandlers(BaseHandler):
                 session=session,
                 content=content
             ):
-                arch_buffer += chunk
-                yield arch_buffer
+                # Handle structured chunks from GenService
+                if isinstance(chunk, dict):
+                    # Only process text content (ignore thinking content)
+                    if text := chunk.get('text'):
+                        arch_buffer += text
+                        yield arch_buffer
+                else:
+                    # Legacy format handling (string chunks)
+                    arch_buffer += chunk
+                    yield arch_buffer
+                
                 await asyncio.sleep(0)
 
         except Exception as e:
@@ -118,8 +127,17 @@ class CodingHandlers(BaseHandler):
                 session=session,
                 content=content
             ):
-                code_buffer += chunk
-                yield code_buffer
+                # Handle structured chunks from GenService
+                if isinstance(chunk, dict):
+                    # Only process text content (ignore thinking content)
+                    if text := chunk.get('text'):
+                        code_buffer += text
+                        yield code_buffer
+                else:
+                    # Legacy format handling (string chunks)
+                    code_buffer += chunk
+                    yield code_buffer
+                
                 await asyncio.sleep(0)
 
         except Exception as e:

@@ -206,14 +206,18 @@ class GenService(BaseService):
                         logger.warning(f"[GenService] Unexpected chunk type: {type(chunk)}")
                         continue
 
-                    # Update metadata
+                    # Pass through thinking or content chunks
+                    if thinking := chunk.get('thinking'):
+                        yield {'thinking': thinking}
+                    elif content := chunk.get('content', {}):
+                        # Handle text
+                        if text := content.get('text'):
+                            yield {'text': text}
+                            accumulated_text.append(text)
+
+                    # Update metadata if it exists
                     if metadata := chunk.get('metadata'):
                         response_metadata.update(metadata)
-                    
-                    # Process text content
-                    if text := chunk.get('content', {}).get('text', ''):
-                        accumulated_text.append(text)
-                        yield text
 
                 # Add complete interaction to session
                 if accumulated_text:
@@ -222,11 +226,13 @@ class GenService(BaseService):
                         "role": "user",
                         "content": content
                     })
+
                     session.add_interaction({
                         "role": "assistant",
                         "content": {"text": ''.join(accumulated_text)},
                         "metadata": response_metadata or None
                     })
+
                     # Persist to session store
                     await self.session_store.save_session(session)
 
