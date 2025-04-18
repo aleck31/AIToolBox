@@ -6,11 +6,14 @@ from core.logger import logger
 from core.config import env_config
 from utils.aws import get_aws_client
 from utils.file import FileProcessor
+from llm.model_manager import model_manager
 from llm.tools.tool_registry import br_registry
 from llm import ResponseMetadata, LLMParameters, LLMMessage, LLMResponse
 from . import LLMAPIProvider, LLMProviderError
 
 
+# Define the content types to include in the output message
+CONTENT_TYPES = ['text', 'image', 'document', 'video']
 # Maximum file size for Bedrock API (5MB)
 MAX_FILE_SIZE = 5 * 1024 * 1024
 # Maximum allowed imaage dimension for Bedrock API (8000 pixels)
@@ -28,12 +31,16 @@ class BedrockConverse(LLMAPIProvider):
             tools: Optional list of tool names to enable
         """
         super().__init__(model_id, llm_params, [])  # Initialize base with empty tools list
-        
+
         # Initialize FileProcessor for file handling
         self.file_processor = FileProcessor(max_file_size=MAX_FILE_SIZE)
-        
-        # Initialize tools if provided
-        if tools:
+
+        # Check if model supports tool use before initializing tools
+        model = model_manager.get_model_by_id(model_id)
+        supports_tool_use = model and model.capabilities and model.capabilities.tool_use
+
+        # Initialize tools if provided and model supports tool use
+        if tools and supports_tool_use:
             # Get tool specifications from registry
             tool_specs = []
             for tool_name in tools:
@@ -46,10 +53,12 @@ class BedrockConverse(LLMAPIProvider):
                         logger.warning(f"[BRConverseProvider] No specification found for tool: {tool_name}")
                 except Exception as e:
                     logger.error(f"[BRConverseProvider] Error loading tool {tool_name}: {str(e)}")
-            
+
             # Store initialized tool specs
             self.tools = tool_specs
             logger.debug(f"[BRConverseProvider] Initialized {len(tool_specs)} tools")
+        elif tools and not supports_tool_use:
+            logger.warning(f"[BRConverseProvider] Model {model_id} does not support tool use. Tools will not be initialized.")
 
     def _validate_config(self) -> None:
         """Validate Bedrock-specific configuration
@@ -125,44 +134,53 @@ class BedrockConverse(LLMAPIProvider):
         - inference_config: Standard inference parameters
         - additional_fields: Model-specific parameters (if applicable)
         """
-        # Prepare standard inference parameters
-        inference_config = {
-            "maxTokens": kwargs.get('max_tokens', self.llm_params.max_tokens),
-            "temperature": kwargs.get('temperature', self.llm_params.temperature),
-            "topP": kwargs.get('top_p', self.llm_params.top_p),
-            "stopSequences": kwargs.get('stop_sequences', self.llm_params.stop_sequences)
-        }
-        inference_config = {k: v for k, v in inference_config.items() if v is not None}
 
+        # Initialize empty inference parameters
+        inference_config = {}
+        # Add standard parameters only if they're not None
+        if max_tokens := kwargs.get('max_tokens', self.llm_params.max_tokens):
+            inference_config["maxTokens"] = max_tokens
+        if temperature := kwargs.get('temperature', self.llm_params.temperature):
+            inference_config["temperature"] = temperature
+        if top_p := kwargs.get('top_p', self.llm_params.top_p):
+            inference_config["topP"] = top_p
+        if stop_sequences := kwargs.get('stop_sequences', self.llm_params.stop_sequences):
+            inference_config["stopSequences"] = stop_sequences
+
+        # Check for thinking config early to avoid redundant operations
+        thinking_config = kwargs.get('thinking', self.llm_params.thinking)
+        is_claude_thinking = thinking_config and 'claude-3-7' in self.model_id
+        
         # Prepare additional model request fields if needed
         additional_fields = {}
-        if top_k := kwargs.get('top_k', self.llm_params.top_k):
-            if isinstance(top_k, (int, float)):  # Validate top_k
+
+        # Handle thinking parameters for Claude reasoning models
+        if is_claude_thinking:
+            # Apply all Claude thinking parameters at once
+            additional_fields['thinking'] = thinking_config
+            logger.debug(f"[BRConverseProvider] Applied Claude thinking parameters")
+
+            # Override inference parameters for thinking
+            inference_config['temperature'] = 1.0
+            if 'topP' in inference_config:
+                del inference_config['topP']
+
+            # Ensure maxTokens is sufficient for thinking
+            budget_tokens = thinking_config.get('budget_tokens', 2048)
+            if inference_config.get('maxTokens', 0) <= budget_tokens:
+                inference_config['maxTokens'] = budget_tokens * 2
+
+        # Handle top_k parameter - only if thinking is not enabled for Claude
+        else:
+            if top_k := kwargs.get('top_k', self.llm_params.top_k):
+                # Optimize model-specific logic with direct assignment
                 if 'deepseek' in self.model_id:
-                    additional_fields = None
+                    # For deepseek, return None as additional_fields
+                    return inference_config, None
                 elif 'nova' in self.model_id:
                     additional_fields = {"inferenceConfig": {"topK": top_k}}
                 else:
                     additional_fields = {'top_k': top_k}
-        # Handle thinking parameters from additionalModelRequestFields
-        if thinking_config := kwargs.get('thinking', self.llm_params.thinking):
-            if 'claude-3-7' in self.model_id:
-                # 1. Add thinking param to additional_fields
-                additional_fields['thinking'] = thinking_config
-                # 2. top_k must be unset when thinking is enabled
-                if 'top_k' in additional_fields:
-                    del additional_fields['top_k']
-                # 3. Temperature must be set to 1.0 when thinking is enabled
-                inference_config['temperature'] = 1.0
-                # 4. topP must be unset when thinking is enabled
-                if 'topP' in inference_config:
-                    del inference_config['topP']
-                # 5. maxTokens must be greater than thinking.budget_tokens
-                budget_tokens = thinking_config.get('budget_tokens', 2048)
-                if inference_config.get('maxTokens', 0) <= budget_tokens:
-                    inference_config['maxTokens'] = budget_tokens * 2  # Set to double the budget tokens
-
-                logger.debug(f"[BRConverseProvider] Applied Claude thinking parameters: {thinking_config}")
 
         return inference_config, additional_fields
 
@@ -237,63 +255,74 @@ class BedrockConverse(LLMAPIProvider):
             Dict in Bedrock message format, containing:
             - role: str ('user' or 'assistant')
             - content: List ({'text':'string'})
-
         """
         content_parts = []
 
         # Handle context if present and not None
-        context = getattr(message, 'context', None)
-        if context and isinstance(context, dict):
-            context_items = []
-            for key, value in context.items():
-                if value is not None:
-                    # Convert snake_case to spaces and capitalize
-                    readable_key = key.replace('_', ' ').capitalize()
-                    context_items.append(f"{readable_key}: {value}")
-            if context_items:
-                # Add formatted context with clear labeling
-                content_parts.append({
-                    "text": f"Context Information:\n{' | '.join(context_items)}\n"
-                })
+        if context := getattr(message, 'context', None):
+            if isinstance(context, dict) and context:
+                context_items = []
+                for key, value in context.items():
+                    if value is not None:
+                        # Transform key from snake_case to readable format
+                        readable_key = key.replace('_', ' ').capitalize()
+                        context_items.append(f"{readable_key}: {value}")
+
+                if context_items:
+                    # Join all items at once for better string performance
+                    content_parts.append({"text": f"Context Information:\n{' | '.join(context_items)}\n"})
 
         # Handle message content
-        if isinstance(message.content, str):
-            if message.content.strip():  # Skip empty strings
-                content_parts.append({"text": message.content})
+        content = message.content
+        if isinstance(content, str):
+            if content := content.strip():  # Skip empty strings
+                content_parts.append({"text": content})
+
         # Handle multimodal content from Gradio chatbox
-        elif isinstance(message.content, dict):
+        elif isinstance(content, dict):
             # Add text if present
-            if text := message.content.get("text", "").strip():
+            if text := content.get("text", "").strip():
                 content_parts.append({"text": text})
+                
             # Add files if present
-            if files := message.content.get("files", []):
-                for file_path in files:
-                    file_type, format = self.file_processor.get_file_type_and_format(file_path)
-                    if file_type == 'image':
-                        # Handle image files according to Nova schema
-                        content_parts.append({
-                            "image": {
-                                "format": format,  # Nova requires explicit format
-                                "source": {
-                                    "bytes": self.file_processor.read_file(file_path, optimize=True)
-                                }
-                            }
-                        })
-                        logger.debug(f"[BRConverseProvider] Added image with format: {format}")
-                    elif file_type == 'document':
-                        # Handle document files
-                        content_block = {
-                            "format": format,
-                            "source": {
-                                "bytes": self.file_processor.read_file(file_path, optimize=True)
-                            },
-                            "name": self.file_processor.get_file_name(file_path)
-                        }
-                        content_parts.append({
-                            file_type: content_block
-                        })
+            if files := content.get("files"):
+                self._process_files(files, content_parts)
             
         return {"role": message.role, "content": content_parts}
+        
+    def _process_files(self, files: List[str], content_parts: List[Dict]) -> None:
+        """Process files and add them to content parts - extracted for clarity and reuse
+        
+        Args:
+            files: List of file paths
+            content_parts: List to append content parts to
+        """
+        for file_path in files:
+            file_type, format = self.file_processor.get_file_type_and_format(file_path)
+            
+            if file_type == 'image':
+                # Handle image files according to Nova schema
+                content_parts.append({
+                    "image": {
+                        "format": format,  # Nova requires explicit format
+                        "source": {
+                            "bytes": self.file_processor.read_file(file_path, optimize=True)
+                        }
+                    }
+                })
+                logger.debug(f"[BRConverseProvider] Added image with format: {format}")
+                
+            elif file_type == 'document':
+                # Handle document files
+                content_parts.append({
+                    file_type: {
+                        "format": format,
+                        "source": {
+                            "bytes": self.file_processor.read_file(file_path, optimize=True)
+                        },
+                        "name": self.file_processor.get_file_name(file_path)
+                    }
+                })
 
     def _convert_messages(self, messages: List[LLMMessage]) -> List[Dict]:
         """Convert messages to Bedrock-specified format efficiently
@@ -318,15 +347,15 @@ class BedrockConverse(LLMAPIProvider):
             messages: List of Converted messages
             system_prompt: Optional system instructions
             **kwargs: Additional parameters for inference
-            
+
         Returns:
             Dict containing:
             - {'role': str} ('user' or 'assistant')
             - {'content': dict} for LLM-generated content
-            - {'thinking': str} for thinking process text (for reasoning models)
+            - {'thinking': dict} for thinking process text (for reasoning models)
             - {'tool_use': dict} for tool use information
             - {"metadata": dict} for response metadata, such as usage, metrics and stop reason
-            
+
         Raises:
             ClientError: For Bedrock-specific errors
             Exception: For unexpected errors
@@ -361,16 +390,33 @@ class BedrockConverse(LLMAPIProvider):
             resp_msg = response.get('output', {}).get('message', {})
             content_blocks = resp_msg.get('content', [])
 
-            # Process each content block
+           # Initialize response components
+            content = {}
+            thinking_block = {}
+            tool_use = {}
+
+            # Process all blocks
             for block in content_blocks:
-                content = {'text': block['text']} if 'text' in block else {}
-                thinking = block.get('reasoningContent', {}).get('reasoningText', '')
-                tool_use = block.get('toolUse', {})
+                # Iterate through all keys in the block
+                for key, value in block.items():
+                    # If key is in content_keys, add to content dict
+                    if key in CONTENT_TYPES:
+                        content[key] = value
+                    # If key is reasoningContent, extract thinking information
+                    elif key == 'reasoningContent':
+                        if reasoning_text := value.get('reasoningText', {}):
+                            thinking_block = {
+                                'text': reasoning_text.get('text', ''),
+                                'signature': reasoning_text.get('signature', '')
+                            }
+                    # If key is toolUse, add to tool_use
+                    elif key == 'toolUse':
+                        tool_use = value
 
             return {
                 'role': resp_msg.get('role', 'assistant'),
                 'content': content,
-                'thinking': thinking,
+                'thinking': thinking_block,
                 'tool_use': tool_use,
                 'metadata': {
                     'usage':response.get('usage'),
@@ -395,12 +441,12 @@ class BedrockConverse(LLMAPIProvider):
             messages: List of Converted messages
             system_prompt: The system prompt send to the model.
             **kwargs: Additional parameters for inference
-                        
+
         Yields:
             Dict containing:
             - {'role': str} ('user' or 'assistant')
             - {'content': dict} for LLM-generated content chunks
-            - {'thinking': str} for thinking process chunks (for reasoning models)
+            - {'thinking': dict} for thinking process chunks (for reasoning models)
             - {'tool_use': dict} for tool use information
             - {"metadata": dict} for response metadata, such as usage, metrics and stop reason
         """
@@ -425,17 +471,14 @@ class BedrockConverse(LLMAPIProvider):
             if self.tools and len(self.tools) > 0:
                 request_params["toolConfig"] = {"tools": self.tools}
 
-            # Get response stream
-            # logger.debug(f"[BRConverseProvider] Full request params: {request_params}")  #Todo: Remove 'messages' field from request_params to prevent excessively long log
-            response = self.client.converse_stream(**request_params)
-            
             # Initialize response tracking
             metadata = ResponseMetadata()
             current_role = None
             tool_use = {}
 
+            # logger.debug(f"[BRConverseProvider] Full request params: {request_params}")
             # Stream response chunks - handle synchronous EventStream
-            for chunk in response['stream']:
+            for chunk in self.client.converse_stream(**request_params)['stream']:
                 if 'messageStart' in chunk:
                     current_role = chunk['messageStart']['role']
                     # Yield initial message structure with role
@@ -472,15 +515,23 @@ class BedrockConverse(LLMAPIProvider):
                             'tool_use': tool_use,
                             'metadata': {}
                         }
-                    elif 'text' in delta or 'reasoningContent' in delta:
+                    elif 'text' in delta:
                         content = {'text': delta['text']} if 'text' in delta else {}
-                        # For Claude 3.7 and Deepseek r1, the thinking is in reasoningContent.text
-                        thinking = delta.get('reasoningContent', {}).get('text', '')
-
                         yield {
                             'role': current_role,
                             'content': content,
-                            'thinking': thinking,
+                            'tool_use': {},
+                            'metadata': {}
+                        }
+                    elif 'reasoningContent' in delta:
+                        thinking_block = {
+                            # For Claude 3.7, Deepseek r1, the thinking text is in reasoningContent.text
+                            'text': delta['reasoningContent'].get('text', ''),
+                            'signature': delta['reasoningContent'].get('signature', '')
+                        }
+                        yield {
+                            'role': current_role,
+                            'thinking': thinking_block,
                             'tool_use': {},
                             'metadata': {}
                         }
@@ -590,18 +641,18 @@ class BedrockConverse(LLMAPIProvider):
                     resp_content = response['content']
 
             # Update content if present
-            elif 'text' in response.get('content', {}):
+            elif response.get('content'):
                 resp_content = response['content']
-
             else:
-                raise ValueError("No text content found in response")
+                resp_content = {'text': ''}
+                logger.warning("[BRConverseProvider] No content found in response, return empty text")
 
             return LLMResponse(
                 content=resp_content,
                 thinking=response.get('thinking', ''),
                 metadata=response.get('metadata')
             )
-            
+
         except ClientError as e:
             self._handle_bedrock_error(e)
 
@@ -638,9 +689,18 @@ class BedrockConverse(LLMAPIProvider):
             llm_messages = self._convert_messages(messages)
             # logger.debug(f"[BRConverseProvider] Initial messages for Bedrock: {llm_messages}")  #Todo: Remove 'content' field from request_params to prevent excessively long log
 
+            # Check if thinking is enabled
+            thinking_enabled = False
+            if thinking_config := kwargs.get('thinking', self.llm_params.thinking):
+                if thinking_config.get('type', '') == 'enabled':
+                    thinking_enabled = True
+
+            # Use StringIO for efficient string accumulation
+            from io import StringIO
+            
             while True:  # Continue until no more tool uses
                 has_tool_use = False
-                # accumulated_text = ""   # track and preserve the text content that comes before a tool use
+                thinking_buffer = StringIO()  # track thinking content that comes before a tool use
 
                 # Convert synchronous stream to async
                 for chunk in self._converse_stream_sync(
@@ -648,13 +708,23 @@ class BedrockConverse(LLMAPIProvider):
                     system_prompt=system_prompt,
                     **kwargs
                 ):
-                    # Stream content(only text) and thinking immediately if present
+                    # Stream content and thinking immediately if present
                     content = chunk.get('content', {})
-                    thinking = chunk.get('thinking', '')
-                    if content or thinking:
+                    thinking_block = chunk.get('thinking', {})
+
+                    # Only update signature if it's not empty
+                    if signature := thinking_block.get('signature', ''):
+                        reasoning_signature = signature
+
+                    # Process thinking text if present
+                    if thinking_text := thinking_block.get('text', ''):
+                        thinking_buffer.write(thinking_text)  # Accumulate thinking content
+
+                    # Yield content immediately to client
+                    if content or thinking_text:
                         yield {
                             'content': content,
-                            'thinking': thinking,
+                            'thinking': thinking_text,
                             'metadata': chunk.get('metadata', {})
                         }
 
@@ -663,14 +733,32 @@ class BedrockConverse(LLMAPIProvider):
                     if tool_use and isinstance(tool_use.get('input'), dict):
                         has_tool_use = True
                         logger.debug(f"[BRConverseProvider] Tool use detected: {tool_use}")
+
+                        # Add LLM message with thinking (if enabled) and toolUse
+                        content_blocks = []
+
+                        # Add thinking block first if thinking is enabled and we have accumulated thinking
+                        accumulated_thinking = thinking_buffer.getvalue()
+                        if thinking_enabled and accumulated_thinking:
+                            content_blocks.append({
+                                'reasoningContent': {
+                                    'reasoningText': {
+                                        'text': accumulated_thinking,
+                                        'signature': reasoning_signature
+                                    }
+                                }
+                            })
+
+                        # Add tool use block
+                        content_blocks.append({'toolUse': tool_use})
                         
-                        # Add LLM message with toolUse
                         assistant_message = {
                             'role': chunk.get('role'),
-                            'content': [{'toolUse': tool_use}]  # not including preceding text content
+                            'content': content_blocks
                         }
+
                         llm_messages.append(assistant_message)
-                        logger.debug(f"[BRConverseProvider] Added LLM message: {assistant_message}")
+                        # logger.debug(f"[BRConverseProvider] Added Assistant message: {assistant_message}")
                         
                         try:
                             # Execute tool with unpacked input
@@ -693,9 +781,12 @@ class BedrockConverse(LLMAPIProvider):
 
                         # Add tool execute result to conversation
                         llm_messages.append(message_with_result)
-                        logger.debug(f"[BRConverseProvider] Added User message w/tool result: <content omitted>")
+                        # logger.debug(f"[BRConverseProvider] Added User message w/tool result: {message_with_result}")
                         break  # Break inner loop to get next response with tool result
 
+                # Clean up resources
+                thinking_buffer.close()
+                
                 # Break outer loop if no tool use in this turn
                 if not has_tool_use:
                     logger.debug("[BRConverseProvider] No more tool uses detected, ending loop")

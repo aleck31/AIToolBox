@@ -128,7 +128,7 @@ DEFAULT_MODELS = [
             input_modality=['text'],
             output_modality=['text'],
             streaming=True,
-            tool_use=True,
+            tool_use=False,
             reasoning=True,
             context_window=32*1024
         )
