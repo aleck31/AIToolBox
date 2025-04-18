@@ -112,7 +112,7 @@ class BaseService:
             # Falls back to module config default model
             elif model_id := module_config.get_default_model(session.metadata.module_name):
                 self.model_id = model_id
-                logger.debug(f"[BaseService] Falls back to module default model: {model_id}")
+                logger.debug(f"[BaseService] Falls back to default model: {model_id}")
                 return self.model_id
             else:
                 logger.warning(f"[BaseService] No model ID found for {session.metadata.module_name}")

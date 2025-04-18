@@ -13,9 +13,6 @@ MODULE_LIST = ['assistant', 'chatbot', 'text', 'summary', 'vision', 'asking', 'c
 class ModuleHandlers:
     """Handlers for module configuration management"""
 
-    # Parameters that should be integers
-    INT_PARAMS = ['max_tokens', 'top_k', 'width', 'height', 'steps']
-
     # Shared module config instance
     _module_config = module_config
 
@@ -25,12 +22,7 @@ class ModuleHandlers:
         if not parameters:
             return "{}"
 
-        display_params = cls._module_config._decimal_to_float(parameters)
-
-        # Convert specified parameters to integers
-        for param in cls.INT_PARAMS:
-            if param in display_params and isinstance(display_params[param], (int, float)):
-                display_params[param] = int(display_params[param])
+        display_params = cls._module_config._decimal_to_numeric(parameters)
 
         return json.dumps(display_params, indent=2)
 
