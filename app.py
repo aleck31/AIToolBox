@@ -47,7 +47,7 @@ app.add_middleware(
     max_age=None,  # Let Cognito handle token expiration
     same_site="lax",  # Prevents CSRF while allowing normal navigation
     https_only=security_config['ssl_enabled'],  # Enable for production with HTTPS
-    path="/",  # Make cookie available for all paths    
+    path="/",  # Make cookie available for all paths
 )
 
 # Add CORS middleware
@@ -58,16 +58,15 @@ app.add_middleware(
     allow_methods=cors_config['allow_methods'],
     allow_headers=cors_config['allow_headers'],
     expose_headers=["*"],
-    max_age=3600,
+    max_age=3600
 )
 
 # Include login routes
 app.include_router(login_router)
 
 @app.get('/')
-def public(request: Request):
+def root_path(request: Request):
     """Root route handler"""
-    logger.debug("Accessing root path")
     try:
         get_auth_user(request)
         logger.debug("User found, redirecting to main")

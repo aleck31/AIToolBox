@@ -115,7 +115,7 @@ def create_provider(provider_name: str, model_id: str, llm_params: Union[LLMPara
     """Factory function to create appropriate provider instance
     
     Args:
-        provider_name: Name of provider (e.g. 'Bedrock', 'Gemini', 'OpenAI')
+        provider_name: Name of provider (e.g. 'Bedrock')
         model_id: Model identifier
         llm_params: LLM inference parameters (either LLMParameters for text or GenImageParameters for images)
         tools: Optional list of tool module names to enable
@@ -128,16 +128,12 @@ def create_provider(provider_name: str, model_id: str, llm_params: Union[LLMPara
     """
     from llm.api_providers.bedrock_converse import BedrockConverse
     from llm.api_providers.bedrock_invoke import BedrockInvoke
-    from llm.api_providers.google_gemini import GeminiProvider
-    from llm.api_providers.openai import OpenAIProvider
     
     # Map provider types to their implementations
     providers = {
         'BEDROCK': BedrockConverse,
-        'BEDROCKINVOKE': BedrockInvoke,
-        # 'ANTHROPIC': AnthropicProvider,
-        'GEMINI': GeminiProvider, 
-        'OPENAI': OpenAIProvider
+        'BEDROCKINVOKE': BedrockInvoke
+        # 'ANTHROPIC': AnthropicProvider
     }
     
     # Get provider class

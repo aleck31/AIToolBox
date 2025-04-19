@@ -6,7 +6,7 @@ import time
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from llm.tools.web_tools import search_wikipedia
+from llm.tools.search_tools import search_wikipedia
 
 def test_search_wikipedia(query, language="en"):
     """Test Wikipedia search with specified language"""

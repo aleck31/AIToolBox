@@ -29,7 +29,7 @@ start_app() {
         fi
     fi
 
-    echo "Starting aibox app..."
+    echo "Starting AI Toolbox App..."
     # Use nohup to run in background, use application logger
     nohup python app.py >/dev/null 2>&1 &
 

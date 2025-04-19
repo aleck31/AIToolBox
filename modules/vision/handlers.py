@@ -44,7 +44,7 @@ class VisionHandlers(BaseHandler):
         Args:
             file_path: Path to the image file
             text: Optional specific analysis requirement
-            model_id: Model to use (e.g., 'anthropic.claude-3-5-sonnet-20241022-v2:0' or 'gemini-1.5-pro')
+            model_id: Model to use (e.g., 'anthropic.claude-3-5-sonnet-20241022-v2:0')
             
         Yields:
             str: Chunks of the analysis result

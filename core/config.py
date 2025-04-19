@@ -47,20 +47,6 @@ class ENVConfig:
             'assume_role': os.getenv('BEDROCK_ASSUME_ROLE', None)
         }
 
-    @property
-    def gemini_config(self) -> Dict[str, str]:
-        """Get Gemini API configuration"""
-        return {
-            'secret_id': os.getenv('GEMINI_SECRET_ID'),
-        }
-
-    @property
-    def openai_config(self) -> Dict[str, str]:
-        """Get OpenAI API configuration"""
-        return {
-            'secret_id': os.getenv('OPENAI_SECRET_ID'),
-        }
-
 class AppConfig:
     """Application-level configuration settings"""
 

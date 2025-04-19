@@ -38,36 +38,6 @@ DEFAULT_MODELS = [
         )
     ),
     LLMModel(
-        name='gemini 1.5 pro',
-        model_id='gemini-1.5-pro',
-        api_provider='Gemini',
-        category='vision',
-        description='Gemini Pro model for text and vision',
-        vendor='Google',
-        capabilities=LLM_CAPABILITIES(
-            input_modality=['text', 'image', 'document'],
-            output_modality=['text'],
-            streaming=True,
-            tool_use=True,
-            context_window=200*1024
-        )
-    ),
-    LLMModel(
-        name='gemini 2.0 flash',
-        model_id='gemini-2.0-flash',
-        api_provider='Gemini',
-        category='vision',
-        description='Gemini Flash model for text and vision',
-        vendor='Google',
-        capabilities=LLM_CAPABILITIES(
-            input_modality=['text', 'image', 'document'],
-            output_modality=['text'],
-            streaming=True,
-            tool_use=True,
-            context_window=1024*1024
-        )
-    ),
-    LLMModel(
         name= "Nova Pro",
         category='vision',
         api_provider= "Bedrock",

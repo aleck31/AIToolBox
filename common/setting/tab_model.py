@@ -4,7 +4,7 @@ from llm import VAILD_CATEGORY, VALID_MODALITY
 
 
 # API Provider choices
-API_PROVIDERS = ["Bedrock", "BedrockInvoke", "Gemini", "OpenAI"]
+API_PROVIDERS = ["Bedrock", "BedrockInvoke"]
 
 def create_model_tab(model_choices_state):
     """Create model management tab UI components"""

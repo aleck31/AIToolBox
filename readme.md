@@ -1,95 +1,79 @@
 # GenAI Toolbox
 
-GenAI Toolbox is a Gen-AI application suite built with FastAPI and Gradio, offering a user-friendly interface for accessing various AI capabilities, such as chatbot, translation, summary, image&document recognition, coding and image generation etc.
+GenAI Toolbox 是一个基于 FastAPI 和 Gradio 构建的 GenAI 应用，提供了用户友好的界面，用于展示和访问 AWS Bedrock 平台的各种 AI 能力，包括聊天机器人、工具调用、翻译、摘要、图像和文档识别、代码生成以及图像生成等功能。
 
-🎉 **What's New in v2.0**
-- Optimized performance and reliability
-- Enhanced Settings & Configuration
-- Improved session management 
-- Improved tool handling with better streaming responses
-- Integrated image generation directly in the chatbot
-- Improved chat history management with session loading
-- Optimized token usage by limiting context window
-- Enhanced multimodal message handling with descriptive placeholders
-- Added BedrockInvoke provider for image/video generation
+## 概述
 
-## Overview
-The application integrates multiple GenAI models, with secure authentication via Amazon Cognito and session management. 
-It provides a modular architecture that makes it easy to add new features and AI models.
+该应用程序集成了 AWS Bedrock 平台的多种生成式 AI 模型，通过 Amazon Cognito 提供安全认证和会话管理。基于 Gradio 的 Web 界面提供了直观的用户体验，让您可以轻松体验 AWS Bedrock 的强大功能。
 
-Its user-friendly Gradio-based web interface provides an intuitive experience.
+## 功能特点
 
-## Features
+* **多模态助手** 🤖
+  - 由 AWS Bedrock 提供支持的智能 AI 助手，支持流式响应
+  - 上下文感知对话能力
+  - 多模态内容(文本、图像和文档)支持
+  - Tool use (function calling) 集成
+  - 支持模型推理扩展思维(Extended thinking)
 
-* **Multimodal Assistant** 🤖
-  - Bedrock-powered agentic AI assistant with streaming responses
-  - Support for text, images, and document inputs
-  - Context-aware conversations
-  - Tool use (function calling) integration
-  - Seamless handling of generated content
-  - Supported formats:
-    * Images: jpg/jpeg, png, gif, webp
-    * Documents: pdf, csv, doc, docx, xls, xlsx, txt, md
-    * Video: mp4, webm, mov, etc.
+* **文本处理** 📝
+  - 语法和拼写检查
+  - 不同风格的文本重写
+  - 文本精简以提高简洁性
+  - 文本扩展以增强细节
+  - 多语言支持
 
-* **Text Processing** 📝
-  - Proofreading: Grammar and spelling checks
-  - Text rewriting with different styles
-  - Text reduction for conciseness
-  - Text expansion for detail enhancement
-  - Multi-language support
+* **视觉识别** 👀
+  - 图像分析和描述
+  - 文档理解（支持 PDF）
+  - 多模型支持（Claude/Nova）
+  - 支持相机和剪贴板输入
 
-* **Vision Recognition** 👀
-  - Image analysis and description
-  - Document understanding (PDF support)
-  - Multi-model support (Claude/Gemini)
-  - Camera and clipboard input support
+* **高级功能**
+  - **摘要** 📰：文档和文本摘要生成
+  - **问答** 🧠：提供带有全面思考过程的回答
+  - **编程** 💻：代码生成和分析
+  - **绘画** 🎨：AI图像生成
+  - **设置** ⚙️：可自定义配置
 
-* **Advanced Features**
-  - **Summary** 📰: Document and text summarization
-  - **Asking** 🧠: Provide responses with comprehensive thinking
-  - **Coding** 💻: Code generation and analysis
-  - **Draw** 🎨: AI-powered image generation
-  - **Settings** ⚙️: Customizable configurations
+## 截图展示
 
-## Screenshots
-
-### Main Interface
+### 主界面
 ![GenAI Toolbox](/assets/screenshot.png "Web UI")
 
-### Multimodal Chatbot
-![GenAI Toolbox](/assets/screenshot_chatbot.png "Multimodal Chatbot")
+### 多模态聊天
+![GenAI Toolbox](/assets/screenshot_chatbot.png "Multimodal Chat")
 
-### Vision Recognition
+### 视觉识别
 ![GenAI Toolbox](/assets/screenshot_vision.png "Vision Recognition")
 
-## Technical Features
+## 技术特点
 
-* **Service Architecture**
-  - Layered design with base service abstraction:
-    * BaseService: Common session and LLM provider management
-    * Specialized services for chat, drawing, and general content
-    * Unified service factory with efficient instantiation
-  - Modular session management:
-    * Standardized session data structures
-    * Pluggable storage backends (DynamoDB implementation)
-    * Efficient caching with TTL-based cleanup
-    * Session metadata for model and context tracking
+* **AWS Bedrock 集成**
+  - 灵活的 LLM Provider 管理：
+    * 统一的 LLM 配置处理
+    * 提供商特定参数优化
+    * 高效的提供商缓存和重用
+  - 高级流式处理能力：
+    * 实时响应流
+    * 多模态内容支持
+    * 优化的内容处理和规范化
+  - 工具集成：
+    * 工具使用（函数调用）集成，具有可扩展的注册表
 
-* **LLM Integration**
-  - Flexible provider management:
-    * Unified LLM configuration handling
-    * Provider-specific parameter optimization
-    * Efficient provider caching and reuse
-  - Advanced streaming capabilities:
-    * Real-time response streaming
-    * Multimodal content support
-    * Tool use (function calling) integration with extensible registry
-    * Optimized content handling and normalization
+* **服务架构**
+  - 分层设计与基础服务抽象：
+    * BaseService：Common Session 和 LLM Provider 管理
+    * 专门用于聊天、绘画和通用内容的服务
+    * 统一的服务工厂，实现高效实例化
+  - 模块化会话管理：
+    * 标准化的会话数据结构
+    * 可插拔存储后端（基于 DynamoDB）
+    * 基于 TTL 的高效缓存清理
+    * 用于模型和上下文跟踪的会话元数据
 
-## Project Structure
+## 项目结构
 
-The project follows a clean, layered architecture:
+该项目遵循清晰的分层架构：
 
 ```
 llm-toolbox/
@@ -114,9 +98,7 @@ llm-toolbox/
 │   ├── api_providers/        # LLM tools implementations
 │   │   ├── init.py             # Abstract interface for LLM providers
 │   │   ├── bredrock_converse.py    # Bedrock Converse integration
-│   │   ├── bedrock_invoke.py      # Bedrock invoke integration
-│   │   ├── openai.py           # OpenAI integration
-│   │   └── google_gemini.py    # Google Gemini integration
+│   │   └── bedrock_invoke.py    # Bedrock invoke integration
 │   └── tools/         # LLM tools implementations
 │       └── tool_registry.py  # Tool registry for Bedrock
 ├── common/            # Common modules
@@ -140,40 +122,40 @@ llm-toolbox/
     └── web.py           # Web-related utilities
 ```
 
-## Setup
+## 设置
 
-1. Install dependencies:
+1. 安装依赖项：
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Configure AWS credentials:
+2. 配置 AWS 凭证：
 ```bash
 aws configure
 ```
 
-3. Configure environment file:
+3. 配置环境文件：
 ```bash
 cp .env.example .env
 ```
 
-4. Update environment with your settings:
-- AWS region
-- Cognito user pool details
-- DynamoDB table names
-- Model configurations
+4. 使用您的设置更新环境：
+- AWS Region
+- Cognito User Pool
+- DynamoDB Table name
+- 默认 LLM 模型配置
 
-5. Run the application:
+5. 运行应用程序：
 
 ```bash
-# Run in background
+# 在后台运行
 ./run.sh start
 
-# or run for local test
+# 或者用于本地测试
 uvicorn app:app --host 127.0.0.1 --port 8080 --reload 
 ```
 
-The server will start on http://localhost:8080 .
+应用将在 http://localhost:8080 上启动。
 
 
 ## License

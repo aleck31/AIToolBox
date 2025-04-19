@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Request, Depends, HTTPException, Form
+import json
+from fastapi import APIRouter, Request, HTTPException, Form
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from core.auth import cognito_auth
 from core.logger import logger
-import json
-from datetime import datetime
 
 
 # Create router
@@ -32,12 +31,28 @@ def log_unauth_access(request: Request, details: str = None):
     logger.warning(f"SECURITY_ALERT: Unauthorized access - {json.dumps(security_log, indent=2)}")
 
 
-# Dependency to get the current user or raises exception
-def get_auth_user(request: Request):
-    """Get current authorized user"""
-    # Log full session data at DEBUG level
-    # logger.debug(f"Full request session data: {dict(request.session)}")
+def handle_auth_failure(request: Request, error_detail: str, log_message: str = None):
+    """Handle authentication failure with appropriate response based on request type
 
+    Raises:
+        HTTPException: Either a 401 error or a 302 redirect
+    """
+    # Check if this is an API request or a UI request
+    is_api_request = request.url.path.startswith('/api/') or request.headers.get('accept') == 'application/json'
+    
+    if is_api_request:
+        # For API requests, return a 401 error
+        raise HTTPException(status_code=401, detail=error_detail)
+    else:
+        # For UI requests, redirect to the login page
+        if log_message:
+            logger.debug(log_message)
+        raise HTTPException(status_code=302, headers={"Location": "/login"}, detail="Redirecting to login page")
+
+
+# Dependency to get the current user or redirects to login page
+def get_auth_user(request: Request):
+    """Get current authorized user with token verification"""
     user = request.session.get('user')
 
     if not user:
@@ -46,15 +61,42 @@ def get_auth_user(request: Request):
             request=request,
             details='Attempted to access protected route without valid session'
         )
-        raise HTTPException(status_code=401, detail="Not authenticated")
-        #ToDo: Redirect users to the homepage instead of showing a 401 error, improving user experience.
+        # Handle authentication failure
+        redirect_url = request.url.path
+        handle_auth_failure(
+            request, 
+            "Not authenticated",
+            f"Redirecting unauthenticated user to login page, from: {redirect_url}"
+        )
 
     username = user.get('username')
-    # Log access token for debugging
-    access_token = user.get('access_token')
-    logger.debug(f"Access token for [{username}] verified: {bool(access_token)}")
-
-    return username
+    if access_token := user.get('access_token'):
+        # Verify token with Cognito (refresh if expired)
+        if validated_token := cognito_auth.verify_token(access_token):
+            request.session['user']['access_token'] = validated_token
+            return username
+        else:
+            log_unauth_access(
+                request=request,
+                details=f'Invalid or expired token for user: {username}'
+            )
+            # Clear invalid session
+            request.session.clear()
+            # Handle authentication failure
+            handle_auth_failure(
+                request, 
+                "Authentication token expired or invalid",
+                "Redirecting user with expired token to login page"
+            )
+    else:
+        # Log token verification issues for debugging
+        logger.warning(f"Missing access token for user [{username}]")
+        # Handle authentication failure
+        handle_auth_failure(
+            request, 
+            "Invalid authentication token",
+            "Redirecting user with invalid token to login page"
+        )
 
 
 @router.get('/login')

@@ -2,15 +2,12 @@ fastapi
 gradio
 gradio_pdf
 boto3
-google-generativeai
-openai
 
 # Utilities
 uvicorn[standard]
 python-dotenv
+itsdangerous
 cachetools
 aiohttp
 wikipedia
 googlesearch-python
-# selectolax
-# pdf2image
