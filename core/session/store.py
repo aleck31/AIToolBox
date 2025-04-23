@@ -30,7 +30,7 @@ class SessionStore:
     def __init__(
         self,
         table_name: str = env_config.database_config['session_table'],
-        region_name: str = env_config.default_region,
+        region_name: str = env_config.aws_region,
         ttl_days: int = env_config.database_config['retention_days']
     ):
         """Initialize DynamoDB session store"""

@@ -64,11 +64,23 @@ DEFAULT_MODELS = [
         )
     ),
     LLMModel(
-        name='stable-diffusion',
-        model_id='stability.stable-image-ultra-v1:0',
+        name='Stable Image Ultra 1.1',
+        model_id='stability.stable-image-ultra-v1:1',
         api_provider='BedrockInvoke',
         category='image',
         description='Stable Diffusion Ultra for image generation',
+        vendor='Stability AI',
+        capabilities=LLM_CAPABILITIES(
+            input_modality=['text', 'image'],
+            output_modality=['image']
+        )
+    ),
+    LLMModel(
+        name='Stable Diffusion 3.5 Large',
+        model_id='stability.sd3-5-large-v1:0',
+        api_provider='BedrockInvoke',
+        category='image',
+        description='Stable Diffusion 3.5 Large is the most powerful model in the Stable Diffusion family.',
         vendor='Stability AI',
         capabilities=LLM_CAPABILITIES(
             input_modality=['text', 'image'],

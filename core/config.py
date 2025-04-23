@@ -18,9 +18,9 @@ class ENVConfig:
     """Environment-specific configuration for deployment settings"""
     
     @property
-    def default_region(self) -> str:
+    def aws_region(self) -> str:
         """Get default AWS region"""
-        return os.getenv('DEFAULT_REGION', 'ap-southeast-1')
+        return os.getenv('AWS_REGION', 'ap-southeast-1')
 
     @property
     def cognito_config(self) -> dict:
@@ -34,8 +34,8 @@ class ENVConfig:
     def database_config(self) -> dict:
         """Get database configuration"""
         return {
-            'setting_table': os.getenv('SETTING_TABLE', 'aibox_setting'),
-            'session_table': os.getenv('SESSION_TABLE', 'aibox_session'),
+            'setting_table': os.getenv('SETTING_TABLE', 'aitoolbox-setting'),
+            'session_table': os.getenv('SESSION_TABLE', 'aitoolbox-session'),
             'retention_days': int(os.getenv('RETENTION_DAYS', '30')) # 用于计算dynamodb ttl
         }
 
@@ -43,7 +43,7 @@ class ENVConfig:
     def bedrock_config(self) -> Dict[str, str]:
         """Get AWS Bedrock configuration"""
         return {
-            'default_region': os.getenv('BEDROCK_REGION', 'us-west-2'),  # Changed from region_id to default_region
+            'bedrock_region': os.getenv('BEDROCK_REGION', 'us-west-2'),
             'assume_role': os.getenv('BEDROCK_ASSUME_ROLE', None)
         }
 
@@ -53,9 +53,11 @@ class AppConfig:
     @property
     def server_config(self) -> Dict[str, Any]:
         """Get server configuration"""
+        # Prioritize using the PORT environment variable provided by App Runner
+        port = os.getenv('PORT') or os.getenv('SERVER_PORT', '8080')
         return {
-            'host': os.getenv('SERVER_HOST', 'localhost'),
-            'port': int(os.getenv('SERVER_PORT', '8080')),
+            'host': os.getenv('SERVER_HOST', '0.0.0.0'),  # 默认使用0.0.0.0以便在容器中工作
+            'port': int(port),
             'debug': os.getenv('DEBUG', 'False').lower() == 'true',
             'log_level': 'debug' if os.getenv('DEBUG') else 'info'
         }

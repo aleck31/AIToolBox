@@ -85,7 +85,7 @@ def get_aws_client(service_name: str, region_name: Optional[str] = None, assume_
         
         # Configure retry settings
         config = Config(
-            region_name=region_name or env_config.default_region,
+            region_name=region_name or env_config.aws_region,
             retries={
                 "max_attempts": 10,
                 "mode": "standard",

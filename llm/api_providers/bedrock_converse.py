@@ -75,13 +75,13 @@ class BedrockConverse(LLMAPIProvider):
     def _initialize_client(self) -> None:
         try:
             # Get region from env_config
-            region = env_config.bedrock_config['default_region']
+            region = env_config.bedrock_config['bedrock_region']
             if not region:
                 raise ParamValidationError(
                     report="AWS region must be configured for Bedrock"
                 )
-                
             self.client = get_aws_client('bedrock-runtime', region_name=region)
+            logger.debug(f"[BRConverseProvider] Initialized Bedrock client at: {region}")
         except Exception as e:
             raise ClientError(
                 error_response={

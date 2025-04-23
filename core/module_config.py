@@ -34,7 +34,7 @@ class AppConf:
 
 class ModuleConfig:
     def __init__(self):
-        session = get_aws_session(region_name=env_config.default_region)
+        session = get_aws_session(region_name=env_config.aws_region)
         self.dynamodb = session.resource('dynamodb')
         self.table = self.dynamodb.Table(env_config.database_config['setting_table'])
         self._config_cache = {}  # Cache for module configurations
@@ -195,7 +195,6 @@ class ModuleConfig:
             logger.error(f"[ModuleConfig] Error getting enabled tools for module {module_name}: {str(e)}")
             return []
 
-
     def init_module_config(self, module_name: str) -> Optional[Dict]:
         """Initialize default configuration for a module"""
         default_configs = {
@@ -207,13 +206,13 @@ class ModuleConfig:
                 'parameters': {
                     'max_tokens': 4096,
                     'temperature': Decimal('0.7'),
-                    'top_p': 0.9,
+                    'top_p': Decimal('0.9'),
                     'top_k': 100
                 },
                 'enabled_tools': [
                     'get_weather',         # Weather information
                     'get_text_from_url',   # Get text content from webpage URL
-                    'generate_image'       # AI image generation
+                    'generate_image',      # AI image generation
                     'search_wikipedia',
                     'search_internet'
                 ]
@@ -280,20 +279,26 @@ class ModuleConfig:
                 'setting_name': 'asking',
                 'type': 'module',
                 'description': 'Asking Module',
-                'default_model': 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+                'default_model': 'us.anthropic.claude-3-7-sonnet-20250219-v1:0',
                 'parameters': {
                     'temperature': Decimal('0.7'),
-                    'max_tokens': 4096
+                    'max_tokens': 4096,
+                    'thinking': {
+                        "type": "enabled",
+                        "budget_tokens": 2048
+                    }
                 },
                 'enabled_tools': [
-                    'get_text_from_url'     # Get text content from webpage URL
+                    'get_text_from_url',    # Get text content from webpage URL
+                    'search_wikipedia',
+                    'search_internet'
                 ]
             },
             'draw': {
                 'setting_name': 'draw',
                 'type': 'module',
                 'description': 'Draw Module',
-                'default_model': 'stability.stable-image-ultra-v1:0',
+                'default_model': 'stability.stable-image-ultra-v1:1',
                 # basic parameters for generative models
                 'parameters': {
                     'height': 1152,

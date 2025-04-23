@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-from core.config import app_config  # Fixed import path
+from core.config import app_config
 from llm.model_manager import model_manager
 from common.login import router as login_router, get_auth_user
 from common.main_ui import create_main_interface
@@ -25,8 +25,12 @@ async def lifespan(app: FastAPI):
     try:
         # Startup
         logger.info("Initializing application...")
+
         # Initialize default LLM models if none exist
         model_manager.init_default_models()
+
+        # Module configs are initialized on-demand when accessed
+
         logger.info("Application initialization complete")
         yield
     except Exception as e:
@@ -75,9 +79,10 @@ def root_path(request: Request):
         logger.debug("No user found, redirecting to login")
         return RedirectResponse(url='/login')
 
+
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
+    """Health check endpoint for both application and App Runner"""
     return {"status": "OK!"}
 
 # Create main interface

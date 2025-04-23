@@ -1,6 +1,6 @@
 # GenAI Toolbox
 
-GenAI Toolbox 是一个基于 FastAPI 和 Gradio 构建的 GenAI 应用，提供了用户友好的界面，用于展示和访问 AWS Bedrock 平台的各种 AI 能力，包括聊天机器人、工具调用、翻译、摘要、图像和文档识别、代码生成以及图像生成等功能。
+GenAI Toolbox (GenAI懒人工具箱) 是一个基于 FastAPI 和 Gradio 构建的 GenAI 应用，提供了用户友好的界面，用于展示和访问 AWS Bedrock 平台的各种 AI 能力，包括聊天机器人、工具调用、翻译、摘要、图像和文档识别、代码生成以及图像生成等功能。
 
 ## 概述
 
@@ -8,12 +8,12 @@ GenAI Toolbox 是一个基于 FastAPI 和 Gradio 构建的 GenAI 应用，提供
 
 ## 功能特点
 
-* **多模态助手** 🤖
+* **聊天助手** 🤖
   - 由 AWS Bedrock 提供支持的智能 AI 助手，支持流式响应
   - 上下文感知对话能力
   - 多模态内容(文本、图像和文档)支持
   - Tool use (function calling) 集成
-  - 支持模型推理扩展思维(Extended thinking)
+  - 支持模型扩展思维模式(Extended thinking)
 
 * **文本处理** 📝
   - 语法和拼写检查
@@ -35,16 +35,19 @@ GenAI Toolbox 是一个基于 FastAPI 和 Gradio 构建的 GenAI 应用，提供
   - **绘画** 🎨：AI图像生成
   - **设置** ⚙️：可自定义配置
 
-## 截图展示
+## 界面展示
 
-### 主界面
-![GenAI Toolbox](/assets/screenshot.png "Web UI")
+### 调用工具
+![GenAI Toolbox](/assets/ui_chat_with_tooluse.png "聊天中调用画图工具")
 
-### 多模态聊天
-![GenAI Toolbox](/assets/screenshot_chatbot.png "Multimodal Chat")
+### 扩展思维
+![GenAI Toolbox](/assets/ui_chat_with_thinking.png "聊天中展示思维过程")
 
-### 视觉识别
-![GenAI Toolbox](/assets/screenshot_vision.png "Vision Recognition")
+### 文本工具
+![GenAI Toolbox](/assets/ui_text_processing.png "文本处理")
+
+### 视觉分析
+![GenAI Toolbox](/assets/ui_vision.png "视觉分析")
 
 ## 技术特点
 
@@ -84,23 +87,11 @@ llm-toolbox/
 │   ├── logger.py      # Logging configuration
 │   ├── module_config.py    # Module configuration
 │   ├── service/         # Service integration
-│   │   ├── init.py           # Base service with common functionality
-│   │   ├── gen_service.py      # General content generation service
-│   │   ├── chat_service.py     # Chat service implementation
-│   │   ├── draw_service.py     # Image generation service
-│   │   └── service_factory.py    # Service creation factory
 │   └── session/        # Session management
-│       ├── models.py         # Data models for Session
-│       └── store.py          # DynamoDB-based session storage
 ├── llm/               # LLM implementations
-│   ├── init.py               # Base LLM interfaces
 │   ├── model_manager.py      # Model management
-│   ├── api_providers/        # LLM tools implementations
-│   │   ├── init.py             # Abstract interface for LLM providers
-│   │   ├── bredrock_converse.py    # Bedrock Converse integration
-│   │   └── bedrock_invoke.py    # Bedrock invoke integration
+│   ├── api_providers/        # LLM Providers implementations
 │   └── tools/         # LLM tools implementations
-│       └── tool_registry.py  # Tool registry for Bedrock
 ├── common/            # Common modules
 │   ├── login/            # Authentication UI
 │   ├── setting/          # Module settings
@@ -116,13 +107,11 @@ llm-toolbox/
 │   ├── coding/           # Code-related features
 │   └── draw/             # Image generation
 └── utils/             # Utility functions
-    ├── aws.py           # AWS resource management
-    ├── file.py          # File handling utilities
-    ├── voice.py         # Voice processing utilities
-    └── web.py           # Web-related utilities
 ```
 
 ## 设置
+
+### 本地开发环境
 
 1. 安装依赖项：
 ```bash
@@ -136,22 +125,19 @@ aws configure
 
 3. 配置环境文件：
 ```bash
+# 参考 .env.example 更新环境变量
 cp .env.example .env
 ```
 
-4. 使用您的设置更新环境：
-- AWS Region
-- Cognito User Pool
-- DynamoDB Table name
-- 默认 LLM 模型配置
+4. 创建基础资源：
+```bash
+cd tests/
+./create_aws_resources.sh --profile myfrofile
+```
 
-5. 运行应用程序：
+5. 本地运行：
 
 ```bash
-# 在后台运行
-./run.sh start
-
-# 或者用于本地测试
 uvicorn app:app --host 127.0.0.1 --port 8080 --reload 
 ```
 

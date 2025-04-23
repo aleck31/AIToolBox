@@ -22,8 +22,7 @@ class ModelManager:
             logger.debug(f"Initialized ModelManager with table: {self.table_name}")
             # Cache for models
             self._models_cache = None
-            # Initialize default models if none exist
-            self.init_default_models()
+            # Note: Default models are initialized in the lifespan function
         except Exception as e:
             logger.error(f"Failed to initialize ModelManager: {str(e)}")
             raise

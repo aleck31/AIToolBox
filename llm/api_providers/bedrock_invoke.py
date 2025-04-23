@@ -30,7 +30,7 @@ class BedrockInvoke(LLMAPIProvider):
     def _initialize_client(self) -> None:
         """Initialize Bedrock client"""
         try:
-            region = env_config.bedrock_config['default_region']
+            region = env_config.bedrock_config['bedrock_region']
             if not region:
                 raise boto_exceptions.ParamValidationError(
                     report="AWS region must be configured for Bedrock"

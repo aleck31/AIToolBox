@@ -17,7 +17,7 @@ class CognitoAuth:
         # Validate configuration
         self._validate_config()
 
-        self.client = boto3.client('cognito-idp', region_name=env_config.default_region)
+        self.client = boto3.client('cognito-idp', region_name=env_config.aws_region)
         self.user_pool_id = env_config.cognito_config['user_pool_id']
         self.client_id = env_config.cognito_config['client_id']
 
@@ -26,8 +26,10 @@ class CognitoAuth:
         self.access_tokens = {}   # {username: {access_token, expiry_time}}
         self.user_info = {}       # {username: {user_attributes}}
         
-        # Token validity period in seconds (default: 55 minutes to be safe with 1h tokens)
-        self.token_validity_period = 55 * 60
+        # Get token validity period from environment config (with 5 minutes buffer for safety)
+        from core.config import app_config
+        token_expiration = app_config.security_config['token_expiration']
+        self.token_validity_period = token_expiration - (5 * 60)  # 5 minutes buffer
         
         logger.info(f"CognitoAuth initialized with user pool: {self.user_pool_id}")
         
