@@ -25,7 +25,7 @@ def get_aws_session(region_name: Optional[str] = None, assume_role_arn: Optional
     global _AWS_SESSION
 
     # Use provided region_name or default from config
-    region_name = region_name or env_config.default_region
+    region_name = region_name or env_config.aws_region
     
     # Initialize session kwargs
     session_kwargs: Dict[str, Any] = {"region_name": region_name}
